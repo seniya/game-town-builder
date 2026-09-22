@@ -4,7 +4,11 @@ Status: Accepted
 Date: 2026-09-22
 
 
-> v1.1 적용 범위 (ADR 016): 대사 종료가 목표만 바꾼다는 원칙은 유지한다. 해금은 이벤트가 아니라 VillageLevelSystem의 레벨 전이에서 적용한다. 아래 unlockBuilding 예시는 현재 구현 기준이 아니다.
+> 현재 적용 범위 (ADR 016 / 020): 해금은 VillageLevelSystem의 레벨 전이에서만 적용한다.
+> 대사 종료는 dialogueId의 완료 사실과 목표 안내를 연결한다. 첫 Farmer 대화 완료는
+> FARM_REQUEST의 명시적 조건이므로 아래 “어떤 이벤트도 대화 완료를 참조하지 않는다”는
+> 구 규칙은 현재 적용하지 않는다. 늦게 읽은 이전 대사의 목표 역행도 막는다.
+> 현재 계약은 ARCHITECTURE 20~23장이며 아래 unlockBuilding 예시는 역사적 기록이다.
 
 ## 배경
 

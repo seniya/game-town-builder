@@ -2,7 +2,7 @@
 
 # Small Village Restoration Game — Architecture Guide
 
-Version: 1.2
+Version: 1.3
 Status: Reviewed Specification — Implementation Pending
 Date: 2026-09-22
 
@@ -57,7 +57,7 @@ ADR 010   대사 종료는 목표 문구만 바꾼다
 ## 2.1 의존성 방향
 
 ```text
-data       ←  types만 참조한다
+data       ←  types와 같은 data 계층의 읽기 전용 설정만 참조한다
 types      ←  아무것도 의존하지 않는다
 voxel      ←  types, data
 room       ←  types, data, voxel
@@ -87,7 +87,7 @@ ui         ←  EventBus / 읽기 전용 조회 / 주입된 입력 명령
 }
 ```
 
-이 규칙은 **선택이 아니다.** ADR 011 이 엔진을 한 번 교체하면서 그 가치가 증명되었다.
+이 규칙은 **선택이 아니다.** ADR 011의 설계상 엔진 변경으로 필요성을 확인했으며 실제 코드 이전은 아직 수행하지 않았다.
 
 ---
 
@@ -347,8 +347,8 @@ export type GameEventMap = {
   DAMAGE_LOGGED:       DamageEntry;
   BLOCK_REPAIRED:      { pos: BlockPos };
   GAME_EVENT_FIRED:    { id: GameEventId };
-  DIALOGUE_STARTED:    { npcId: string; lines: string[] };
-  DIALOGUE_ENDED:      { npcId: string };
+  DIALOGUE_STARTED:    { npcId: string; dialogueId: string; lines: string[] };
+  DIALOGUE_ENDED:      { npcId: string; dialogueId: string };
   OBJECTIVE_CHANGED:   { text: string; progress?: { current: number; total: number } };
   DAY_PHASE_CHANGED:   { phase: DayPhase };
   WORLD_STATE_CHANGED: WorldStateData;
@@ -418,7 +418,13 @@ export class VoxelWorld {
 
 5번을 빠뜨리면 청크 경계에 구멍이나 오래된 AO가 남는다.
 setBlock은 단일 칸용이다. 기존 객체에 걸치거나 bed/door를 직접 쓰려 하면 거부하고
-editObject를 사용한다. 초기 생성·로드도 PlacementIndex와 함께 복원한다.
+editObject를 사용한다. 이 둘은 VoxelWorld의 편집 진입점이며 인벤토리를 소유하지 않는다.
+BlockEditSystem은 변경할 칸과 인벤토리 결과를 사전 검증하고, 같은 동기 커밋 구간에서
+아이템·블록·메타데이터를 함께 반영한다. 그 구간에는 await나 이벤트 콜백을 실행하지 않는다.
+실패 시 전부 원상태이며, 관련 알림은 전체 성공 뒤 발행한다. 기존 즉시 무효화도
+NPC의 다음 판단·이동 전에 끝낸다. 구현용 내부 편집 포트가 필요해도 voxel이
+InventorySystem을 import하거나 가변 배열을 외부에 공개하지 않는다.
+초기 생성·로드도 PlacementIndex와 함께 복원한다.
 여러 소비자가 비우는 changedBlocks 큐를 공유하지 않는다.
 
 ## 6.2 Chunk
@@ -656,7 +662,8 @@ MVP의 전체 섬 로드·초기 메싱·23.4의 로드 재구축은 그대로 �
 
 **스트리밍은 상주 비용을 줄이지 보이는 청크 수를 줄이지 않는다.** 높은 곳에서 마을
 전체를 내려다보는 장기 성공 장면에서는 시야 안의 메시 수가 그대로 드로우콜이 된다.
-이 비용은 GPU가 아니라 드로우 제출(CPU)에 나타난다. 따라서 **원거리 청크 LOD**
+드로우 제출의 CPU 비용이 늘 수 있고 GPU 비용도 장면에 따라 달라지므로 각각 측정한다.
+따라서 **원거리 청크 LOD**
 (청크 병합 또는 수직 컬럼 단일 메시)를 스트리밍과 별개의 장기 후보로 둔다.
 2.4의 순서대로 배치·가시성·광원 예산을 먼저 조정하며, 드로우콜 증가만으로 WebGPU를
 검토하지 않는다. 렌더 청크 LOD는 3.3의 Simulation LOD와 다른 기능이다.
@@ -716,7 +723,7 @@ export interface Facility {
   readonly objectId: string;
   readonly anchor: BlockPos;
   readonly approachCells: readonly BlockPos[];
-  readonly usePosition: Vec3; // 자세 전환용. A* 목적지가 아니다
+  readonly usePosition: Vec3; // 렌더의 사용 자세용. body.pos나 A* 목적지가 아니다
 }
 export interface RoomFacilities {
   beds: Facility[];
@@ -991,6 +998,11 @@ MVP에서는 `GameWorld.update`와 `render`가 같은 프레임에 돌므로 직
 3.2의 다중 주기를 도입하면 이전/현재 시뮬레이션 snapshot과 시각으로 렌더 위치를
 보간한다. 시각적 보간 결과를 게임 위치·충돌·시설 예약에 역으로 쓰지 않는다.
 
+취침·식사 중에도 body.pos는 통행 가능한 접근 셀의 발밑 중심이다. Action이 제공하는
+시설 id·usePosition·사용 자세를 EntityView가 읽어 침대에 눕거나 의자에 앉은 모습을
+그린다. 사용 취소 후에는 접근 위치로 돌아오며, 그 위치가 파괴되었다면 충돌·이동
+처리가 현재 월드를 다시 검사한다. SaveData에 렌더용 사용 위치를 NPC 위치로 쓰지 않는다.
+
 ---
 
 # 13. Action
@@ -1001,6 +1013,8 @@ ADR 008 을 유지한다. **NPC 의 상태는 현재 Action 이다.**
 export interface Action {
   readonly kind: ActionKind;
   readonly label: string;             // UI 표시용
+  /** 실제 사용 중인 시설의 렌더 snapshot. 이동·대기 중에는 없다. */
+  readonly facilityUse?: DeepReadonly<Pick<Facility, 'objectId' | 'usePosition'>>;
 
   start(ctx: ActionContext): void;
   update(ctx: ActionContext, dt: number): ActionStatus;
@@ -1307,6 +1321,8 @@ evaluate/ring은 같은 순수 게이트 평가를 쓰며 현재 유효한 방·
 비용·레벨·해금·예약 커밋 후 프레임 끝에 저장한다.
 ResidentArrivalSystem은 레벨 2/3 고유 키로 예약하고 스폰·완료를 함께 커밋한다.
 다음 07:00은 ring 시각보다 엄격히 뒤인 아침이다.
+최고 레벨에서 evaluate는 cost=0, gates=[], canRing=false를 반환한다.
+패널은 최고 레벨을 표시하며 ring은 비용·레벨·예약을 바꾸지 않고 false를 반환한다.
 
 ---
 
@@ -1401,13 +1417,13 @@ export interface EventContext {
   readonly gratitude: number;
   readonly bellWorldCenter: Vec3;
   readonly villageLevel: number;
-  readonly lastRaid: Readonly<RaidResult> | null;
+  readonly raidResults: readonly Readonly<RaidResult>[]; // RaidSystem의 완료 이력 snapshot
   readonly completed: ReadonlySet<GameEventId>;
   readonly dialogueCompleted: ReadonlySet<string>;
 }
 
 export type GameCommand =
-  | { kind: 'setObjective'; text: string; progress?: { current: number; total: number } }
+  | { kind: 'setObjective'; objective: ObjectiveDefinition }
   | { kind: 'markDialogueAvailable'; npcId: string; dialogueId: string }
   | { kind: 'gainGratitude'; amount: number; source: GratitudeSource; at: Vec3 }
   | { kind: 'playCutscene'; id: string };
@@ -1418,6 +1434,12 @@ export interface GameEventDefinition {
   execute(ctx: EventContext): GameCommand[];
 }
 ```
+
+`lastRaid` 하나로는 1차 습격 종료와 2차 습격 종료를 따로 확인할 수 없다.
+WALL_REQUEST는 raidId=1의 결과 존재, SLICE_END는 raidId=2의 종료 뒤 첫 07:00에
+도달했는지를 완료 이력에서 계산한다. 안전 지표는 계속 가장 최근 결과 한 건을 쓴다.
+이력의 소유자는 RaidSystem 하나이며 이벤트용 별도 습격 상태를 만들지 않는다.
+각 이벤트 평가 직전에 snapshot을 조립하여 같은 프레임에 앞선 이벤트의 완료를 반영한다.
 
 ## 20.1 왜 커맨드인가
 
@@ -1451,7 +1473,7 @@ if (!completed.has(def.id) && def.canTrigger(ctx)) {
   id: 'EVENT_BELL_REQUEST',
   canTrigger: (ctx) =>
     ctx.completed.has('EVENT_BEDROOM_REQUEST') &&
-    ctx.rooms.filter(r => !r.dirty).length >= 2,
+    ctx.rooms.filter(r => !r.dirty).length >= balance.village.levels[1].gate.minRooms,
   execute: (ctx) => [
     { kind: 'markDialogueAvailable', npcId: 'carpenter', dialogueId: 'bell_intro' },
     { kind: 'gainGratitude', amount: balance.gratitude.onGameEvent,
@@ -1461,7 +1483,9 @@ if (!completed.has(def.id) && def.canTrigger(ctx)) {
 ```
 
 목표 문구를 여기서 바꾸지 않는다. ADR 010 이다.
-대사가 끝날 때 `DialogueSystem` 이 `setObjective` 를 낸다.
+DialogueSystem은 완료 dialogueId와 DIALOGUE_ENDED를 발행하고,
+ObjectiveSystem이 해당 데이터의 nextObjective를 검증·적용한다 (21장).
+GameCommand의 setObjective는 ARRIVAL의 초기 목표처럼 이벤트가 직접 설정하는 경우에 쓴다.
 
 ---
 
@@ -1470,13 +1494,34 @@ if (!completed.has(def.id) && def.canTrigger(ctx)) {
 ## 21.1 대사 데이터가 다음 목표를 들고 있다
 
 ```ts
+export type ObjectiveProgressKind = 'farmland';
+export interface ObjectiveDefinition {
+  readonly id: string;
+  readonly sourceEventId: GameEventId; // MVP_SPEC 27.1의 진행 순서
+  readonly text: string;
+  readonly progress: { kind: ObjectiveProgressKind; total: number } | null;
+}
 export interface DialogueDefinition {
   id: string;
   npcId: string;
   lines: string[];
-  nextObjective?: { text: string; progress?: { current: number; total: number } };
+  nextObjective?: ObjectiveDefinition;
 }
 ```
+
+대사·커맨드·저장은 같은 ObjectiveDefinition을 참조한다. 표시용 current는 저장하거나
+대사 데이터에 고정하지 않는다. 밭 목표의 total은 balance.farm.tutorialPlotCount를 쓴다.
+ObjectiveSystem은 progress.kind로 원천 집계를 조회하고 OBJECTIVE_CHANGED의 표시용
+current/total을 만든다. GameEventSystem의 setObjective도 같은 적용 API를 사용한다.
+
+DialogueSystem은 NPC별 미완료 dialogueId 목록과 완료 id 집합을 소유한다. 표시 등록은
+id로 중복 제거하며 새 대사가 이전 미완료 대사를 덮어쓰지 않는다. 대화 종료 때 완료를
+기록한 뒤 id를 포함한 DIALOGUE_ENDED를 발행한다. 같은 NPC의 목록은 등록 순서대로 읽는다.
+ObjectiveSystem은 sourceEventId의 정본 순서를 비교해 현재보다 이른 목표 적용을 무시한다.
+같은 목표의 재적용도 진행 수치를 초기화하지 않는다. 이는 조건·보상 롤백과 별개로
+늦은 대화 때문에 표시가 뒤로 돌아가는 문제를 막는다 (ADR 020).
+첫 Farmer 대사의 nextObjective는 FARM_REQUEST의 밭 목표를 가리킨다.
+FARM_REQUEST 자체는 완료 확인·보상을 담당하고 같은 요청 대사를 재등록하지 않는다.
 
 ## 21.2 해금은 대사에 걸지 않는다
 
@@ -1584,8 +1629,8 @@ export interface SaveData {
   residentArrivals: { level: number; dueAtGameMinutes: number; npcId: string; arrived: boolean }[];
   completedEvents: GameEventId[];
   completedDialogues: string[];
-  availableDialogues: { npcId: string; dialogueId: string }[];
-  objective: { id: string; text: string; progressKind: ObjectiveProgressKind | null };
+  availableDialogues: { npcId: string; dialogueId: string }[]; // NPC별 등록 순서를 유지
+  objective: ObjectiveDefinition;
   raids: {
     firedIds: number[];
     scheduled: { raidId: number; dueAtGameMinutes: number }[];
@@ -1614,6 +1659,7 @@ export interface SaveData {
 ## 23.2 저장하지 않는 것
 
 WorldState, 방 결과, Nav 캐시, 메시, NPC Action·임시 시설 예약은 저장하지 않는다.
+저장 자체는 실행 중 Action·예약을 변경하지 않는다.
 작물 단계·성숙은 심은 시각으로 재계산한다.
 조리는 완료 때 재료를 소비하므로 취소해도 손실·중복 생산이 없다.
 수리는 시간을 다시 채우되 당일 완료량을 복원한다.
@@ -1627,6 +1673,12 @@ IndexedDB의 슬롯 하나를 트랜잭션으로 교체한다.
 주민 스폰과 예약 완료, 비용과 레벨 전이를 서로 다른 스냅샷으로 나누지 않는다.
 저장용 modifiedChunks는 세션 전체의 변경을 유지하며 렌더의 takeDirtyChunks와 별개다.
 메시 업로드가 끝났어도 저장 대상에서 빠지지 않는다.
+스냅샷 배열·Map·TypedArray는 살아 있는 게임 데이터와 분리해 비동기 쓰기 중 변하지 않게 한다.
+같은 슬롯의 저장은 순서대로 처리하고 오래된 요청이 최신 저장을 덮어쓰지 못하게 한다.
+대기 중 요청은 최신의 완전한 스냅샷으로 합칠 수 있다. 저장 실패 시 이전 슬롯을 유지하고
+UI에 실패를 알린다. 성공 전에는 저장 완료로 표시하지 않는다.
+로드할 때만 기존 Action·예약을 폐기하고, 복원한 지속 사실에서 새로 판단한다.
+비동기 저장 대기 중 편집/종 치기와 실패 재시도를 TASK-051에서 검증한다.
 원시 복셀은 약 2MiB다. localStorage 초과를 단정하지 않는다.
 문자열 인코딩 회피와 원자적 구조화 저장이 IndexedDB 선택 이유다.
 
@@ -1671,9 +1723,11 @@ src/game/data/
 허용   if (npc.pos.distanceTo(monster.pos) < balance.npc.threatRadius)
 ```
 
-## 24.2 data 는 아무것도 import 하지 않는다
+## 24.2 data는 상위 런타임 모듈을 import하지 않는다
 
-`types` 만 예외로 허용한다.
+`types`와 같은 data 계층의 읽기 전용 설정 참조는 허용한다.
+예를 들어 gameEvents/dialogues가 balance를 읽어 보상·목표 수치를 재사용할 수 있다.
+같은 계층에서도 순환 의존은 만들지 않는다.
 
 `data` 가 시스템을 import 하면 순환이 생기고, 테스트에서 데이터만
 불러오는 것이 불가능해진다.
@@ -1819,10 +1873,10 @@ DamageLog                 RepairSystem
 우클릭
   → BlockEditSystem.raycast
   → 설치 규칙 검사 (MVP_SPEC 10.4)
-  → InventorySystem.consume(1)
-  → VoxelWorld.setBlock(pos, id, 'player')
+  → BlockEditSystem이 아이템 1개와 전체 점유 변경을 사전 검증
+  → 동기 커밋: 인벤토리 + VoxelWorld의 단일 칸/객체 편집 (실패하면 전체 미변경)
       ├→ Chunk dirty + 인접 청크 dirty
-      └→ BLOCK_CHANGED 발행
+      └→ 전체 커밋 후 INVENTORY_CHANGED / BLOCK_CHANGED 발행
   → (다음 update 순서에서)
       RoomSystem      : 즉시 markDirty한 후보를 예산 안에서 처리
       NavigationGraph : 변경 알림에서 즉시 invalidate(pos)
@@ -1853,7 +1907,7 @@ NPCDecisionSystem
   → new MoveAction(approachCell) → new SleepAction(facility)
 
 SleepAction.start
-  → npc 를 침대 위치에 눕힌다
+  → body.pos는 접근 셀에 유지하고 View가 usePosition에서 취침 자세를 표시한다
   → events.emit('GRATITUDE_GAINED', ...) 이 아니라
     ctx.services.gratitude.gain({ kind: 'sleep', npcId }, 5, bedWorldPos)
 
@@ -1896,7 +1950,8 @@ F (종 조준)
       → level += 1
       → unlocked 갱신
       → VILLAGE_LEVEL_UP 발행
-  → RaidSystem 이 구독 → 다음 21:00 습격 예약
+  → RaidSystem이 구독 → 레벨·선행 습격 종료 조건이 모두 충족된 뒤 첫 21:00 예약
+    (2차는 레벨 3 도달만으로 예약하지 않는다)
   → ResidentArrivalSystem이 레벨별 고유 키로 다음 07:00을 예약
   → 프레임 끝 자동 저장
   → 예약 처리 뒤 GameEventSystem이 레벨 3·주민 5명 도착 사실을 평가
@@ -1977,6 +2032,7 @@ DI 컨테이너
 017  MVP 5명과 100명·대형 월드 확장 경계          Accepted (018로 구체화)
 018  사건 기반 작업·다중 주기·LOD·계층 경로       Accepted (장기 계약)
 019  Web-first, not Browser-only / 에셋 경계    Accepted (장기 계약)
+020  진행 안내·블록 편집·저장 실행 계약          Accepted
 ```
 
 ---
