@@ -1066,13 +1066,41 @@ export interface NPCContext {
   readonly threatNearby: DeepReadonly<MonsterDecisionView> | null;
   readonly dialogueRequested: boolean;
   readonly storage: Readonly<VillageStorageData>;
-  readonly rooms: readonly DeepReadonly<Room>[];
   readonly worldState: Readonly<WorldStateData>;
-  readonly damageLog: readonly DeepReadonly<DamageEntry>[];
+  /** 소유 시스템이 이 NPC 에게 좁혀서 넘긴 후보. 전체 목록을 넘기지 않는다. */
+  readonly candidates: Readonly<NPCCandidates>;
+}
+
+/** 각 항목은 "지금 이 NPC 가 쓸 수 있는 하나"다. null 이면 MVP_SPEC 12.5 의 대체 행동. */
+export interface NPCCandidates {
+  readonly diningSeat: DeepReadonly<Facility> | null;   // RoomRegistry → MealSystem
+  readonly farm: DeepReadonly<FarmCandidate> | null;    // FarmSystem
+  readonly cooking: DeepReadonly<CookCandidate> | null; // CookingSystem
+  readonly repair: DeepReadonly<RepairCandidate> | null;// RepairSystem
+}
+
+export interface FarmCandidate {
+  readonly kind: 'plant' | 'harvest';
+  readonly target: BlockPos;
+  readonly approachCells: readonly BlockPos[];
+}
+export interface CookCandidate {
+  readonly facility: Facility;   // Kitchen 의 cookingSpot
+  readonly ingredientsReady: boolean;
+}
+export interface RepairCandidate {
+  readonly damageId: string;
+  readonly cells: readonly BlockPos[];
+  readonly approachCells: readonly BlockPos[];
 }
 
 export function decideAction(ctx: NPCContext): Action | null;
 ```
+
+방 목록 전체나 DamageLog 전체를 NPC 마다 넘기지 않는다. 14.4 / 14.5 의 원칙이며
+주민 수가 늘어도 판단 입력의 크기가 주민 수 × 월드 규모로 자라지 않게 한다.
+후보 선정의 비용은 소유 시스템이 변경 시점에 한 번 치른다.
+`assignedBed` 도 같은 규칙의 예외가 아니라 SleepSystem 이 이미 좁혀 준 결과다.
 
 ## 14.1 우선순위는 5 단계. 위에서 아래로 한 번만
 
@@ -1115,7 +1143,7 @@ MVP의 욕구는 기존 식사·취침 구간으로 표현한다. 매 NPC가 월
 crop 조건이며 음식 부족 조건을 추가하지 않는다. HaulJob·운반 메커닉도 MVP에 추가하지 않는다.
 
 MVP는 FarmSystem·CookingSystem·RepairSystem이 블록/작물/저장소/시설 변경과 예정 시각에서
-갱신하는 후보 목록과 기존 예약으로 시작한다. 후보 발견을 NPC마다 중복 실행하지
+갱신하는 후보 목록과 기존 예약으로 시작한다. 그 결과가 14 장 `NPCCandidates` 의 각 항목이다. 후보 발견을 NPC마다 중복 실행하지
 않고 NPCDecisionSystem이 읽기 전용 후보를 조립한다. 14장의 Context는 MVP 계약이며
 범용 Job 조회 포트로의 구체 확장은 도입 시 명세화한다. 방 전체·피해 전체를 주민마다
 복사하지 말고 소유자 조회로 관련 후보를 좁힌다. 첫 취침에는 범용 큐가 필요 없다.
@@ -1149,6 +1177,7 @@ VillageStorage(seed/crop/food) 필드나 수자원 시스템을 늘리지 않는
 # 15. 시스템 책임표
 
 ```text
+InputSystem           키보드 / 마우스 입력 수집. update 2 번 자리
 GameClockSystem       게임 시간 진행. DayPhase 전이 이벤트
 InventorySystem       플레이어 인벤토리 / 핫바
 CraftingSystem        제작 레시피 판정. 해금 확인
@@ -1171,6 +1200,7 @@ WorldStateSystem      파생 지표 계산 (순수 함수 호출)
 GameEventSystem       진행 이벤트 조건 평가 / 커맨드 실행
 DialogueSystem        대사 재생
 ObjectiveSystem       목표 문구
+DebugSystem           F3 패널의 계측 수집과 디버그 명령 (26 장)
 ```
 
 ## 15.1 다른 소유자의 내부 상태를 직접 쓰지 않는다
