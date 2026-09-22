@@ -1,6 +1,6 @@
 # ADR 014. 복셀 월드를 청크 16³ 와 그리디 메싱으로 표현한다
 
-Status: Accepted
+Status: Accepted — operational details amended by ADR 016
 Date: 2026-09-22
 Evidence: docs/research/2026-09-22-voxel-web-stack.md
 Related: ADR 011
@@ -70,7 +70,8 @@ interface BlockDefinition {
 ```
 
 블록에 인스턴스 상태를 두지 않는다.
-문의 열림 여부, 침대의 점유 여부 같은 상태는 별도 맵으로 관리한다.
+문의 열림 상태는 없다. 다중 칸 객체의 anchor·방향·id는 PlacementIndex,
+침대 사용자 배정은 SleepSystem이 관리한다 (ADR 016).
 1,048,576 개의 객체를 만들지 않기 위한 결정이다.
 
 **4. 메싱은 그리디 메싱으로 하고 Worker 에서 수행한다.**
@@ -83,7 +84,7 @@ interface BlockDefinition {
 그리디 메싱    같은 재질의 인접한 면을 하나의 큰 사각형으로 합친다
 ```
 
-16 × 16 격자 기준으로 나이브 24,576 면이 청크 + 면 컬링에서 1,536 면이 된다.
+빈 주변 공간에 놓인 완전히 채워진 16³ 블록 기준으로 나이브 24,576 면이 청크 + 면 컬링에서 1,536 면이 된다.
 6.25% 다. 그리디 메싱은 여기서 더 줄인다.
 
 메싱은 CPU 작업이므로 Worker 풀에서 수행한다.
@@ -91,13 +92,13 @@ interface BlockDefinition {
 ```text
 블록 변경
     ↓
-해당 청크와 경계를 공유하는 인접 청크를 dirty 로 표시
+padded가 변경점을 읽는 청크를 dirty로 표시하고 meshRevision 증가 (모서리 AO 포함)
     ↓
 메싱 큐에 넣는다 (같은 청크가 이미 큐에 있으면 합친다)
     ↓
 Worker 가 메싱하여 transferable ArrayBuffer 로 반환
     ↓
-메인 스레드가 BufferGeometry 를 교체한다
+메인 스레드가 최신 revision일 때만 BufferGeometry를 교체한다
 ```
 
 프레임당 GPU 업로드 청크 수에 상한을 둔다.
@@ -136,7 +137,7 @@ Worker 가 메싱하여 transferable ArrayBuffer 로 반환
 
 메모리를 절약한다.
 
-월드가 1MB 복셀 고정이므로 `Uint16Array` 전체가 2MB 다. 절약할 이유가 없다.
+월드가 약 100만 복셀 고정이므로 `Uint16Array` 전체가 2MB 다. 절약할 이유가 없다.
 접근이 O(1) 인 것이 게임 규칙 코드 전체에서 이득이다.
 
 **C. 메인 스레드 메싱**

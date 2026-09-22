@@ -3,6 +3,9 @@
 Status: Accepted
 Date: 2026-09-22
 
+
+> v1.1 적용 범위 (ADR 016): 진행 정의가 커맨드를 반환한다는 원칙은 유지한다. 아래 unlockBuilding/spawnResident 및 2D 타입은 구 버전 예시다. 현재 커맨드는 ARCHITECTURE 20장이고 주민 스폰은 ResidentArrivalSystem만 담당한다.
+
 ## 배경
 
 초기 아키텍처 문서의 진행 이벤트 정의는 다음과 같았다.

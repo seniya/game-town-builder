@@ -3,6 +3,9 @@
 Status: Accepted
 Date: 2026-09-22
 
+
+> v1.1 적용 범위 (ADR 016): Action 단일 상태 원칙은 유지한다. 아래 stateLabel/currentAction의 구체 이름은 구 버전 예시이며 현재 계약은 ARCHITECTURE 13장이다.
+
 ## 배경
 
 초기 문서에는 두 개의 상태 표현이 동시에 존재했다.

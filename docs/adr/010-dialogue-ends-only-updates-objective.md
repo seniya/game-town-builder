@@ -3,6 +3,9 @@
 Status: Accepted
 Date: 2026-09-22
 
+
+> v1.1 적용 범위 (ADR 016): 대사 종료가 목표만 바꾼다는 원칙은 유지한다. 해금은 이벤트가 아니라 VillageLevelSystem의 레벨 전이에서 적용한다. 아래 unlockBuilding 예시는 현재 구현 기준이 아니다.
+
 ## 배경
 
 `MVP_SPEC.md` 47.1의 첫 페이즈 흐름은 다음과 같았다.

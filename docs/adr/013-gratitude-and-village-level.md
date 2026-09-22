@@ -1,6 +1,6 @@
 # ADR 013. 감사 포인트와 마을 레벨을 도입하되, 파생 지표와 축을 분리한다
 
-Status: Accepted
+Status: Accepted — operational details amended by ADR 016
 Date: 2026-09-22
 Evidence: docs/research/2026-09-22-dragon-quest-builders-2.md
 Related: ADR 004 (유지), ADR 012
@@ -59,7 +59,7 @@ ADR 004 가 금지한 것은 **"마을의 현재 상태를 누적값으로 표�
 
 **1. 감사 포인트는 주민의 실제 행동에서 발생한다.**
 
-건물을 짓는 순간이 아니다. 주민이 그것을 쓰는 순간이다.
+반복 보상은 주민이 사용하는 순간이다. 최초 방 타입·이벤트는 일회성 예외다.
 
 ```text
 주민이 침대에서 잠들었다          +gratitude
@@ -91,7 +91,7 @@ levelUp 가능 조건 = gratitude >= levelCost[next]
 ```text
 레벨 2    인식된 방 >= 2, housingLevel >= 50
 레벨 3    인식된 방 >= 4, foodLevel >= 50, housingLevel >= 100
-레벨 4    인식된 방 >= 6, safetyLevel >= 100, happinessLevel >= 70
+레벨 4    범위 밖. 조건을 정의하지 않는다
 ```
 
 정확한 수치의 정본은 `MVP_SPEC.md` 와 `data/balance.ts` 다.
@@ -101,7 +101,8 @@ levelUp 가능 조건 = gratitude >= levelCost[next]
 몬스터가 벽을 부수면 방 인식이 풀리고 파생 지표가 내려간다.
 그러면 **다음 레벨업이 막힌다.** 이미 올린 레벨은 유지된다.
 
-DQB2 는 베이스 레벨 자체를 떨어뜨리지만, 이 프로젝트는 그렇게 하지 않는다.
+DQB2의 레벨 하락 여부는 재검증하지 못했으므로 비교 근거로 사용하지 않는다.
+이 프로젝트의 정책은 해금과 도착한 주민을 되돌리지 않는다는 내부 이유에 근거한다.
 
 ADR 005 가 같은 문제를 이미 지적했다.
 진행 조건이 다시 거짓이 되면 이벤트가 롤백되어 플레이어가 진행 불가에 빠진다.

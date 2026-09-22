@@ -2,8 +2,8 @@
 
 # Small Village Restoration Game — Task Breakdown
 
-Version: 1.0
-Status: DQB2 Redesign Baseline
+Version: 1.1
+Status: Reviewed Specification — Implementation Pending
 Date: 2026-09-22
 
 ---
@@ -54,13 +54,13 @@ ADR 011 ~ 015 로 전부 폐기되었다.
 # 2. 단계 개요
 
 ```text
-Phase A  복셀 기반      TASK-001 ~ 008    청크 / 메싱 / 렌더 / 섬
+Phase A  복셀 기반      TASK-001 ~ 008 + 027    청크 / 메싱 / 렌더 / 섬
 Phase B  플레이어       TASK-009 ~ 016    이동 / 충돌 / 블록 편집 / 제작
 Phase C  방 인식 ★     TASK-017 ~ 022    detectRoom / 레시피 / 진단
-Phase D  시간과 이동     TASK-023 ~ 029    시계 / 통행 / A* / NPC 골격
-Phase E  주민 생활 ★   TASK-030 ~ 034    농사 / 요리 / 식사 / 취침
-Phase F  성장          TASK-035 ~ 038    감사 포인트 / 종 / 해금
-Phase G  진행          TASK-039 ~ 043    지표 / 대사 / 목표 / 이벤트
+Phase D  시간과 이동     TASK-023 ~ 026, 028 ~ 029, 034    시계 / 통행 / A* / NPC 골격
+Phase E  주민 생활 ★   TASK-033 ★ → 030 ~ 032    농사 / 요리 / 식사 / 취침
+Phase F  성장          TASK-039 → 035 ~ 038    감사 포인트 / 종 / 해금
+Phase G  진행          TASK-040 ~ 043    지표 / 대사 / 목표 / 이벤트
 Phase H  방어          TASK-044 ~ 049    습격 / 파괴 / 전투 / 수리
 Phase I  마무리        TASK-050 ~ 053    오디오 / 저장 / 엔딩 / 밸런스
 ```
@@ -69,7 +69,7 @@ Phase I  마무리        TASK-050 ~ 053    오디오 / 저장 / 엔딩 / 밸런
 
 ```text
 TASK-022 (방 진단)     Phase C 끝. 방을 만드는 것이 즐거운가
-TASK-033 (취침)        Phase E 끝. 주민이 내 방을 쓰는 것이 만족스러운가
+TASK-033 (취침)        Phase E 시작. 주민이 내 방을 쓰는 것이 만족스러운가
 ```
 
 **두 지점에서 부정적이면 다음 Phase 로 넘어가지 않는다.**
@@ -89,14 +89,32 @@ Phase A 끝    섬이 보인다. 아직 조작할 수 없다
 Phase B 끝    돌아다니며 블록을 부수고 놓을 수 있다. 마인크래프트 크리에이티브 수준
 Phase C 끝    방이 인식된다. 아직 주민이 없다
 Phase D 끝    주민 3 명이 시간표대로 걸어다닌다. 아직 일을 하지 않는다
-Phase E 끝    주민이 농사 / 요리 / 식사 / 취침을 한다. ★ 게임의 핵심이 전부 있다
+Phase E 끝    취침 검증 후 농사 / 요리 / 식사를 연결한다. ★ 게임의 핵심이 전부 있다
 Phase F 끝    감사 포인트가 쌓이고 종을 칠 수 있다
 Phase G 끝    대사와 목표가 플레이어를 안내한다
 Phase H 끝    밤에 몬스터가 온다. 벽이 부서지고 목수가 고친다
 Phase I 끝    저장되고, 소리가 나고, 엔딩이 있다
 ```
 
-## 2.3 표기
+## 2.3 실행 순서와 기존 번호
+
+번호는 식별자다. 본문 위치나 숫자 순으로 실행하지 않고 다음 순서와 의존을 따른다.
+
+1. 001 → 002 → 027 → 004 → 003 → 005 → 006 → 007 → 008
+2. 009 → 010 → 012 → 011 → 014 → 013 → 015 → 016
+3. 017 → 018 → 019 → 020 → 021 → 022 ★
+4. 023 → 024 → 025 → 026 → 028 → 029 → 034 → 033 ★
+5. 030 → 031 → 032 → 039 → 035 → 036 → 037 → 038
+6. 040 → 041 → 042 → 043 → 044 → 045 → 046 → 047 → 048 → 049
+7. 050 → 051 → 052 → 053
+
+027은 초기 공통 골격, 039는 성장 게이트에 필요한 순수 지표 계산이므로 앞당긴다.
+033은 농사·요리·식사에 의존하지 않는다. 기존 디버그 기능으로 침실·주민 한 명·시계를
+연결해 핵심 취침 경험부터 확인한다. 022를 통과하기 전 주민 단계로 넘어가지 않는다.
+아직 구현하지 않은 시스템은 update 슬롯을 비워 두고, 타 시스템 완료 조건을 통과했다고 주장하지 않는다.
+TASK 본문은 참조 안정성을 위해 기존 번호 위치를 유지한다.
+
+## 2.4 표기
 
 ```text
 ★   핵심 검증 지점
@@ -118,7 +136,7 @@ pnpm init. Node 24 LTS
 typescript 5.x (strict: true)
 vite 8.x (SPA)
 three 0.18x
-vitest 3.x
+vitest 4.1 이상 4.x (Vite 8 지원)
 eslint + no-restricted-imports 로 three 격리 규칙
 prettier
 ```
@@ -140,24 +158,24 @@ Acceptance Criteria:
 작업:
 
 ```text
-ARCHITECTURE.md 33 장의 폴더 구조를 만든다
+MVP_SPEC.md 33 장의 폴더 구조를 만든다
 src/game/types/index.ts 에 BlockPos / Vec3 / ChunkCoord / posKey 를 둔다
 src/game/data/balance.ts 에 MVP_SPEC 34 장을 그대로 옮긴다
-좌표 변환 함수 3 개 (blockToWorldMin / blockToWorldCenter / worldToBlock)
+좌표 변환 함수 4개 (blockToWorldMin / blockToWorldCenter / standCellToWorldFeet / worldToBlock)
 ```
 
 Acceptance Criteria:
 
 - [ ] 모든 폴더에 최소 1 개의 파일 또는 `.gitkeep` 이 있다
 - [ ] `balance.ts` 가 `as const` 로 선언되어 있다
-- [ ] 좌표 변환 3 함수의 왕복 테스트가 통과한다
+- [ ] 좌표 변환 4함수의 기준점·왕복 테스트가 통과한다
 - [ ] `blockToWorld` 라는 이름의 함수가 존재하지 않는다
 
 ---
 
 ## TASK-003 Chunk 와 VoxelWorld
 
-의존: TASK-002
+의존: TASK-004, TASK-027
 
 작업:
 
@@ -165,7 +183,7 @@ Acceptance Criteria:
 Chunk (Uint16Array 4096, index = x + z*16 + y*256)
 VoxelWorld (128 × 64 × 128, getBlock / setBlock)
 dirty 청크 추적. 경계 블록이면 인접 청크도 dirty
-changedBlocks 추적
+PlacementIndex + 원자적 editObject. meshRevision 추적
 ```
 
 Acceptance Criteria:
@@ -175,6 +193,9 @@ Acceptance Criteria:
 - [ ] 청크 경계(x % 16 === 0)의 블록을 바꾸면 **인접 청크도 dirty** 가 된다
 - [ ] `takeDirtyChunks()` 가 중복 없이 반환하고, 호출 후 비워진다
 - [ ] 위 전부에 대한 테스트가 있다
+- [ ] 침대·문의 점유 칸과 메타데이터가 함께 변경된다. 일부만 실패하면 모두 롤백한다
+- [ ] AO를 위해 padded에 변경점을 포함하는 모서리·꼭짓점 이웃도 dirty/revision이 갱신된다
+- [ ] 다중 칸 객체에 단일 setBlock을 직접 적용하면 거부한다
 
 ---
 
@@ -193,10 +214,11 @@ BlockDefinition { id, name, kind, solid, opaque, terrain, breakSeconds, drops }
 
 Acceptance Criteria:
 
-- [ ] 22 종이 모두 정의되어 있고 id 가 0 ~ 22 로 연속이다
+- [ ] 공기 제외 22종, 공기 포함 23개가 id 0~22로 연속이다
 - [ ] `isWallBlock` 이 plank / stone_brick / window / door 만 true 를 반환한다
 - [ ] `isWallBlock(dirt)` 가 false 다 — MVP_SPEC 8.4
 - [ ] bedrock / water / bell 의 `breakSeconds` 가 `null` 이다
+- [ ] leaves 회수 1개와 씨앗 25% 추가 드롭, 다중 칸 객체의 단일 아이템 드롭이 정의된다
 
 ---
 
@@ -219,10 +241,11 @@ Acceptance Criteria:
 - [ ] 전부 air 인 청크가 정점 0 개를 만든다
 - [ ] 단일 블록 하나가 정확히 6 면 24 정점을 만든다
 - [ ] 2 × 1 × 1 로 붙은 같은 블록에서 맞닿은 2 면이 컬링되어 보이는 면이 10 개다
-- [ ] 그 10 면이 그리디 병합되어 **쿼드 8 개** 가 된다 (긴 쪽 4 면이 2 개씩 병합)
+- [ ] 주변 장애물이 없고 재질·AO가 같은 두 블록의 10면이 **쿼드 6개**로 병합된다
 - [ ] 경계(padded 의 바깥 1 칸)가 불투명이면 해당 면이 생성되지 않는다
 - [ ] `three` 를 import 하지 않는다
 - [ ] Worker 없이 Vitest 에서 직접 호출된다
+- [ ] AO 유무의 정점 수를 따로 측정하고 면 컬링과 그리디 병합의 감소량을 구분한다
 
 ---
 
@@ -246,6 +269,9 @@ Acceptance Criteria:
 - [ ] 청크 경계에 구멍이 보이지 않는다
 - [ ] 블록을 빠르게 연속으로 놓아도 프레임이 끊기지 않는다
 - [ ] `mesher.worker.ts` 에 메싱 알고리즘이 없다
+- [ ] Worker 결과가 역순 도착해도 최신 meshRevision의 메시만 표시된다
+- [ ] 처리 중 인접 청크 변경과 연속 편집에서 오래된 결과가 dirty를 해제하지 않는다
+- [ ] transferable에 월드 원본 배열을 넘기지 않는다
 
 ---
 
@@ -295,6 +321,7 @@ Acceptance Criteria:
 - [ ] 나무가 24 그루다
 - [ ] 생성이 결정적이다. 두 번 실행해도 같은 섬이 나온다
 - [ ] 생성 시간이 1 초 이하다
+- [ ] MVP_SPEC 36장의 기준 장치·브라우저·DPR·시험 장면을 docs/state에 기록한다
 
 ---
 
@@ -348,7 +375,7 @@ Acceptance Criteria:
 
 ## TASK-011 3인칭 카메라
 
-의존: TASK-010
+의존: TASK-010, TASK-012
 
 작업:
 
@@ -364,6 +391,7 @@ Acceptance Criteria:
 - [ ] 벽에 붙어도 카메라가 벽을 뚫고 나가지 않는다
 - [ ] 위아래 시야가 제한 각도에서 멈춘다
 - [ ] 실내에 들어가도 카메라가 벽 밖으로 나가지 않는다
+- [ ] 투명한 window도 카메라 충돌을 막는다
 
 ---
 
@@ -390,7 +418,7 @@ Acceptance Criteria:
 
 ## TASK-013 블록 파괴와 설치
 
-의존: TASK-012
+의존: TASK-012, TASK-014
 
 작업:
 
@@ -410,12 +438,16 @@ Acceptance Criteria:
 - [ ] `bed` 가 수평 2 칸을 차지하고, 두 칸이 비어 있어야만 놓인다
 - [ ] `farmland` 는 아래가 고체일 때만 놓인다
 - [ ] 파괴 균열이 진행도에 따라 보인다
+- [ ] door 아이템 하나가 수직 2칸을 차지하며 주민에게 두 칸 통로를 제공한다
+- [ ] 침대 방향과 객체 id가 보존된다. 어느 점유 칸을 부숴도 전체 제거와 드롭 1개가 원자적이다
+- [ ] 두 침대를 붙여 놓아도 별개 객체로 판정한다
+- [ ] 인벤토리 부족·점유 충돌로 실패하면 블록·아이템·PlacementIndex가 바뀌지 않는다
 
 ---
 
 ## TASK-014 인벤토리와 핫바
 
-의존: TASK-013
+의존: TASK-012
 
 작업:
 
@@ -427,22 +459,23 @@ src/ui/Hotbar.ts — DOM
 
 Acceptance Criteria:
 
-- [ ] 파괴한 블록이 인벤토리에 들어간다
+- [ ] 드롭 추가 API로 블록이 인벤토리에 들어간다 (파괴 연동은 TASK-013)
 - [ ] 64 를 넘으면 다음 칸으로 넘어간다
 - [ ] 핫바 선택이 숫자키와 휠로 바뀐다
-- [ ] 설치할 때 개수가 1 줄고, 0 이 되면 설치되지 않는다
+- [ ] 설치 소비 API가 1개를 차감하고 0개면 거부한다 (설치 연동은 TASK-013)
 - [ ] UI 가 `three` 를 import 하지 않는다
 
 ---
 
 ## TASK-015 제작
 
-의존: TASK-014
+의존: TASK-013
 
 작업:
 
 ```text
 src/game/data/recipes.ts — MVP_SPEC 8.5
+src/game/data/unlocks.ts의 레벨별 정적 표 — MVP_SPEC 23.2 (초기 레벨 1 조회)
 CraftingSystem
 src/ui/InventoryPanel.ts — E 로 열기
 해금되지 않은 레시피는 회색 + 필요 레벨 표시
@@ -455,6 +488,7 @@ Acceptance Criteria:
 - [ ] 해금되지 않은 레시피가 **숨겨지지 않고 회색으로 보인다**
 - [ ] 회색 레시피에 "마을 레벨 2 필요" 가 표시된다
 - [ ] 제작 재료가 `blocks.ts` 에 존재하는 블록으로만 구성되어 있다
+- [ ] 레벨 1에서 화덕·물통·침대 제작이 가능하고, 잎 회수부터 침대 제작까지 디버그 없이 이어진다
 
 ---
 
@@ -467,7 +501,7 @@ Acceptance Criteria:
 ```text
 DebugSystem + src/ui/DebugPanel.ts (F3)
 ARCHITECTURE 26 장의 표시 항목
-디버그 명령: 시간 배속 / 블록 무제한
+디버그 명령: 블록 무제한. 시간 배속은 TASK-023에서 연결 (그 전 비활성)
 ```
 
 Acceptance Criteria:
@@ -483,7 +517,7 @@ Acceptance Criteria:
 
 ## TASK-017 buildTestWorld 헬퍼
 
-의존: TASK-004
+의존: TASK-004, TASK-003
 
 작업:
 
@@ -501,6 +535,9 @@ Acceptance Criteria:
 - [ ] 헬퍼 자체에 대한 테스트가 있다
 
 **이 Task 를 건너뛰지 않는다.** 이것이 없으면 방 테스트를 아무도 쓰지 않는다.
+- [ ] 기본 바닥은 자동 생성하지 않는다. 성공 fixture는 바닥 레이어를 명시한다
+- [ ] D는 수직 쌍의 문 객체로 생성한다. B는 명시한 anchor/facing으로 침대 객체를 생성한다
+- [ ] 잘못된 점유·메타데이터 fixture는 오류를 낸다
 
 ---
 
@@ -519,15 +556,17 @@ RoomFailure 6 종. 좌표를 포함한다
 Acceptance Criteria:
 
 - [ ] 5 × 5 판자방 + 문 1 개가 성공한다
-- [ ] 벽이 한 칸 뚫리면 `NOT_ENCLOSED` + **정확한 좌표** 를 반환한다
+- [ ] 평지의 벽 구멍은 `TOO_LARGE` 또는 `NOT_ENCLOSED`로 종료하고 탐색 영역·경로를 남긴다
 - [ ] 문이 없으면 `NO_DOOR` 다
 - [ ] 벽이 1 칸 높이면 `WALL_TOO_LOW` + 좌표다
 - [ ] 바닥에 구멍이 있으면 `NO_FLOOR` + 좌표다
 - [ ] 2 × 1 공간은 `TOO_SMALL` 이다
-- [ ] 11 × 11 공간은 `TOO_LARGE` 다
+- [ ] 내부 바닥 11 × 11 공간은 `TOO_LARGE` 다
 - [ ] **dirt 로만 둘러싸인 공간은 `NOT_ENCLOSED` 다** (MVP_SPEC 8.4)
 - [ ] 열린 공간에서 시작하면 `TOO_LARGE` 또는 `NOT_ENCLOSED` 로 종료된다. 무한 루프가 없다
 - [ ] `VoxelWorld` 가 아니라 `RoomBlockReader` 를 받는다
+- [ ] 고체 가구를 놓아도 방 형태가 유지되고 점유 칸이 바닥 면적에 포함된다
+- [ ] 문은 비고체보다 먼저 경계로 처리한다
 
 ---
 
@@ -554,12 +593,15 @@ Acceptance Criteria:
 - [ ] **벽 틈에 낀 침대는 `facilities.beds` 에 들어가지 않고 `Bedroom` 도 아니다**
 - [ ] 식탁에서 떨어진 의자는 `diningSeats` 가 아니다
 - [ ] `facilities` 가 좌표 목록을 들고 있다 (타입만 반환하지 않는다)
+- [ ] 가구 옆 머리 공간이 막히거나 문과 단절되면 접근 가능한 시설에 포함하지 않는다
+- [ ] 접근 셀과 사용 위치가 구분되며 고체 가구 자체를 A* 목적지로 쓰지 않는다
+- [ ] 높은 priority로 타입이 바뀌면 이전 타입 시설은 비활성화된다
 
 ---
 
 ## TASK-020 RoomRegistry 와 재판정
 
-의존: TASK-019, TASK-013
+의존: TASK-019, TASK-013, TASK-027
 
 작업:
 
@@ -578,6 +620,11 @@ Acceptance Criteria:
 - [ ] 블록을 빠르게 연속으로 놓아도 큐가 밀리지 않는다
 - [ ] 같은 방이 큐에 중복으로 들어가지 않는다
 - [ ] 월드 전체 스캔이 발생하지 않는다 (로드 시 제외)
+- [ ] 문부터 설치하고 멀리 있는 마지막 벽을 막아도 인식된다
+- [ ] 해제된 방의 먼 벽을 복구하면 재인식된다
+- [ ] 바닥·둘째 층 벽·머리 공간 변경이 재판정에 반영된다
+- [ ] 같은 방의 여러 문은 방 하나로, 공유 문 양쪽의 서로 다른 방은 둘로 등록된다
+- [ ] 탐색 중 변경된 결과는 버리고 재시작한다. dirty 시설은 신규 예약·완료 보상에서 제외한다
 
 ---
 
@@ -612,17 +659,20 @@ Acceptance Criteria:
 ```text
 src/ui/RoomDiagnosticPanel.ts — Tab 토글
 플레이어 위치에서 강제 flood fill → RoomFailure 표시
-실패 좌표를 붉게 하이라이트
+확인된 실패 좌표 또는 열린 탐색 영역·경로를 붉게 하이라이트
 인식된 방은 초록 경계
 ```
 
 Acceptance Criteria:
 
 - [ ] Tab 으로 켜고 끈다
-- [ ] 뚫린 벽 좌표가 정확히 붉게 표시된다
+- [ ] 열린 평지에서는 탐색 영역·경로와 “공간이 열려 있거나 너무 큽니다”가 표시된다
 - [ ] "문이 없습니다" 같은 사유 문구가 보인다
 - [ ] 문을 아직 안 단 공간도 진단된다 (door 없이 플레이어 위치에서 시작)
-- [ ] 진단이 재판정 큐를 거치지 않고 즉시 수행된다
+- [ ] 진단이 자동 큐보다 먼저 시작하고 공통 3ms 예산 안에서 이어서 수행된다
+- [ ] 바닥 구멍·낮은 벽·지형 경계는 실제 확인한 좌표와 사유를 표시한다
+- [ ] 가구 접근 실패를 진단한다. 구멍 위치를 추측해 정답으로 표시하지 않는다
+- [ ] 흙집·주방에 침대 추가·같은 높이 제한 사례를 플레이어가 이해하는지 기록한다
 
 **여기서 멈추고 판단한다.**
 
@@ -663,16 +713,16 @@ Acceptance Criteria:
 
 ## TASK-024 통행 그래프
 
-의존: TASK-003
+의존: TASK-003, TASK-019
 
 작업:
 
 ```text
 src/game/nav/NavigationGraph.ts
-isStandable — 발밑 고체 + 2 칸 공기
+isStandable — voxel/occupancy.ts를 room과 공유. 발밑 고체 + 발·머리 비고체
 neighbors — 4 방향 × (같은 높이 / +1 / -1)
 ActorKind 로 door 처리 분기
-invalidate — 3 × 3 × 3
+invalidate — 실제 읽은 셀의 역참조 (step-up 머리 공간까지)
 ```
 
 Acceptance Criteria:
@@ -684,6 +734,7 @@ Acceptance Criteria:
 - [ ] `door` 가 `'npc'` 에게는 통행 가능, `'monster'` 에게는 불가다
 - [ ] `ActorKind` 에 기본값이 없다 (생략하면 컴파일 에러)
 - [ ] 디버그 모드에서 통행 가능 셀을 시각화할 수 있다
+- [ ] step-up 출발·도착 중 머리 공간 변경도 이웃 캐시와 경로를 즉시 무효화한다
 
 ---
 
@@ -695,7 +746,7 @@ Acceptance Criteria:
 
 ```text
 src/game/nav/pathfind.ts
-maxNodes 4000
+프레임 전체 확장 예산 4000. NODE_LIMIT이면 탐색 세션을 이어서 실행
 PathResult 에 reason ('NO_PATH' / 'NODE_LIMIT')
 ```
 
@@ -708,6 +759,10 @@ Acceptance Criteria:
 - [ ] 노드 상한을 넘으면 `reason: 'NODE_LIMIT'` 다
 - [ ] **두 reason 이 구분된다** — 몬스터가 이걸로 판단한다
 - [ ] 64 칸 거리 탐색이 5ms 이하다
+- [ ] 반경 목표는 고체 종이 아니라 반경 안의 통행 가능한 셀에서 성공한다
+- [ ] NODE_LIMIT의 partialPath는 검증된 셀만 포함한다
+- [ ] 4000노드보다 큰 막힌 영역도 세션을 이어서 탐색해 NO_PATH로 종료한다
+- [ ] NO_PATH의 reachableBoundary에는 실제 접근 경로가 있는 장애물만 들어간다
 
 ---
 
@@ -743,14 +798,14 @@ Acceptance Criteria:
 EventBus (타입 안전)
 EntityRegistry
 VillageStorage (seed / crop / food)
-GameWorld 와 update 순서 16 단계
+GameWorld와 update 16슬롯. 아직 없는 시스템은 빈 슬롯이며 후속 Task에서 연결한다
 ```
 
 Acceptance Criteria:
 
 - [ ] `EventBus.emit` 에 잘못된 payload 를 넣으면 컴파일 에러다
 - [ ] `on` 이 구독 해제 함수를 반환한다
-- [ ] `GameWorld.update` 순서가 ARCHITECTURE 4.1 과 일치한다
+- [ ] `GameWorld.update` 슬롯 순서가 ARCHITECTURE 4.1과 일치하고 추가 시스템도 그 자리에 연결된다
 - [ ] `VillageStorage` 변경 시 `STORAGE_CHANGED` 가 발행된다
 - [ ] 초기 `seed` 가 3 이다
 
@@ -799,6 +854,7 @@ Acceptance Criteria:
 - [ ] 아직 밭 / 주방 / 침대가 없으므로 대부분 Idle 이다 (정상)
 - [ ] 우선순위 5 단계 전부에 대한 테스트가 있다
 - [ ] Context 가 전부 `readonly` 다
+- [ ] 순수 snapshot에 가변 Action·시스템을 노출하지 않는다. 기절 중에는 새 Action을 시작하지 않는다
 
 ---
 
@@ -806,12 +862,12 @@ Acceptance Criteria:
 
 ## TASK-030 농사와 농부
 
-의존: TASK-029, TASK-020
+의존: TASK-033, TASK-020
 
 작업:
 
 ```text
-FarmSystem — crop 성장 3 단계 × 4 시간
+FarmSystem — crop 표시 3단계 각각 4시간. 12시간 경과 시 성숙
 PlantAction / HarvestAction
 farmland 파괴 시 crop 정리
 ```
@@ -825,6 +881,9 @@ Acceptance Criteria:
 - [ ] 성장이 농부와 무관하게 진행된다
 - [ ] `farmland` 를 부수면 위의 `crop` 도 사라진다
 - [ ] `seed` 가 0 이면 심지 않고 다른 행동을 한다
+- [ ] 8시간의 stage=2는 미성숙이며 12시간에만 수확된다
+- [ ] 성숙 작물 수확·재파종을 우선하고 role 시간 밖에는 작업하지 않는다
+- [ ] 씨앗은 정상 수확에서만 돌아오며 작물 파괴로 잃은 씨앗은 채집으로 보충한다
 
 ---
 
@@ -846,6 +905,8 @@ Acceptance Criteria:
 - [ ] 1 게임시간 뒤 `crop -2`, `food +3` 이다
 - [ ] `Kitchen` 이 없으면 `crop` 이 쌓이기만 한다 (게임이 멈추지 않는다)
 - [ ] 요리 중 주방이 해제되면 Action 이 취소된다
+- [ ] 시작 시 재료를 예약하고 완료 때 소비한다. 중단·로드로 재료를 잃거나 음식을 복제하지 않는다
+- [ ] 식사를 못 했어도 다음 역할 시간에 요리할 수 있다
 
 ---
 
@@ -871,19 +932,20 @@ Acceptance Criteria:
 - [ ] `food` 가 0 이면 먹지 않고 넘어간다. 게임이 멈추지 않는다
 - [ ] 같은 끼니에 두 번 먹지 않는다
 - [ ] 식탁 위 음식이 연출 오브젝트이고 블록이 아니다
+- [ ] 같은 의자를 동시에 예약하지 않는다. 경로 실패·취소 시 시설 예약을 해제한다
 
 ---
 
 ## TASK-033 취침 ★ — 분기점 2
 
-의존: TASK-032
+의존: TASK-029, TASK-020, TASK-034
 
 작업:
 
 ```text
 SleepSystem — 침대 배정 / 해제
 SleepAction (침대) / RestAction (광장) — 별개의 Action
-침대 파괴 시 깨어남
+침대 파괴 시 깨어남. 농사·요리·식사 없이 기존 디버그 시험 월드로 먼저 검증
 ```
 
 Acceptance Criteria:
@@ -895,6 +957,10 @@ Acceptance Criteria:
 - [ ] `SleepAction` 과 `RestAction` 이 별개의 클래스다
 - [ ] 자고 있는 주민의 침대를 부수면 깨어나고 배정이 해제된다
 - [ ] 방이 해제되면 그 방의 배정이 전부 풀린다
+- [ ] 한 주민·침실·침대로 핵심 장면을 먼저 확인한 뒤 주민 세 명으로 배정 충돌을 확인한다
+- [ ] 침대는 SleepSystem만 소유한다. NPC 엔티티에 별도 배정 상태를 저장하지 않는다
+- [ ] 방 타입이 바뀌거나 같은 타입에서 침대 하나만 없어져도 해당 배정을 해제한다
+- [ ] 실제 접근 경로가 없으면 다른 침대 또는 RestAction을 선택한다
 
 **여기서 멈추고 판단한다.**
 
@@ -934,7 +1000,7 @@ Acceptance Criteria:
 
 ## TASK-035 감사 포인트
 
-의존: TASK-033
+의존: TASK-033, TASK-032
 
 작업:
 
@@ -954,12 +1020,14 @@ Acceptance Criteria:
 - [ ] `EmptyRoom` 은 보너스를 주지 않는다
 - [ ] 방이 해제되어도 포인트가 줄지 않는다
 - [ ] `gain` 이 좌표를 필수 인자로 받는다
+- [ ] EmptyRoom 등록 뒤 Bedroom 타입 변경에서도 최초 +20을 한 번 지급한다
+- [ ] 자정 전 취침 후 자정 뒤 깨어나 다시 자도 같은 nightId에는 추가 지급하지 않는다
 
 ---
 
 ## TASK-036 마을의 종
 
-의존: TASK-035
+의존: TASK-035, TASK-039
 
 작업:
 
@@ -978,6 +1046,10 @@ Acceptance Criteria:
 - [ ] 치면 포인트가 소비되고 레벨이 오른다
 - [ ] 레벨을 내리는 코드 경로가 존재하지 않는다
 - [ ] 종 연출(소리 / 빛 / 카메라)이 있다
+- [ ] 종의 F는 성장·저장소 탭을 가진 패널 하나만 연다
+- [ ] 종 또는 상자에서 seed/crop/food를 플레이어 인벤토리에서 마을 저장소로 기부한다
+- [ ] 레벨 2에서 80, 레벨 3에서 200을 차감한다. 총 소비량은 280이다
+- [ ] 현재 상태로 게이트를 재평가하고 dirty 방은 세지 않는다
 
 ---
 
@@ -988,17 +1060,18 @@ Acceptance Criteria:
 작업:
 
 ```text
-src/game/data/unlocks.ts — MVP_SPEC 23.2
-CraftingSystem 이 해금을 확인
+TASK-015에서 만든 unlocks.ts를 VillageLevelSystem의 실제 레벨 전이와 연결
+CraftingSystem이 현재 레벨의 해금을 확인
 ```
 
 Acceptance Criteria:
 
-- [ ] 레벨 1 에서 `window` / `chest` / `cooking_stove` / `water_pot` 이 회색이다
+- [ ] 레벨 1 에서 `window` / `chest` 이 회색이다
 - [ ] 회색 항목에 필요 레벨이 표시된다
 - [ ] 레벨 2 를 달성하면 즉시 활성화된다
 - [ ] 해금되지 않은 블록은 디버그 모드에서도 제작되지 않는다
 - [ ] 레벨이 오른 뒤 다시 잠기지 않는다
+- [ ] cooking_stove / water_pot은 레벨 1부터 제작 가능하다
 
 ---
 
@@ -1009,7 +1082,7 @@ Acceptance Criteria:
 작업:
 
 ```text
-residentCap 증가 시 다음 07:00 에 주민 1 명 스폰
+ResidentArrivalSystem이 레벨별 고유 키로 다음 07:00 도착을 예약·스폰
 Villager 역할 (생활만 한다)
 도착 연출
 ```
@@ -1021,6 +1094,8 @@ Acceptance Criteria:
 - [ ] 도착 즉시 침대가 배정된다 (비어 있으면)
 - [ ] `population` 이 늘어 `housingLevel` 과 `foodLevel` 이 내려간다
 - [ ] 새 주민이 시간표대로 생활한다 (서 있기만 하지 않는다)
+- [ ] 레벨 2·3을 같은 날 달성해도 각 예약당 한 명씩 정확히 두 명이 도착한다
+- [ ] EVENT_NEW_RESIDENT는 스폰하지 않는다. 도착 사실만 확인한다
 
 ---
 
@@ -1028,7 +1103,9 @@ Acceptance Criteria:
 
 ## TASK-039 World State
 
-의존: TASK-038
+의존: TASK-020, TASK-027
+
+실행: 성장 게이트보다 먼저 완료한다 (2.3 참조).
 
 작업:
 
@@ -1042,8 +1119,8 @@ Acceptance Criteria:
 
 - [ ] 4 지표가 MVP_SPEC 21.1 대로 계산된다
 - [ ] `population === 0` 에서 0 으로 나누지 않는다
-- [ ] 주민이 밥을 먹으면 `foodLevel` 이 내려간다
-- [ ] 주민이 늘면 `housingLevel` 이 내려간다
+- [ ] food 감소 입력에서 `foodLevel`이 내려간다. 실제 식사 연동은 TASK-032 이후 확인한다
+- [ ] 테스트 입력의 주민 수가 늘면 `housingLevel`이 내려간다. 실제 도착 연동은 TASK-038에서 확인한다
 - [ ] 습격 전에는 `safetyLevel` 이 100 이다
 - [ ] `WorldState` 에 변경 API 가 없다
 - [ ] `SaveData` 에 포함되지 않는다
@@ -1101,7 +1178,7 @@ Acceptance Criteria:
 
 ```text
 GameEventSystem — 커맨드 반환 (ADR 007)
-GameCommand 5 종
+GameCommand 4종 (주민 스폰 명령 없음)
 completed 집합. 비가역
 ```
 
@@ -1134,6 +1211,10 @@ Acceptance Criteria:
 - [ ] 각 이벤트가 감사 포인트 +15 를 준다
 - [ ] 8 개 전부에 대한 `canTrigger` 테스트가 있다
 - [ ] 처음부터 끝까지 이벤트만 따라가면 레벨 2 에 도달한다 (MVP_SPEC 35.3)
+- [ ] 표 순서의 선행 이벤트 완료 조건을 함께 검사한다
+- [ ] 레벨 1 해금·초기 자원으로 주방 → 침실 → 첫 종 경로가 성립한다
+- [ ] 종 대사가 밭 4→8칸·주민 수에 맞춘 침대를 안내한다
+- [ ] 습격 조건은 RaidResult fixture로 단위 검증하고 실제 연동은 TASK-044~049에서 검증한다
 
 ---
 
@@ -1154,11 +1235,12 @@ RaidSystem — villageLevel 달성 후 첫 21:00
 Acceptance Criteria:
 
 - [ ] 레벨 2 달성 후 첫 21:00 에 3 마리가 나온다
-- [ ] 레벨 3 달성 후 첫 21:00 에 5 마리가 나온다
+- [ ] 레벨 3이고 1차 습격이 끝난 뒤 첫 21:00에 5마리가 나온다
 - [ ] 그 외의 밤에는 나오지 않는다
 - [ ] 05:00 에 남은 몬스터가 사라진다
 - [ ] 같은 습격이 두 번 발생하지 않는다
 - [ ] `RAID_STARTED` / `RAID_ENDED` 가 발행된다
+- [ ] 두 레벨을 같은 날 달성해도 습격은 겹치지 않고 순서대로 한 번씩 발생한다
 
 ---
 
@@ -1170,7 +1252,7 @@ Acceptance Criteria:
 
 ```text
 MonsterSystem — ARCHITECTURE 18.1 의 판단 순서
-findBreakableToward (terrain === false 만)
+findBreakableToward (도달 가능한 경계 + terrain=false + breakSeconds!=null + 남은 예산)
 파괴 진행 + 블록 흔들림 연출
 ```
 
@@ -1184,6 +1266,10 @@ Acceptance Criteria:
 - [ ] `NODE_LIMIT` 로 경로를 못 찾았을 때는 부수지 않는다
 - [ ] 완전히 막히면 배회하다 05:00 에 사라진다
 - [ ] 종 반경 6 안에 들어오면 "도달" 로 기록된다
+- [ ] 종은 파괴되지 않으며 열린 마을의 목표 반경까지 걸어간다
+- [ ] 벽에서 떨어져 스폰해도 접근 가능한 벽 앞까지 이동한 뒤 파괴한다
+- [ ] 습격 파괴량이 16복셀을 넘지 않고 두 칸 객체는 부분 파괴하지 않는다
+- [ ] 흙벽 제한이 방어·수리의 재미를 없애는지 관찰 기록을 남긴다
 
 ---
 
@@ -1239,7 +1325,7 @@ Acceptance Criteria:
 
 ```text
 RepairSystem — DamageLog
-RepairAction — 목수. 하루 8 블록. 07:00 ~ 18:00
+RepairAction — 목수. 하루 8 점유 복셀. 07:00 ~ 18:00
 플레이어가 직접 놓아도 resolve
 ```
 
@@ -1247,11 +1333,14 @@ Acceptance Criteria:
 
 - [ ] 몬스터가 부순 좌표가 기록된다
 - [ ] 아침에 목수가 그곳으로 가서 원래 블록을 복구한다
-- [ ] 하루 8 블록까지만 한다
+- [ ] 하루 8 점유 복셀까지만 한다
 - [ ] 9 번째부터는 다음 날로 넘어간다
 - [ ] 재료를 소비하지 않는다
 - [ ] 플레이어가 직접 놓으면 기록에서 제거된다
 - [ ] 18:00 이후에는 수리하지 않는다
+- [ ] 문·침대는 전체 배치로 복원하고 당일 예산에서 2칸을 쓴다
+- [ ] 부분 복구·NPC 점유가 있으면 덮어쓰지 않는다. 완료 시 공간과 예산을 다시 검사한다
+- [ ] 농사 BLOCK_CHANGED를 수리 완료로 오인하지 않는다
 
 ---
 
@@ -1273,6 +1362,7 @@ Acceptance Criteria:
 - [ ] 좌표가 월드에 붉게 표시된다
 - [ ] 수리되면 표시가 사라진다
 - [ ] 피해가 없으면 패널이 뜨지 않는다
+- [ ] 아침 전에 수리한 피해도 지난밤 파괴 수에 포함되고 미수리 표시만 사라진다
 
 ---
 
@@ -1324,6 +1414,12 @@ Acceptance Criteria:
 - [ ] 변경된 청크만 저장된다
 - [ ] `Date.now()` 가 저장 데이터에 없다
 - [ ] 버전이 다르면 조용히 깨지지 않고 거부한다
+- [ ] gameMinutes 하나로 시각을 저장하고 다중 칸 배치·objectId를 복원한다
+- [ ] 습격 중 저장·로드 후 몬스터 체력·도달 집합·파괴 예산·종료 이벤트가 유지된다
+- [ ] 종 직후 도착 예약이 보존되고 같은 주민·이벤트·보상을 두 번 생성하지 않는다
+- [ ] 자정 전후 취침 보상, 기절, 식사 구간, 당일 수리 8칸 제한이 유지된다
+- [ ] 현재 목표와 미완료 대화 표시가 복원된다
+- [ ] 로드의 방 재구축은 보상 이벤트를 발생시키지 않는다
 
 ---
 
@@ -1363,10 +1459,10 @@ Acceptance Criteria:
 
 - [ ] 처음부터 끝까지 90 ~ 120 분에 도달한다
 - [ ] 이벤트만 따라가도 레벨 2 에 도달한다
-- [ ] 레벨 3 까지 약 3 게임일이 걸린다
-- [ ] 밭 4 칸으로 주민 5 명의 식량이 유지된다
-- [ ] 씨앗이 고갈되지 않는다
-- [ ] 60 FPS 를 유지한다
+- [ ] 레벨 2 이후 약 3게임일이라는 가설을 측정하고 차이와 원인을 기록한다
+- [ ] 밭 8칸·충분한 씨앗과 접근 가능한 주방에서 주민 5명의 일간 식량을 검증한다
+- [ ] 파괴 없는 정상 수확에서 씨앗이 순환하고 손실 시 채집으로 보충할 수 있다
+- [ ] MVP_SPEC 36장의 동일 조건에서 60 FPS 목표 / 하위 1% 30 FPS 최소를 측정한다
 - [ ] 드로우콜이 600 미만이다
 - [ ] 방 재판정이 프레임당 3ms 이하다
 - [ ] MVP_SPEC 39 장의 Acceptance Test 10 개가 전부 통과한다
@@ -1375,24 +1471,10 @@ Acceptance Criteria:
 
 # 3. Task 의존 그래프 요약
 
-```text
-A: 001 → 002 → 003 → 004 → 005 → 006 → 007 → 008
-B: 003 → 009 → 010 → 011
-   007,010 → 012 → 013 → 014 → 015
-   013 → 016
-C: 004 → 017 → 018 → 019 → 020 → 021 → 022 ★
-D: 002 → 023
-   003 → 024 → 025 → 026
-   002 → 027 → 028 → 029
-E: 029,020 → 030 → 031 → 032 → 033 ★
-   023,007 → 034
-F: 033 → 035 → 036 → 037 → 038
-G: 038 → 039
-   027 → 040 → 041 → 042 → 043
-H: 036 → 044 → 045 → 046 → 047
-   045 → 048 → 049
-I: 049 → 050 → 051 → 052 → 053
-```
+실행 정본은 2.3의 전체 순서와 각 Task의 의존 목록이다.
+주요 수정: 027→003/020, 012→011, 014→013, 029/020/034→033,
+033→030, 020/027→039→036, 032/033→035.
+같은 Phase 안에서도 이 선행 조건을 생략하지 않는다.
 
 ---
 

@@ -3,6 +3,9 @@
 Status: Accepted
 Date: 2026-09-22
 
+
+> v1.1 적용 범위 (ADR 016): React를 쓰지 않고 UI가 게임 상태를 소유하지 않는 원칙만 유지한다. Phaser UI 예시는 폐기되었으며 현재 UI는 DOM이다.
+
 ## 배경
 
 게임 UI로 Resource HUD, Objective, Interaction Prompt, Build Menu, Game Time,

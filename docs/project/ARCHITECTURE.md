@@ -2,8 +2,8 @@
 
 # Small Village Restoration Game — Architecture Guide
 
-Version: 1.0
-Status: DQB2 Redesign Baseline
+Version: 1.1
+Status: Reviewed Specification — Implementation Pending
 Date: 2026-09-22
 
 ---
@@ -49,7 +49,7 @@ ADR 010   대사 종료는 목표 문구만 바꾼다
         └───────────────>─┴────────────────┘
 
     src/game/**  →  three 를 모른다
-    src/render/** →  게임 상태를 읽는다. 쓰지 않는다
+    src/render/** →  게임 상태를 읽는다. 렌더 전용 dirty 알림만 소비한다
     src/ui/**     →  이벤트를 구독한다. 상태를 소유하지 않는다
     src/workers/**→  three 도 게임 상태도 모른다. 순수 함수만 실행한다
 ```
@@ -57,17 +57,17 @@ ADR 010   대사 종료는 목표 문구만 바꾼다
 ## 2.1 의존성 방향
 
 ```text
-data       ←  아무것도 의존하지 않는다
+data       ←  types만 참조한다
 types      ←  아무것도 의존하지 않는다
 voxel      ←  types, data
 room       ←  types, data, voxel
 nav        ←  types, data, voxel
-entities   ←  types, data
+entities   ←  types, data (Action 인터페이스는 types에 둔다)
 actions    ←  types, entities, voxel, nav, room
 systems    ←  위 전부
 GameWorld  ←  systems
 render     ←  GameWorld (읽기)
-ui         ←  EventBus (구독)
+ui         ←  EventBus / 읽기 전용 조회 / 주입된 입력 명령
 ```
 
 **역방향 의존을 만들지 않는다.**
@@ -159,15 +159,15 @@ export class GameWorld {
  5  room               ★ 블록 변경 이후. 방 재판정 큐를 예산 안에서 처리한다
  6  nav                무효화된 통행 캐시를 정리한다
  7  farm               작물 성장
- 8  raid               습격 스케줄 판정
+ 8  raid / arrival     습격 스케줄과 ResidentArrivalSystem의 도착 예약 처리
  9  monster            몬스터 AI. 블록 파괴 포함
-10  npcDecision        NPC 의 다음 Action 을 정한다
-11  npc                현재 Action 을 실행한다
+10  npcDecision        식사 구간·침대 배정을 갱신한 뒤 읽기 전용 판단
+11  npc                Action 실행. 조리·식사·취침·수리 서비스 호출
 12  combat             공격 판정
 13  gratitude          누적 이벤트를 소비해 포인트를 더한다
 14  worldState         ★ 파생 지표를 계산한다. NPC 행동 이후여야 한다
 15  gameEvent          진행 이벤트 조건을 평가한다
-16  objective          목표 문구를 갱신한다
+16  objective / save   목표 갱신 후 프레임 끝의 일관된 스냅샷을 저장한다
 ```
 
 ## 4.2 5 번이 4 번 뒤인 이유
@@ -189,7 +189,10 @@ NPC 행동 전에 계산하면 지표가 항상 한 프레임 과거를 가리�
 ## 4.4 9 번이 10 번 앞인 이유
 
 몬스터가 블록을 부수면 NPC 의 경로가 무효화된다.
-NPC 가 먼저 판단하면 이미 사라진 블록 위로 경로를 잡는다.
+NPC가 먼저 판단하면 이미 사라진 블록 위로 경로를 잡는다.
+모든 변경은 Nav 캐시·진행 중 경로·가구 예약을 즉시 무효화한다.
+room 처리 이후 바뀐 방은 다음 프레임에 재판정하지만 dirty 시설을 사용하거나 보상하지 않는다.
+07:00 도착과 05:00 습격 종료는 경계 시각을 넘었는지 검사하며 등호 비교를 쓰지 않는다.
 
 ---
 
@@ -197,8 +200,9 @@ NPC 가 먼저 판단하면 이미 사라진 블록 위로 경로를 잡는다.
 
 ```ts
 export type GameEventMap = {
-  BLOCK_CHANGED:       { pos: BlockPos; from: number; to: number; by: 'player' | 'npc' | 'monster' };
+  BLOCK_CHANGED:       { batchId: number; pos: BlockPos; from: number; to: number; by: BlockChangeSource; removedObject?: PlacedObjectSnapshot };
   ROOM_REGISTERED:     { roomId: string; type: RoomType };
+  ROOM_FACILITIES_CHANGED: { roomId: string };
   ROOM_TYPE_CHANGED:   { roomId: string; from: RoomType; to: RoomType };
   ROOM_UNREGISTERED:   { roomId: string; reason: RoomFailure };
   GRATITUDE_GAINED:    { amount: number; source: GratitudeSource; at: Vec3 };
@@ -207,10 +211,10 @@ export type GameEventMap = {
   INVENTORY_CHANGED:   void;
   NPC_ACTION_CHANGED:  { npcId: string; label: string };
   NPC_ARRIVED:         { npcId: string };
-  RAID_STARTED:        { count: number };
-  RAID_ENDED:          { total: number; reached: number };
+  RAID_STARTED:        { raidId: number; count: number };
+  RAID_ENDED:          RaidResult;
   BLOCK_DAMAGED:       { pos: BlockPos; progress: number };
-  DAMAGE_LOGGED:       { pos: BlockPos; blockId: number };
+  DAMAGE_LOGGED:       DamageEntry;
   BLOCK_REPAIRED:      { pos: BlockPos };
   GAME_EVENT_FIRED:    { id: GameEventId };
   DIALOGUE_STARTED:    { npcId: string; lines: string[] };
@@ -244,7 +248,7 @@ export class EventBus {
 ```text
 player    파괴 진행 UI 를 닫는다
 monster   DamageLog 에 기록한다
-npc       목수의 수리. DamageLog 에서 제거한다
+npc       농사 또는 목수 수리. 피해 cells가 복구된 경우에만 해결한다
 ```
 
 ---
@@ -263,8 +267,9 @@ export class VoxelWorld {
   /** 이번 프레임에 변경된 청크 좌표. 렌더가 읽고 비운다. */
   takeDirtyChunks(): ChunkCoord[];
 
-  /** 이번 프레임에 변경된 블록 좌표. RoomSystem 과 NavigationGraph 가 읽는다. */
-  takeChangedBlocks(): BlockPos[];
+  /** 다중 칸 객체의 점유 배열과 메타데이터를 함께 커밋한다. */
+  editObject(command: ObjectEditCommand, by: BlockChangeSource): boolean;
+  readonly placements: PlacementIndex;
 }
 ```
 
@@ -274,14 +279,17 @@ export class VoxelWorld {
 1  범위 검사. 밖이면 false
 2  같은 id 면 false
 3  Chunk 의 배열에 쓴다
-4  해당 청크를 dirty 로 표시
-5  경계 블록이면 인접 청크도 dirty 로 표시   ★ 잊기 쉽다
-6  changedBlocks 에 좌표를 넣는다
-7  BLOCK_CHANGED 이벤트를 발행한다
+4  해당 청크의 meshRevision을 증가시키고 dirty 표시
+5  padded 18³에 변경점이 포함된 이웃도 dirty (면·모서리·꼭짓점 AO 포함)
+6  Nav와 방 후보를 즉시 무효화
+7  커밋 완료 뒤 BLOCK_CHANGED 발행
 8  true 반환
 ```
 
-5 번을 빠뜨리면 청크 경계에 구멍이 보인다. 가장 흔한 버그다.
+5번을 빠뜨리면 청크 경계에 구멍이나 오래된 AO가 남는다.
+setBlock은 단일 칸용이다. 기존 객체에 걸치거나 bed/door를 직접 쓰려 하면 거부하고
+editObject를 사용한다. 초기 생성·로드도 PlacementIndex와 함께 복원한다.
+여러 소비자가 비우는 changedBlocks 큐를 공유하지 않는다.
 
 ## 6.2 Chunk
 
@@ -301,18 +309,27 @@ export class Chunk {
 
 ## 6.3 블록 부가 상태
 
-블록 자체가 아니라 별도 맵이 소유한다.
-
 ```ts
-// FarmSystem 이 소유한다
-Map<string /* "x,y,z" */, { stage: number; plantedAtGameMinutes: number }>
-
-// SleepSystem 이 소유한다
-Map<string /* bed 좌표 */, string /* npcId */>
+export interface PlacedObjectSnapshot {
+  readonly id: string;
+  readonly blockId: number; // bed 또는 door
+  readonly anchor: BlockPos;
+  readonly facing: 'north' | 'east' | 'south' | 'west';
+}
+export type ObjectEditCommand =
+  | { kind: 'place'; object: PlacedObjectSnapshot }
+  | { kind: 'remove'; objectId: string };
 ```
 
-키를 문자열로 만드는 것은 `Map` 의 참조 동등성 문제를 피하기 위해서다.
-`posKey(pos)` 헬퍼를 `types` 에 둔다.
+PlacementIndex는 VoxelWorld 소유이며 id와 점유 좌표에서 대표 객체를 찾는다.
+침대는 anchor와 facing의 수평 두 칸, 문은 anchor와 y+1 두 칸이다.
+전체 cells를 검증하고 배열·인덱스를 커밋한 뒤 같은 batchId의 알림을 보낸다.
+실패하면 아이템·블록·메타데이터 모두 바뀌지 않는다.
+
+FarmSystem은 posKey → plantedAtGameMinutes를, SleepSystem은 bed objectId → npcId를 소유한다.
+NPC는 assignedBed를 별도로 소유하지 않는다. Decision의 배정은 읽기 전용 snapshot이다.
+단일 칸 가구 id는 posKey, 다중 칸 id는 저장되는 단조 증가 objectIdCounter로 발급한다.
+키 함수와 공통 타입은 src/game/types/index.ts에만 정의한다.
 
 ---
 
@@ -329,6 +346,7 @@ export interface ChunkCoord { cx: number; cy: number; cz: number; }
 ```ts
 blockToWorldMin(p: BlockPos): Vec3       // 블록의 최소 모서리
 blockToWorldCenter(p: BlockPos): Vec3    // 블록의 중심
+standCellToWorldFeet(p: BlockPos): Vec3  // {x+0.5, y, z+0.5}, 발밑 중심
 worldToBlock(v: Vec3): BlockPos          // floor
 ```
 
@@ -340,7 +358,7 @@ worldToBlock(v: Vec3): BlockPos          // floor
 ```text
 게임 규칙 / 방 판정 / 통행 / 저장   →  BlockPos
 이동 / 충돌 / 렌더 / 카메라        →  Vec3
-NPC 의 이동 목적지                →  blockToWorldCenter(BlockPos)
+NPC 의 이동 목적지                →  standCellToWorldFeet(approachCell)
 ```
 
 ---
@@ -369,9 +387,9 @@ export function raycastVoxels(
 `isTarget` 을 주입받는 이유는 용도마다 대상이 다르기 때문이다.
 
 ```text
-블록 파괴     id !== 0 && 파괴 가능
+블록 파괴     id !== 0 (가장 앞 블록 선택 후 파괴 가능 여부 검사)
 블록 설치     id !== 0                (설치는 hit.pos + hit.face 에 한다)
-카메라 충돌   isOpaque(id)
+카메라 충돌   충돌용 고체 판정 (window도 카메라를 막는다)
 ```
 
 ## 8.2 collision.ts
@@ -426,6 +444,7 @@ update()
 // 메인 → Worker
 interface MeshRequest {
   coord: ChunkCoord;
+  revision: number;
   /** 경계 1 칸을 포함한 18 × 18 × 18 뷰. 5832 개. */
   padded: Uint16Array;
 }
@@ -433,6 +452,7 @@ interface MeshRequest {
 // Worker → 메인
 interface MeshResult {
   coord: ChunkCoord;
+  revision: number;
   opaque:      { positions: Float32Array; normals: Float32Array; uvs: Float32Array; ao: Float32Array; indices: Uint32Array };
   transparent: { ... } | null;
 }
@@ -443,7 +463,10 @@ interface MeshResult {
 Worker 가 인접 청크를 알 수 없으므로, 메인 스레드가 미리 잘라서 넘긴다.
 이 규칙을 지키지 않으면 청크 경계의 면 컬링이 틀린다.
 
-`ArrayBuffer` 는 transferable 로 넘긴다. 복사하지 않는다.
+padded 전용 배열의 ArrayBuffer를 transferable로 보낸다. 월드 원본 배열은 보내지 않는다.
+결과 revision이 현재 meshRevision과 같을 때만 GPU 업로드한다.
+처리 중 변경이 오면 최신 revision의 작업 하나를 유지하고 이전 결과는 폐기한다.
+이웃의 padded 내용 변경도 revision을 증가시킨다. 오래된 결과가 dirty를 해제하지 않는다.
 
 ## 9.3 greedyMesh.ts
 
@@ -468,120 +491,108 @@ export function createTransparentMaterial(atlas: THREE.Texture): THREE.Material;
 export function createEntityMaterial(...): THREE.Material;
 ```
 
-ADR 011 의 WebGPU 전환 조건이 충족되면 이 파일만 고친다.
+재질 집중은 전환 범위를 줄인다. 향후 Renderer와 GPU 업로드도 별도 검증해야 한다.
 `ShaderMaterial` 을 다른 곳에서 만들지 않는다.
 
 ---
 
 # 10. 방 인식
 
-**이 장이 이 아키텍처의 핵심이다.**
-
 ## 10.1 detectRoom.ts — 순수 함수
+
+공통 타입은 src/game/types/index.ts에 둔다. 아래 선언은 계약을 설명한다.
 
 ```ts
 export interface RoomBlockReader {
+  /** blockId를 읽는다. */
   get(x: number, y: number, z: number): number;
+  /** 월드 밖 air와 내부 air를 구별한다. */
+  contains(pos: BlockPos): boolean;
+  /** 다중 칸 객체를 조회한다. */
+  objectAt(pos: BlockPos): PlacedObjectSnapshot | undefined;
 }
-
 export type RoomFailure =
   | { reason: 'NOT_ENCLOSED'; at: BlockPos }
-  | { reason: 'NO_FLOOR';     at: BlockPos }
+  | { reason: 'NO_FLOOR'; at: BlockPos }
   | { reason: 'NO_DOOR' }
   | { reason: 'WALL_TOO_LOW'; at: BlockPos }
   | { reason: 'TOO_LARGE' }
   | { reason: 'TOO_SMALL' };
-
 export interface RoomShape {
-  interior: BlockPos[];     // 바닥 위 첫 칸의 내부 셀
-  boundary: BlockPos[];     // 벽 블록 좌표
-  doors:    BlockPos[];
-  floorY:   number;         // interior 의 y
+  interior: BlockPos[]; // 가구 점유를 포함한 바닥 영역
+  boundary: BlockPos[]; // 첫 층 경계. 둘째 층도 검증
+  doors: BlockPos[];    // 문 아래 anchor
+  floorY: number;
 }
-
 export type RoomDetection =
-  | { ok: true;  shape: RoomShape }
+  | { ok: true; shape: RoomShape }
   | { ok: false; failure: RoomFailure };
-
-export function detectRoom(
-  read: RoomBlockReader,
-  start: BlockPos,
-  limits: { minFloorArea: number; maxFloorArea: number; minWallHeight: number },
-): RoomDetection;
+export interface RoomDiagnostic {
+  detection: RoomDetection;
+  explored: BlockPos[];
+  escapeTrace: BlockPos[]; // 실제 탐색 경로. 구멍의 정답이라는 뜻이 아니다
+  facilityIssues: { at: BlockPos; message: string }[];
+}
+/** MVP_SPEC 11.2~11.3의 형태를 판정한다. */
+export function detectRoom(read: RoomBlockReader, start: BlockPos, limits: RoomLimits): RoomDetection;
 ```
 
-`VoxelWorld` 가 아니라 `RoomBlockReader` 를 받는다.
-
-테스트에서 3 차원 배열 리터럴로 방을 그려 넣고 검증하기 위해서다.
-이것이 이 프로젝트에서 가장 많이 작성될 테스트다.
+순수 탐색 kernel은 한 셀씩 진행하는 상태를 갖고 detectRoom은 테스트에서 끝까지 실행한다.
+런타임은 같은 kernel을 프레임 예산 내에서 이어서 수행한다.
+문·벽 검사는 비고체 검사보다 먼저다. 가구는 영역에 포함하지만 보행에서는 막는다.
 
 ## 10.2 matchRecipe.ts — 순수 함수
 
 ```ts
-export interface FurnitureHit { pos: BlockPos; blockId: number; }
-
+export interface Facility {
+  readonly objectId: string;
+  readonly anchor: BlockPos;
+  readonly approachCells: readonly BlockPos[];
+  readonly usePosition: Vec3; // 자세 전환용. A* 목적지가 아니다
+}
 export interface RoomFacilities {
-  beds:           BlockPos[];    // 접근 가능한 것만
-  cookingSpots:   BlockPos[];    // cooking_stove 에 인접한 통행 가능 셀
-  diningSeats:    BlockPos[];    // table 에 인접한 chair
-  chests:         BlockPos[];
+  beds: Facility[];
+  cookingSpots: Facility[];
+  diningSeats: Facility[];
+  chests: Facility[];
 }
-
-export interface RecipeMatch {
-  type: RoomType;
-  facilities: RoomFacilities;
-}
-
-export function matchRecipe(
-  read: RoomBlockReader,
-  shape: RoomShape,
-  recipes: readonly RoomRecipe[],
-): RecipeMatch;
+export interface RecipeMatch { type: RoomType; facilities: RoomFacilities; }
+/** 가구 배치와 문까지의 국소 접근성을 검사한다. */
+export function matchRecipe(read: RoomBlockReader, shape: RoomShape, recipes: readonly RoomRecipe[]): RecipeMatch;
 ```
 
-**반환값이 `RoomType` 만이 아니라 `RoomFacilities` 를 포함하는 것이 핵심이다.**
+room과 nav는 voxel/occupancy.ts의 isStandableCell을 공유한다.
+바닥 고체 + 발·머리 비고체를 같은 actor 규칙으로 검사한다.
+문 아래 셀과 방 내부에서 연결된 보행 셀에 닿는 가구만 접근 가능하다.
+NavigationGraph 구현체를 주입하지 않고 공통 판정을 하위 voxel 계층에 둔다.
 
-Version 0.2 의 Prefab 은 침대 위치를 상수로 알고 있었다.
-자유 건축에서는 방 판정만이 그것을 안다.
-
-주민 AI 가 나중에 다시 방 안을 스캔하게 만들면 안 된다.
-판정할 때 한 번만 계산하고 결과를 들고 다닌다.
-
-### 접근성 판정에 NavigationGraph 를 쓰지 않는다
-
-`matchRecipe` 의 인자에 `NavigationGraph` 가 없는 것은 실수가 아니다.
-
-```text
-접근 가능한 bed  =  bed 가 차지한 2 칸 중 한 칸이
-                   shape.interior 의 어떤 셀과 수평으로 인접해 있다
-```
-
-`shape.interior` 는 이미 "비고체이고 바로 아래가 고체" 인 셀만 담고 있다.
-그것이 통행 가능의 정의다 (MVP_SPEC 11.2 의 조건 1, 2).
-
-`NavigationGraph` 를 인자로 받으면 `room` 이 `nav` 에 의존하게 되어
-ARCHITECTURE 2.1 의 의존성 방향이 깨진다. 같은 판정을 두 곳에서 하지 않는다.
+최종 타입에 해당하는 facilities만 활성화한다.
+같은 Bedroom에서 침대 하나가 없어져도 ROOM_FACILITIES_CHANGED로 배정·예약을 해제한다.
+타입 변경도 이전 시설과 차이를 비교한다. 실제 외부 NPC 경로 실패는 다른 접근 셀·시설을
+찾은 뒤 없으면 MVP_SPEC 12.5의 대체 행동으로 처리한다.
 
 ## 10.3 RoomRegistry
 
 ```ts
 export class RoomRegistry {
-  getAll(): readonly Room[];
-  getById(id: string): Room | undefined;
-  getByType(type: RoomType): readonly Room[];
-  findContaining(pos: BlockPos): Room | undefined;
-
-  /** 이 좌표가 바뀌었으니 다시 판정하라고 큐에 넣는다. */
+  /** 읽기 snapshot 목록을 반환한다. */
+  getAll(): readonly DeepReadonly<Room>[];
+  /** id로 조회한다. */
+  getById(id: string): DeepReadonly<Room> | undefined;
+  /** 타입별 유효한 방을 조회한다. dirty 시설은 제외한다. */
+  getByType(type: RoomType): readonly DeepReadonly<Room>[];
+  /** 내부 영역을 포함하는 방을 찾는다. */
+  findContaining(pos: BlockPos): DeepReadonly<Room> | undefined;
+  /** 기존 방과 문 공간 인덱스의 후보를 무효화한다. */
   markDirty(pos: BlockPos): void;
-
-  /** 예산 안에서 큐를 처리한다. RoomSystem 이 호출한다. */
+  /** 자동·진단 탐색이 공유하는 예산으로 처리한다. */
   processQueue(budgetMs: number): void;
-
-  /** 진단 모드 전용. 큐를 거치지 않고 즉시 판정한다. */
-  diagnose(start: BlockPos): RoomDetection;
-
-  /** 로드 직후에만 호출한다. 전역 스캔. */
-  rebuildAll(doorPositions: readonly BlockPos[]): void;
+  /** 자동 큐보다 먼저 진단을 시작한다. */
+  beginDiagnosis(start: BlockPos): void;
+  /** 진단 결과 또는 계산 중 상태를 조회한다. */
+  getDiagnosis(): { pending: boolean; result: RoomDiagnostic | null };
+  /** 로드 직후 문 인덱스로 재구축한다. 보상 이벤트는 발행하지 않는다. */
+  rebuildAll(): void;
 }
 ```
 
@@ -594,38 +605,32 @@ export interface Room {
   shape: RoomShape;
   facilities: RoomFacilities;
   center: BlockPos;
+  dirty: boolean;
 }
 ```
 
-`Room` 은 순수 데이터다. three 를 모른다. 메서드를 두지 않는다.
+같은 interior의 재판정에서 id를 유지한다. 합병·분할은 이전 방 해제 후 새 등록이다.
+최초 타입 보상은 방 id와 무관하다.
 
 ## 10.5 재판정 큐
 
-```text
-markDirty(pos)
-  ├─ pos 를 포함하는 기존 Room 이 있으면 그 Room 의 door 를 큐에 넣는다
-  └─ pos 가 door 이거나 door 에 인접하면 그 door 를 큐에 넣는다
+MVP_SPEC 11.6의 거리 상한과 y 범위로 문 인덱스를 조회한다.
+기존 방의 영향 범위는 바닥·발·머리 셀과 두 층 벽이다.
+문 삭제 전에 소속 방을 무효화하고 후보를 (door anchor, 시작 면)으로 중복 제거한다.
+성공 결과는 interior 집합으로 합친다. 한 문 양쪽이 다른 방이면 두 결과를 유지한다.
+한 면의 실패가 다른 면의 성공 방을 지우지 않는다.
 
-processQueue(budgetMs)
-  시작 시각을 재고, 예산을 넘기 전까지:
-    큐에서 door 를 꺼낸다
-    detectRoom → matchRecipe
-    결과가 이전과 다르면 Room 을 갱신하고 이벤트를 발행한다
-```
+진행 중 작업은 읽은 좌표와 revision을 기록하고 결과 발행 전에 최신인지 검사한다.
+오래된 작업은 재시작한다. 진단과 자동 탐색을 합쳐 프레임당 3ms이며 셀 사이에서 양보한다.
+큐가 비면 최신 상태와 일치해야 한다. 매 변경마다 월드 전체를 스캔하지 않는다.
 
-같은 door 가 큐에 중복으로 들어가면 합친다. `Set` 으로 관리한다.
+## 10.6 방·시설 무효화의 연쇄
 
-## 10.6 방이 사라질 때의 연쇄
-
-```text
-ROOM_UNREGISTERED
-  ├─ SleepSystem     그 방의 침대 배정을 전부 해제한다
-  ├─ NPCSystem       그 방을 목적지로 하던 Action 을 취소한다
-  ├─ NPCSystem       그 방에서 자던 NPC 를 깨운다
-  └─ UI              라벨을 지우고 경고음을 낸다
-```
-
-**GratitudeSystem 은 구독하지 않는다.** 포인트를 회수하지 않는다 (ADR 013).
+ROOM_UNREGISTERED / ROOM_TYPE_CHANGED / ROOM_FACILITIES_CHANGED에서
+SleepSystem은 사라진 침대 배정을, NPCSystem은 사라진 시설 예약과 Action을 해제한다.
+사용 중 침대·접근 셀이 파괴되면 위 이벤트를 기다리지 않고 즉시 깨어난다.
+dirty 시설에서는 완료 보상도 확정하지 않는다. 다시 유효해지면 미배정 주민을 배정한다.
+GratitudeSystem은 이미 지급한 포인트를 회수하지 않는다.
 
 ---
 
@@ -637,13 +642,13 @@ ROOM_UNREGISTERED
 export class NavigationGraph {
   constructor(world: VoxelWorld);
 
-  /** 발을 디딜 수 있는 위치인가. MVP_SPEC 15 장의 조건. */
+  /** 공통 occupancy의 바닥·발·머리 조건. MVP_SPEC 12.2. */
   isStandable(pos: BlockPos, actor: ActorKind): boolean;
 
   /** from 에서 한 걸음에 갈 수 있는 이웃. 같은 높이 / +1 / -1. */
   neighbors(pos: BlockPos, actor: ActorKind, out: BlockPos[]): number;
 
-  /** 블록이 바뀌면 주변 3 × 3 × 3 캐시를 버린다. */
+  /** 변경점을 읽은 캐시·경로를 역참조로 무효화한다. */
   invalidate(pos: BlockPos): void;
 }
 
@@ -670,16 +675,35 @@ door 블록
 ```ts
 export interface PathResult {
   path: BlockPos[] | null;
+  partialPath: BlockPos[]; // NODE_LIMIT에서 검증된 구간만
+  reachableBoundary: { obstacle: BlockPos; approach: BlockPos; path: BlockPos[] }[];
   nodesExplored: number;
   reason?: 'NO_PATH' | 'NODE_LIMIT';
+  continuation: PathSearchState | null; // NODE_LIMIT에서 다음 호출로 넘길 상태
 }
 
+export type PathGoal =
+  | { kind: 'cell'; pos: BlockPos }
+  | { kind: 'radius'; center: Vec3; radius: number };
+export interface PathSearchState {
+  readonly from: BlockPos;
+  readonly goal: PathGoal;
+  readonly actor: ActorKind;
+  readonly revision: number;
+  readonly open: readonly { pos: BlockPos; score: number }[];
+  readonly closed: ReadonlySet<string>;
+  readonly costs: ReadonlyMap<string, number>;
+  readonly parents: ReadonlyMap<string, BlockPos>;
+  readonly boundary: PathResult['reachableBoundary'];
+}
+/** 명시적 탐색 상태를 받아 결과와 다음 상태를 반환한다. 게임 상태는 바꾸지 않는다. */
 export function findPath(
   graph: NavigationGraph,
   from: BlockPos,
-  to: BlockPos,
+  goal: PathGoal,
   actor: ActorKind,
   maxNodes: number,
+  search?: PathSearchState,
 ): PathResult;
 ```
 
@@ -691,6 +715,16 @@ NODE_LIMIT   너무 멀다          →  몬스터는 계속 시도한다. 부�
 ```
 
 둘을 구분하지 않으면 몬스터가 멀리 있다는 이유로 멀쩡한 벽을 부순다.
+radius는 standCellToWorldFeet가 반경 안이면 성공한다. 고체 종은 cell 목적지가 아니다.
+reachableBoundary에는 실제 접근 경로가 있는 장애물만 기록한다.
+NODE_LIMIT의 경계 목록은 파괴 승인에 쓰지 않는다.
+maxNodes는 실행 예산이다. 호출자는 결과 continuation을 다음 호출의 search로 넘긴다.
+입력 search는 변경하지 않고 다음 상태를 반환한다. 탐색 상태는 저장 파일에 포함하지 않는다.
+Nav 스케줄러가 NPC별 continuation을 소유하며 pathfind의 숨은 전역 상태는 없다.
+모든 actor의 합계가 프레임당 4000 확장을 넘지 않게 Nav가 분배한다.
+따라서 4000개보다 큰 막힌 영역도 여러 프레임 후 NO_PATH를 확정할 수 있다.
+출발점·목표·읽은 월드가 바뀌면 세션을 취소한다. 예산 소진을 영구 재시작 루프로 만들지 않는다.
+이웃 이동은 출발·도착·step-up 중 머리 여유까지 검사하고 읽은 셀을 캐시 의존에 기록한다.
 
 ## 11.4 MovementController
 
@@ -734,7 +768,6 @@ export interface NPC {
   body: AabbBody;
   health: number;
   action: Action;
-  assignedBed: BlockPos | null;
   hasEatenThisMeal: boolean;
   stunUntilGameMinutes: number;
 }
@@ -823,8 +856,13 @@ export interface ActionContext {
   readonly storage: VillageStorage;
   readonly clock: GameClockReader;
   readonly events: EventBus;
+  readonly services: ActionServices; // 아래의 좁은 변경 포트
 }
 ```
+
+ActionServices는 gratitude.gain, cooking.complete, meal.consume, repair.complete,
+시설 예약 acquire/release의 계약이다. 전체 시스템 객체를 노출하지 않는다.
+SleepAction도 이 포트로 보상을 요청한다. NPCSystem은 start/cancel과 예약 해제를 한 번씩 보장한다.
 
 Action 은 `GameWorld` 전체를 받지 않는다. 필요한 것만 받는다.
 
@@ -834,15 +872,16 @@ Action 은 `GameWorld` 전체를 받지 않는다. 필요한 것만 받는다.
 
 ```ts
 export interface NPCContext {
-  npc: NPC;
-  phase: DayPhase;
-  gameMinutes: number;
-  threatNearby: Monster | null;
-  dialogueRequested: boolean;
-  storage: Readonly<VillageStorageData>;
-  rooms: RoomRegistry;
-  worldState: Readonly<WorldStateData>;
-  damageLog: Readonly<DamageEntry[]>;
+  readonly npc: NPCDecisionView; // id/role/위치/actionKind snapshot. 가변 Action 없음
+  readonly assignedBed: DeepReadonly<Facility> | null;
+  readonly phase: DayPhase;
+  readonly gameMinutes: number;
+  readonly threatNearby: DeepReadonly<MonsterDecisionView> | null;
+  readonly dialogueRequested: boolean;
+  readonly storage: Readonly<VillageStorageData>;
+  readonly rooms: readonly DeepReadonly<Room>[];
+  readonly worldState: Readonly<WorldStateData>;
+  readonly damageLog: readonly DeepReadonly<DamageEntry>[];
 }
 
 export function decideAction(ctx: NPCContext): Action | null;
@@ -889,6 +928,7 @@ MealSystem            식사 시간 판정. hasEatenThisMeal 리셋
 SleepSystem           침대 배정 / 해제
 GratitudeSystem       포인트 누적. 최초 인식 보너스 중복 방지
 VillageLevelSystem    게이트 평가. 종 상호작용 처리. 해금 적용
+ResidentArrivalSystem 레벨별 도착 예약과 실제 스폰의 유일한 소유자
 RaidSystem            습격 스케줄. 몬스터 스폰 / 소멸
 MonsterSystem         몬스터 AI. 블록 파괴
 RepairSystem          DamageLog 관리. 목수 수리 할당
@@ -899,17 +939,19 @@ DialogueSystem        대사 재생
 ObjectiveSystem       목표 문구
 ```
 
-## 15.1 시스템은 다른 시스템을 직접 호출하지 않는다
+## 15.1 다른 소유자의 내부 상태를 직접 쓰지 않는다
 
-예외를 둔다.
+GameWorld는 순서를 조정하고 생성자로 필요한 조회·변경 포트를 주입한다.
+다른 시스템의 필드·Map을 직접 바꾸거나 GameWorld 전체를 전달하지 않는다.
+다음의 명시적인 서비스 API는 허용한다.
 
-```text
-허용   GameWorld 가 update 순서대로 호출한다
-허용   생성자 주입으로 받은 읽기 전용 조회 (rooms.getByType 등)
-금지   시스템 A 가 시스템 B 의 상태를 바꾼다
-```
+- VillageLevelSystem → GratitudeSystem.spend: 비용 검사와 차감을 한 번에 처리.
+- ActionServices → GratitudeSystem.gain, 조리·식사·수리 완료 API.
+- BlockEditSystem / 역할 Action → VoxelWorld의 원자적 편집 API.
+- GameEventSystem → 반환된 GameCommand를 해석해 소유자의 API 호출.
 
-상태를 바꿔야 하면 이벤트를 발행하거나 커맨드를 반환한다.
+EventBus는 완료 사실을 알린다. data의 진행 정의는 순수 커맨드를 반환한다.
+이것이 ADR 007의 적용 범위다.
 
 ---
 
@@ -939,11 +981,11 @@ export type GratitudeSource =
 ```text
 firstRoom     타입별로 1 회. 이미 준 타입 집합을 저장한다
 gameEvent     이벤트 id 별로 1 회
-sleep         npcId + 날짜로 1 회
-cook / eat    행위마다 1 회. 중복 방지가 필요 없다
+sleep         npcId + nightId로 1회 (20시 시작 구간, 자정 뒤에도 같은 키)
+cook / eat    완료 트랜잭션당 1회. 식사는 mealId로 중복 소비를 막는다
 ```
 
-이 집합들은 저장 대상이다.
+이 집합들은 저장 대상이다. ROOM_REGISTERED / ROOM_TYPE_CHANGED 모두 firstRoom으로 처리한다.
 
 ## 16.2 gain 은 반드시 좌표를 받는다
 
@@ -987,7 +1029,12 @@ MVP_SPEC 23.4 가 미충족 조건을 전부 표시하라고 요구한다.
 
 ## 17.2 레벨은 내려가지 않는다
 
-`ring` 만이 `level` 을 바꾼다. 감소 경로가 존재하지 않는다.
+ring만이 level을 바꾼다. 감소 경로가 존재하지 않는다.
+evaluate/ring은 같은 순수 게이트 평가를 쓰며 현재 유효한 방·저장소로 재계산한다.
+이전 프레임 지표만 믿지 않는다. dirty 방은 게이트에서 제외한다.
+비용·레벨·해금·예약 커밋 후 프레임 끝에 저장한다.
+ResidentArrivalSystem은 레벨 2/3 고유 키로 예약하고 스폰·완료를 함께 커밋한다.
+다음 07:00은 ring 시각보다 엄격히 뒤인 아침이다.
 
 ---
 
@@ -1003,69 +1050,69 @@ export type MonsterAction =
 
 ## 18.1 판단 순서
 
-```text
-1  종까지 findPath(actor: 'monster')
-2  path !== null            → move
-3  reason === 'NODE_LIMIT'  → 목표 방향으로 move (부수지 않는다)
-4  reason === 'NO_PATH'
-     목표 방향으로 가장 가까운 파괴 가능 블록을 찾는다
-     찾으면 그 앞 셀로 이동 → break
-     못 찾으면 가장 가까운 NPC / 플레이어 → attack
-     그것도 없으면 wander
-5  05:00 이 되면 종류와 무관하게 소멸
-```
+1. findPath(goal: radius, 종 중심·반경 6)를 호출한다.
+2. path가 있으면 이동한다.
+3. NODE_LIMIT이면 정지한 채 continuation을 다음 프레임 탐색에 전달한다.
+4. NO_PATH이면 reachableBoundary에서 파괴 가능한 후보를 고른다.
+5. 후보·예산이 없으면 경로가 있는 NPC/플레이어를 추적하고 없으면 배회한다.
+6. 05:00에는 모두 소멸한다.
 
 ## 18.2 파괴 가능 블록 탐색
 
 ```ts
-function findBreakableToward(
-  world: VoxelWorld, from: BlockPos, toward: BlockPos, maxRadius: number,
-): BlockPos | null;
+/** 도달 가능한 경계에서 파괴 후보와 접근 경로를 고른다. */
+export function findBreakableToward(
+  read: RoomBlockReader,
+  boundary: PathResult['reachableBoundary'],
+  goalCenter: Vec3,
+  remainingCells: number,
+): { target: BlockPos; approachPath: BlockPos[] } | null;
 ```
 
-```text
-조건   blockDefinitions[id].terrain === false
-      id !== 0
-      몬스터가 서 있는 위치에서 수평으로 인접하거나 그 위 칸
-```
-
-`terrain === true` 인 블록은 후보에서 제외한다. MVP_SPEC 8.2 다.
+조건은 terrain=false, air 아님, breakSeconds!=null이다.
+현재 위치와 떨어져 있어도 실제 접근 경로 끝에서 공격 가능하면 후보가 된다.
+목표 거리·접근 경로 길이·좌표 순으로 고른다.
+다중 칸 전체 점유 수가 남은 예산 이하여야 한다.
+RaidSystem이 습격당 maxDestroyedCellsPerRaid=16의 사용량을 소유한다.
 
 ## 18.3 블록을 부수면
 
-```text
-world.setBlock(pos, 0, 'monster')
-    ↓
-BLOCK_CHANGED (by: 'monster')
-    ↓
-RepairSystem 이 DamageLog 에 기록한다
-NavigationGraph 가 무효화된다
-RoomRegistry 가 dirty 로 표시한다
-    ↓
-다음 프레임에 경로를 다시 찾는다
-```
+전체 편집 커밋 후 RepairSystem이 batchId로 원본 배치를 한 번 기록한다.
+Nav·시설은 즉시 무효화하고 RoomRegistry는 예산 내 재판정한다.
+다음 이동에서 경로를 다시 찾는다. 부분 파괴 진행도는 저장하며,
+로드 후 대상이 바뀌었으면 초기화한다.
 
 ---
 
 # 19. RepairSystem
 
 ```ts
+export interface DamageEntry {
+  readonly id: string;
+  readonly batchId: number;
+  readonly blockId: number;
+  readonly cells: readonly BlockPos[];
+  readonly object: PlacedObjectSnapshot | null;
+  readonly gameMinutes: number;
+}
 export class RepairSystem {
+  /** 미수리 피해를 조회한다. */
   get pending(): readonly DamageEntry[];
-
-  /** 몬스터가 부순 블록을 기록한다. BLOCK_CHANGED 를 구독한다. */
-  log(pos: BlockPos, blockId: number): void;
-
-  /** 목수가 수리할 다음 좌표. 하루 상한을 넘으면 null. */
+  /** 커밋된 파괴를 기록한다. */
+  log(entry: DamageEntry): void;
+  /** 전체 복원이 가능하고 당일 예산 이내인 대상을 찾는다. */
   nextRepairTarget(): DamageEntry | null;
-
-  /** 목수 또는 플레이어가 복구했을 때. */
-  resolve(pos: BlockPos): void;
+  /** 시간·예산·공간을 재검증하고 원자적으로 복원한다. */
+  complete(damageId: string): boolean;
+  /** 플레이어가 모든 피해 cells를 채웠으면 해결한다. */
+  resolveCoveredCells(): void;
 }
 ```
 
-플레이어가 직접 블록을 놓아도 `resolve` 가 호출되어야 한다.
-`BLOCK_CHANGED` 를 구독해서 `pos` 가 `pending` 에 있으면 제거한다.
+by=npc는 농사에도 쓰이므로 곧바로 수리 완료로 간주하지 않는다.
+당일 day / repairedCells는 저장하며 완료 시에만 점유 복셀 수를 차감한다.
+중단·로드 시 수리 시간은 다시 시작하지만 이미 완료한 당일 수리량은 유지한다.
+원본 피해 이력과 보고한 아침은 별도 보관하여 수리 후에도 지난밤 피해 수를 알 수 있다.
 
 ---
 
@@ -1078,8 +1125,9 @@ export interface EventContext {
   readonly clock: GameClockReader;
   readonly storage: Readonly<VillageStorageData>;
   readonly worldState: Readonly<WorldStateData>;
-  readonly rooms: RoomRegistry;
+  readonly rooms: readonly DeepReadonly<Room>[];
   readonly gratitude: number;
+  readonly bellWorldCenter: Vec3;
   readonly villageLevel: number;
   readonly lastRaid: Readonly<RaidResult> | null;
   readonly completed: ReadonlySet<GameEventId>;
@@ -1089,8 +1137,7 @@ export interface EventContext {
 export type GameCommand =
   | { kind: 'setObjective'; text: string; progress?: { current: number; total: number } }
   | { kind: 'markDialogueAvailable'; npcId: string; dialogueId: string }
-  | { kind: 'spawnResident'; role: NPCRole }
-  | { kind: 'gainGratitude'; amount: number }
+  | { kind: 'gainGratitude'; amount: number; source: GratitudeSource; at: Vec3 }
   | { kind: 'playCutscene'; id: string };
 
 export interface GameEventDefinition {
@@ -1132,10 +1179,11 @@ if (!completed.has(def.id) && def.canTrigger(ctx)) {
   id: 'EVENT_BELL_REQUEST',
   canTrigger: (ctx) =>
     ctx.completed.has('EVENT_BEDROOM_REQUEST') &&
-    ctx.rooms.getAll().filter(r => r.type !== 'EmptyRoom').length >= 2,
-  execute: () => [
+    ctx.rooms.filter(r => !r.dirty).length >= 2,
+  execute: (ctx) => [
     { kind: 'markDialogueAvailable', npcId: 'carpenter', dialogueId: 'bell_intro' },
-    { kind: 'gainGratitude', amount: balance.gratitude.onGameEvent },
+    { kind: 'gainGratitude', amount: balance.gratitude.onGameEvent,
+      source: { kind: 'gameEvent', id: 'EVENT_BELL_REQUEST' }, at: ctx.bellWorldCenter },
   ],
 }
 ```
@@ -1163,11 +1211,11 @@ export interface DialogueDefinition {
 ADR 010 을 유지한다.
 
 ```text
-이벤트 발생   →  해금 적용 + 대화 표시 띄우기
+이벤트 발생   →  일회성 보상 + 대화 표시 (해금은 레벨 전이만)
 대사 종료     →  목표 문구만 바뀐다
 ```
 
-플레이어가 대화를 건너뛰어도 진행이 막히지 않는다.
+제작 해금은 대사와 무관하다. 첫 Farmer 대화 완료 조건은 MVP_SPEC 27.1의 예외로 유지한다.
 
 ## 21.3 진행 수치가 있는 목표
 
@@ -1223,78 +1271,109 @@ rooms.getByType('Bedroom')
      .reduce((n, r) => n + r.facilities.beds.length, 0)
 ```
 
-`facilities.beds` 는 접근 가능한 것만 담고 있다 (10.2 참조).
-`housingLevel` 이 도달 불가능한 침대를 세지 않는다.
+facilities.beds는 문까지 국소 접근 가능한 Bedroom 침대만 담는다.
+외부 NPC 전체의 경로를 보장하는 지표는 아니다. dirty 방과 다른 타입 침대는 제외한다.
 
 ---
 
 # 23. SaveSystem
 
+## 23.1 저장 계약
+
 ```ts
+export interface RaidResult {
+  readonly raidId: number;
+  readonly total: number;
+  readonly reached: number;
+  readonly endedAtGameMinutes: number;
+}
 export interface SaveData {
   version: number;
-  clock: { day: number; hour: number; minute: number };
-
-  chunks: { coord: ChunkCoord; blocks: Uint16Array }[];   // 변경된 청크만
-  doorPositions: BlockPos[];                              // 로드 시 방 재구축 가속
-
+  gameMinutes: number;
+  chunks: { coord: ChunkCoord; blocks: Uint16Array }[]; // 원본 섬과 다른 청크 전체
+  placedObjects: PlacedObjectSnapshot[];
+  objectIdCounter: number;
+  editBatchCounter: number; // 로드 후 DamageLog 중복 키 충돌 방지
   player: { pos: Vec3; health: number; inventory: ItemStack[]; hotbarIndex: number };
   storage: VillageStorageData;
-
   npcs: {
-    id: string; role: NPCRole; pos: Vec3;
-    assignedBed: BlockPos | null;
-    hasEatenThisMeal: boolean;
+    id: string; role: NPCRole; pos: Vec3; health: number;
+    stunUntilGameMinutes: number; mealId: string | null; hasEatenThisMeal: boolean;
   }[];
-
+  bedAssignments: { objectId: string; npcId: string }[];
   gratitude: number;
-  gratitudeOnce: { roomTypes: RoomType[]; eventIds: string[]; sleptToday: string[] };
+  gratitudeOnce: {
+    roomTypes: RoomType[]; eventIds: string[];
+    sleepKeys: { npcId: string; nightId: number }[];
+  };
   villageLevel: number;
   unlocked: number[];
-
+  residentArrivals: { level: number; dueAtGameMinutes: number; npcId: string; arrived: boolean }[];
   completedEvents: GameEventId[];
   completedDialogues: string[];
-
-  lastRaid: RaidResult | null;
-  raidsFired: number[];
-
-  damageLog: DamageEntry[];
-  crops: { pos: BlockPos; stage: number; plantedAt: number }[];
+  availableDialogues: { npcId: string; dialogueId: string }[];
+  objective: { id: string; text: string; progressKind: ObjectiveProgressKind | null };
+  raids: {
+    firedIds: number[];
+    scheduled: { raidId: number; dueAtGameMinutes: number }[];
+    results: RaidResult[];
+    active: {
+      raidId: number; total: number; despawnAtGameMinutes: number;
+      reachedIds: string[]; destroyedCells: number;
+      monsters: {
+        id: string; pos: Vec3; health: number; attackCooldownSeconds: number;
+        breakTarget: BlockPos | null; breakProgress: number;
+      }[];
+    } | null;
+  };
+  damage: {
+    history: DamageEntry[]; pendingIds: string[];
+    reportedThroughGameMinutes: number; repairDay: number; repairedCells: number;
+  };
+  crops: { pos: BlockPos; plantedAtGameMinutes: number }[];
+  ending: { pending: boolean; played: boolean };
 }
 ```
 
-## 23.1 저장하지 않는 것
+저장 대상은 Action 객체가 아니라 지속되어야 하는 게임 사실이다.
+시각은 gameMinutes다. 쿨다운은 벽시계 시각이 아닌 남은 시뮬레이션 초다.
 
-```text
-WorldState 지표     계산한다
-방 인식 결과         블록에서 다시 판정한다
-NPC 의 현재 Action  IdleAction 으로 시작한다
-통행 그래프 캐시
-청크 메시
-```
+## 23.2 저장하지 않는 것
 
-## 23.2 NPC 의 Action 을 복원하지 않는 이유
+WorldState, 방 결과, Nav 캐시, 메시, NPC Action·임시 시설 예약은 저장하지 않는다.
+작물 단계·성숙은 심은 시각으로 재계산한다.
+조리는 완료 때 재료를 소비하므로 취소해도 손실·중복 생산이 없다.
+수리는 시간을 다시 채우되 당일 완료량을 복원한다.
+침대 배정은 SleepSystem에서 저장하고 로드 시 유효성만 확인한다.
 
-Action 은 진행 중인 경로, 남은 시간, 대상 좌표를 들고 있다.
-저장하면 Action 이 늘 때마다 저장 형식이 바뀐다.
+## 23.3 스냅샷과 저장소
 
-다음 프레임에 `decideAction` 이 같은 결론을 낸다.
-자고 있던 주민은 로드 직후 다시 침대로 걸어간다. 허용 가능한 차이다.
+IndexedDB의 슬롯 하나를 트랜잭션으로 교체한다.
+07:00 / 종 직후 저장은 요청을 큐에 넣고 프레임 끝 커밋된 상태에서 실행한다.
+진행 중 습격의 소멸시각·총수·도달 집합·살아 있는 몬스터를 함께 저장한다.
+주민 스폰과 예약 완료, 비용과 레벨 전이를 서로 다른 스냅샷으로 나누지 않는다.
+저장용 modifiedChunks는 세션 전체의 변경을 유지하며 렌더의 takeDirtyChunks와 별개다.
+메시 업로드가 끝났어도 저장 대상에서 빠지지 않는다.
+원시 복셀은 약 2MiB다. localStorage 초과를 단정하지 않는다.
+문자열 인코딩 회피와 원자적 구조화 저장이 IndexedDB 선택 이유다.
 
-## 23.3 저장소는 IndexedDB 다
+## 23.4 로드 순서
 
-`localStorage` 는 보통 5MB 제한이다.
-변경된 청크만 저장해도 건축이 진행되면 초과한다.
+1. version 검증·마이그레이션 후 입력과 시간을 멈춘다.
+2. 고정 섬 위에 변경 청크와 PlacementIndex를 함께 복원·검증한다.
+3. Nav 캐시를 비우고 문 인덱스로 전체 방을 재판정한다. 보상 이벤트는 발행하지 않는다.
+4. 주민·자원·침대 배정·감사 키·목표·대화·도착 예약·수리량·습격·엔딩을 복원한다.
+5. 사라진 침대 배정만 해제한다. NPC Action은 Idle에서 다시 판단한다.
+6. WorldState·UI를 재계산하고 메시를 준비한 뒤 시간을 재개한다.
 
-## 23.4 모든 시간값은 게임 시간이다
-
-`Date.now()` 를 저장하지 않는다.
-저장은 `gameMinutes` (게임 시작부터의 누적 분) 하나로 표현한다.
+로드 중 완료 이벤트를 재실행하지 않는다.
+dueAt을 지났으나 미완료인 예약은 고유 키로 한 번 처리한다.
+NPC 기절은 Action 재판단보다 우선한다.
 
 ## 23.5 Save Version
 
-`version` 이 다르면 `migrate.ts` 를 통과시킨다.
-마이그레이션이 불가능하면 로드를 거부하고 새 게임을 제안한다. 조용히 깨뜨리지 않는다.
+다른 version은 migrate.ts를 거친다. 안전한 변환이 없으면 이유를 알리고 거부한다.
+습격 중·자정 전후·당일 여덟 칸 수리 뒤에도 진행과 중복 방지가 유지되는지 검증한다.
 
 ---
 
@@ -1357,19 +1436,24 @@ src/game/data/
 
 ```ts
 const room = buildTestWorld(`
-  y=0:  # # # # #        # = plank
+  y=0:  # # # # #
+        # # # # #
+        # # # # #
+        # # # # #
+        # # # # #
+  y=1:  # # # # #        # = plank
         # . . . #        . = air
         # . . . #        D = door
         # . . . #
         # # D # #
-  y=1:  # # # # #
+  y=2:  # # # # #
         # . . . #
         # . . . #
         # . . . #
         # # D # #
 `);
 
-expect(detectRoom(room, { x: 2, y: 0, z: 2 }, limits).ok).toBe(true);
+expect(detectRoom(room, { x: 2, y: 1, z: 2 }, limits).ok).toBe(true);
 ```
 
 `buildTestWorld` 헬퍼를 가장 먼저 만든다.
@@ -1378,7 +1462,7 @@ expect(detectRoom(room, { x: 2, y: 0, z: 2 }, limits).ok).toBe(true);
 ## 25.2 반드시 테스트해야 하는 실패 케이스
 
 ```text
-벽이 한 칸 뚫려 있다           → NOT_ENCLOSED + 정확한 좌표
+평지에서 벽 한 칸이 빠졌다      → TOO_LARGE/NOT_ENCLOSED + 탐색 영역·경로
 문이 없다                     → NO_DOOR
 벽이 한 칸 높이뿐이다          → WALL_TOO_LOW + 좌표
 바닥에 구멍이 있다             → NO_FLOOR + 좌표
@@ -1437,11 +1521,14 @@ WorldState 4 개 지표
 블록                      VoxelWorld
 방                        RoomRegistry
 crop 성장 단계             FarmSystem
-침대 배정                  SleepSystem
+침대 배정                  SleepSystem (NPC에는 조회 snapshot만)
 NPC 위치 / 체력 / Action   NPC 엔티티
 population                EntityRegistry.npcs.size    ★ WorldState 가 아니다
 감사 포인트                GratitudeSystem
 마을 레벨 / 해금            VillageLevelSystem
+주민 도착 예약 / 스폰         ResidentArrivalSystem
+진행 중 습격 / 파괴 예산       RaidSystem
+다중 칸 점유                 VoxelWorld.PlacementIndex
 완료된 이벤트               GameEventSystem
 DamageLog                 RepairSystem
 플레이어 인벤토리            InventorySystem
@@ -1462,11 +1549,10 @@ DamageLog                 RepairSystem
   → InventorySystem.consume(1)
   → VoxelWorld.setBlock(pos, id, 'player')
       ├→ Chunk dirty + 인접 청크 dirty
-      ├→ changedBlocks 에 추가
       └→ BLOCK_CHANGED 발행
   → (다음 update 순서에서)
-      RoomSystem      : rooms.markDirty(pos)
-      NavigationGraph : invalidate(pos)
+      RoomSystem      : 즉시 markDirty한 후보를 예산 안에서 처리
+      NavigationGraph : 변경 알림에서 즉시 invalidate(pos)
       ChunkMeshManager: takeDirtyChunks → Worker
 ```
 
@@ -1481,8 +1567,8 @@ RoomSystem.update
           ok: true  → matchRecipe(read, shape, roomRecipes)
                       → Room 생성 또는 갱신
                       → ROOM_REGISTERED / ROOM_TYPE_CHANGED
-  → GratitudeSystem 이 ROOM_REGISTERED 를 구독
-      → 그 타입이 처음이면 gain('firstRoom', 20, room.center)
+  → GratitudeSystem이 ROOM_REGISTERED / ROOM_TYPE_CHANGED를 구독
+      → 그 타입이 처음이면 gain({ kind: 'firstRoom', roomType }, 20, blockToWorldCenter(room.center))
   → UI 가 라벨을 띄우고 효과음을 낸다
 ```
 
@@ -1490,16 +1576,16 @@ RoomSystem.update
 
 ```text
 NPCDecisionSystem
-  → 취침 시간이고 npc.assignedBed !== null
-  → new MoveAction(bed) → new SleepAction(bed)
+  → 취침 시간이고 SleepSystem의 배정 snapshot이 있다
+  → new MoveAction(approachCell) → new SleepAction(facility)
 
 SleepAction.start
   → npc 를 침대 위치에 눕힌다
   → events.emit('GRATITUDE_GAINED', ...) 이 아니라
-    GratitudeSystem.gain({ kind: 'sleep', npcId }, 5, bedWorldPos)
+    ctx.services.gratitude.gain({ kind: 'sleep', npcId }, 5, bedWorldPos)
 
 GratitudeSystem
-  → 오늘 이미 잤으면 무시한다
+  → 같은 nightId에 이미 잤으면 무시한다
   → total += 5
   → GRATITUDE_GAINED 발행
 
@@ -1511,15 +1597,15 @@ UI
 
 ```text
 MonsterSystem
-  → findPath(monster, bell, 'monster')
+  → findPath(monster, { kind: 'radius', center: bellCenter, radius: 6 }, 'monster')
   → reason === 'NO_PATH'
-  → findBreakableToward(...)  (terrain === false 만)
+  → findBreakableToward(...)  (도달 가능한 경계 + 실제 파괴 가능 + 남은 예산)
   → MonsterAction 'break'
   → progress += dt / (breakSeconds * 2.0)
   → progress >= 1
-      → VoxelWorld.setBlock(pos, 0, 'monster')
+      → 단일/다중 칸 편집 API로 원자적 제거
       → BLOCK_CHANGED (by: 'monster')
-          ├→ RepairSystem.log(pos, blockId)
+          ├→ RepairSystem.log(originalSnapshot)
           ├→ NavigationGraph.invalidate(pos)
           └→ RoomRegistry.markDirty(pos)
   → 다음 프레임에 경로 재탐색 → 통과
@@ -1538,8 +1624,10 @@ F (종 조준)
       → unlocked 갱신
       → VILLAGE_LEVEL_UP 발행
   → RaidSystem 이 구독 → 다음 21:00 습격 예약
-  → GameEventSystem 이 다음 프레임에 EVENT_NEW_RESIDENT 조건을 만족
-  → 커맨드 spawnResident → 다음 07:00 에 도착
+  → ResidentArrivalSystem이 레벨별 고유 키로 다음 07:00을 예약
+  → 프레임 끝 자동 저장
+  → 예약 처리 뒤 GameEventSystem이 레벨 3·주민 5명 도착 사실을 평가
+  → EVENT_NEW_RESIDENT는 대화/연출만 반환
 ```
 
 ---
@@ -1611,7 +1699,8 @@ Fixed timestep 시뮬레이션
 012  자유 건축 + 방 인식                      Accepted
 013  감사 포인트 + 마을 레벨                   Accepted
 014  복셀 청크 16³ + 그리디 메싱               Accepted
-015  3D 통행 그래프 + 파괴 가능한 벽            Accepted
+015  3D 통행 그래프 + 파괴 가능한 벽            Accepted (016으로 보완)
+016  설계 검토 반영: 공간·진행·저장 계약          Accepted
 ```
 
 ---
