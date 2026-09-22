@@ -2,6 +2,7 @@
 
 Status: Accepted
 Date: 2026-09-22
+Evidence: docs/research/2026-09-22-voxel-web-stack.md
 Related: ADR 011
 
 ## 배경

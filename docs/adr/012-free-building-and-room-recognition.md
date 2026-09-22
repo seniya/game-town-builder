@@ -2,6 +2,7 @@
 
 Status: Accepted
 Date: 2026-09-22
+Evidence: docs/research/2026-09-22-dragon-quest-builders-2.md
 Supersedes: ADR 002
 
 ## 배경

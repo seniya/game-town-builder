@@ -76,8 +76,13 @@ docs/project/MVP_SPEC.md      무엇을 만드는가          수치와 조건�
 docs/project/ARCHITECTURE.md  어떤 구조로 만드는가      인터페이스의 정본
 docs/project/TASKS.md         어떤 순서로 만드는가      Acceptance Criteria 의 정본
 docs/adr/                     구조적 결정 기록
+docs/research/                외부 조사 기록과 출처        결정이 기댄 사실의 근거
 docs/state/                   작업 완료 기록과 다음 할 일
 ```
+
+`docs/research/` 는 정본이 아니라 근거다.
+ADR 011 ~ 015 는 "DQB2 는 이렇게 동작한다", "청크 16³ 이 균형점이다" 를
+전제로 결정을 내렸다. 그 전제의 출처와 신뢰도가 여기에 있다.
 
 에이전트 작업 규약은 `AGENTS.md` 에 있다.
 

@@ -2,6 +2,7 @@
 
 Status: Accepted
 Date: 2026-09-22
+Evidence: docs/research/2026-09-22-dragon-quest-builders-2.md
 Related: ADR 004 (유지), ADR 012
 
 ## 배경
