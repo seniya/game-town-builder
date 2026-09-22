@@ -2,7 +2,7 @@
 
 # Small Village Restoration Game — Architecture Guide
 
-Version: 1.1
+Version: 1.2
 Status: Reviewed Specification — Implementation Pending
 Date: 2026-09-22
 
@@ -95,7 +95,9 @@ ui         ←  EventBus / 읽기 전용 조회 / 주입된 입력 명령
 
 **MVP는 최대 5명과 128 × 64 × 128 섬을 구현하되, 아키텍처는 주민 100명과 대형
 월드로 확장 가능해야 한다.** 이 수치는 콘텐츠 설정이며 구조의 고정 한계가 아니다.
-ADR 017을 따른다. 설계 목표만으로 확장 규모의 성능을 달성했다고 판단하지 않는다.
+ADR 017과 이를 구체화한 ADR 018을 따른다. 장기 콘텐츠 목표는 약 50~100명이며,
+100명은 구조 검증 규모이지 하드코딩할 상한이 아니다. 설계 목표만으로 확장 규모의
+성능을 달성했다고 판단하지 않는다.
 
 ### MVP부터 지키는 경계
 
@@ -128,7 +130,48 @@ ADR 017을 따른다. 설계 목표만으로 확장 규모의 성능을 달성�
 
 100명 시험은 전체 주민 수, 상세 시뮬레이션 중인 수, 화면에 보이는 수를 구분해 기록한다.
 월드 크기와 상주 청크 수, 프레임 시간·메모리·경로 대기 시간·저장/로드 시간을 함께 측정한다.
-MVP 성능 통과와 확장 성능 통과는 별개다. 구체 시험 규모와 예산은 확장 구현 전에 명세로 확정한다.
+MVP 성능 통과와 확장 성능 통과는 별개다. 초기 synthetic 시험은 TASK-PERF-001에서
+재현 조건을 고정한다. 최종 확장 규모의 합격 예산은 별도 명세로 확정한다.
+
+### 구현 단계의 구분
+
+| 영역 | MVP에서 지킬 경계 | 장기 확장 시 구현·검증 |
+| --- | --- | --- |
+| 작업 선택 | 역할 시스템이 변경 기반 후보를 관리하고 NPC에 제공 | event-driven Job System / Job Queue / JobIndex |
+| 갱신 | 판단·Action 실행·렌더를 분리하고 공유 예산 적용 | multi-rate scheduling과 거리별 Simulation LOD |
+| 경로 | 예산형 A*, continuation, 국소 무효화 | Hierarchical Navigation과 경로 Worker |
+| 조회 | RoomRegistry의 방·시설 결과와 소유자별 후보 조회 | 지역별 Room / Resource / Facility / Job 인덱스 |
+| 월드 | 16³ Chunk, Uint16Array, Worker greedy meshing, dirty만 재메싱 | Chunk Streaming과 활성·상주·가시 영역 분리 |
+
+표의 오른쪽 전체를 MVP에 구현하지 않는다. 아래 장기 계약은 그 기능을 도입할 때
+유지해야 할 책임과 정합성 기준이며, 별도 승인된 확장 Task에서 구체 API를 확정한다.
+
+## 2.4 Web-first, not Browser-only
+
+TypeScript / Three.js / WebGL2 / Vite / Web Worker를 유지한다. 지금 Unity나 Godot로
+전환하지 않는다. DQB2와 유사한 스타일의 복셀 그래픽·낮밤·조명·주민 50~100명을
+웹 기술로 만드는 것을 현실적인 설계 목표로 삼되, 달성 여부는 실제 측정으로 판단한다.
+이는 이번 개정에서 새로 검증한 성능 사실이 아니라 프로젝트의 기술 방향이다.
+
+```text
+공통 Game Core (순수 TypeScript 게임 규칙)
+    → Browser build: 즉시 실행 / 데모 / 초기 플레이 / 필요한 에셋 팩 다운로드
+    → Desktop build / Steam build: 설치 / 대형 에셋 / 로컬 파일 접근
+```
+
+MVP_SPEC 4장의 대상은 계속 Desktop Web Browser다. Desktop/Steam은 장기 배포 후보이며
+wrapper는 지금 확정하지 않는다. Electron 등 특정 제품의 채택도 이 결정에 포함하지 않는다.
+플랫폼 API는 부트스트랩에서 어댑터로 주입하고 게임 로직이 다운로드·캐시·filesystem을
+직접 다루지 않도록 한다. 기존 SaveSystem 경계는 유지한다. 에셋 경계는 9.5, 결정은 ADR 019다.
+
+### 측정 이후에만 기술을 추가한다
+
+MVP는 WebGL2다. 실제 profiling에서 GPU 병목이 확인되고 현재 렌더의 배치·가시성·광원
+예산 조정만으로 해결하기 어려울 때 WebGPU를 검토한다. 월드 크기나 드로우콜 수만으로
+전환하지 않는다. WASM·추가 Worker·SharedArrayBuffer도 선행 도입하지 않는다.
+이들은 GPU 병목 확인 뒤에도 CPU 계산·전송·동기화 중 어디에 비용이 있는지 구분하여
+해당 병목에 유효한 경우에만 별도로 검토한다. GPU 병목이 CPU 기술 도입의 자동 근거는 아니다.
+현재 메싱 Worker는 유지한다. 기술 변경 시 측정 근거와 별도 ADR을 남긴다.
 
 ---
 
@@ -154,7 +197,7 @@ function frame(now: number) {
 `dt` 를 0.1 초로 클램프한다. 탭이 백그라운드에 갔다 오면
 한 프레임에 수십 초가 흘러 캐릭터가 벽을 통과한다.
 
-## 3.1 Fixed Update 를 쓰지 않는다
+## 3.1 MVP는 단일 가변 dt로 시작한다
 
 물리 엔진이 없고 결정적 시뮬레이션이 필요하지 않다.
 
@@ -165,6 +208,48 @@ function frame(now: number) {
 ```
 
 그렇지 않으면 빠르게 낙하할 때 블록을 관통한다.
+
+## 3.2 Multi-rate simulation — 장기 요구사항
+
+`world.update(dt)`는 작업을 배분하는 진입점이다. 호출됐다고 모든 NPC와 시스템을
+매번 완전 갱신해야 하는 계약은 아니다. MVP의 단일 주기 구현은 허용한다.
+
+| 처리 | 장기 갱신 주기의 개념 예시 |
+| --- | --- |
+| Render / animation | 60fps 목표, 시뮬레이션 snapshot 보간 |
+| Player movement | 입력·충돌에 필요한 높은 빈도 |
+| 근거리 NPC movement | 약 15~30Hz |
+| NPC decision | 약 2~5Hz, 긴급 사건은 우선 처리 |
+| Needs / 장기 상태 | 약 1Hz 또는 이하 |
+| Job assignment | 작업·가용 주민·시설의 변경에 따른 event-driven 처리 |
+| 원거리 NPC | 훨씬 낮은 빈도 또는 완료 예정 시각 처리 |
+
+위 값은 MVP 수치나 합격 기준이 아니다. MVP에는 허기 수치를 추가하지 않으며
+현재 생리 판단은 식사·취침 구간이다. 주기는 측정 후 데이터로 정의한다.
+NPCDecisionSystem은 판단 대상·시점을, NPCSystem은 실행 대상·경과 시간을 관리한다.
+누적 시간으로 실행하고 큰 이동은 충돌 substep으로 나눈다. 예약 취소·경로 무효화·
+위협 등 즉각 반응이 필요한 사건을 낮은 정기 판단 주기 뒤로 미루지 않는다.
+시간표·작업 완료는 경계 시각 통과로 처리해 낮은 주기에서도 누락·중복되지 않게 한다.
+
+## 3.3 Simulation LOD — 장기 요구사항
+
+근거리 주민은 실제 경로·이동·시설 접근·행동과 애니메이션으로 표현한다.
+원거리 주민은 낮은 갱신 빈도와 추상 작업 진행, 예정 시각의 결과 반영으로 처리할 수 있다.
+`08:00 광산 작업 시작 → 12:00 종료 → 광석 +4`는 원리 설명용 예시다.
+광산 작업·광석·해당 생산량은 현재 MVP 콘텐츠가 아니다.
+
+Simulation LOD의 선택은 게임 쪽 스케줄러가 소유하며 렌더의 화면 가림 여부만으로
+바꾸지 않는다. 플레이어가 접근하면 같은 npcId와 지속 상태에서 실제 표현으로 복귀한다.
+구체 거리와 전환 규칙을 도입할 때 다음을 먼저 정의한다.
+
+- 상세/추상 실행 중 하나만 작업 진행을 소유한다. 전환 중 이중 생산·보상은 금지한다.
+- Job claim·시설·재료 예약은 하나의 소유권으로 유지하고 무효화 시 취소·재배정한다.
+- 시설 파괴, 경로 단절, 습격 등 추상 진행의 전제가 깨지면 완료를 그대로 확정하지 않는다.
+- 접근 시 유효한 위치·접근 셀을 검증하고 화면 안의 순간이동이나 시간 역행을 방지한다.
+- 미완료 추상 작업의 지속 사실·예정 시각·완료 키와 로드 복구는 저장 버전으로 정의한다.
+
+현재 MVP는 모든 주민을 상세 처리한다. 23장의 Action 미저장 계약을 그대로 쓰며,
+위 저장 확장은 LOD 도입 시 명세화한다. 렌더 LOD와 Simulation LOD는 별개의 기능이다.
 
 ---
 
@@ -191,6 +276,10 @@ export class GameWorld {
 ## 4.1 update 순서
 
 순서에 이유가 있다. 임의로 바꾸지 않는다.
+
+아래 슬롯은 의존성과 커밋 순서다. 모든 시스템의 동일 갱신 빈도를 요구하지 않는다.
+주기를 나눠도 해당 슬롯에서 기한이 된 작업을 처리하고, 즉시 무효화와 프레임 끝 저장
+일관성을 유지한다. MVP의 WorldState는 14번에서 매 프레임 계산한다.
 
 ```text
  1  clock              시간을 먼저 진행시킨다. 모든 판단의 기준이다
@@ -346,7 +435,8 @@ export class Chunk {
 }
 ```
 
-블록에 인스턴스 객체를 만들지 않는다. 100 만 개의 객체가 된다.
+블록마다 JavaScript 객체를 만들지 않는다. 현재 약 100만, 장기에는 수천만 복셀이
+될 수 있으므로 TypedArray와 청크 단위 데이터 소유권을 유지한다.
 
 ## 6.3 블록 부가 상태
 
@@ -535,6 +625,35 @@ export function createEntityMaterial(...): THREE.Material;
 재질 집중은 전환 범위를 줄인다. 향후 Renderer와 GPU 업로드도 별도 검증해야 한다.
 `ShaderMaterial` 을 다른 곳에서 만들지 않는다.
 
+## 9.5 AssetManager와 AssetStore — 장기 경계
+
+에셋이 수 GB 이상으로 성장해도 전부 한 번에 다운로드하거나 RAM/GPU에 올리지 않는다.
+AssetManager는 필요한 에셋의 요청·수명·해제·메모리 예산을, AssetStore는 바이트의
+획득·저장 위치를 담당하는 방향으로 분리한다. 현재는 MVP 아틀라스와 소수 에셋만 로드하며
+사용하지 않는 플랫폼 구현체를 미리 만들지 않는다.
+
+```text
+Core Assets / Village Assets / Region Packs / Character Assets / Audio
+    → AssetManager → AssetStore
+                       ├ BrowserAssetStore: 필요 시 다운로드 + 버전별 캐시
+                       └ DesktopAssetStore: 설치된 로컬 파일 / 추가 팩
+```
+
+Cache는 콘텐츠 팩이 아닌 저장 정책이다. 게임 로직은 에셋 id만 다루고 실제 저장 위치를
+모른다. three 객체 생성·해제는 렌더 계층에 남긴다. AssetStore는 SaveSystem의 게임 저장과
+별도 책임이다. 팩 manifest·버전·오류/재시도·다운로드 캐시 한도·상주 메모리 한도는
+도입 시 정의한다. 텍스처 KTX2/Basis와 모델 glTF/GLB는 장기 배포 포맷 후보이며 지금
+필수 도구로 추가하지 않는다. 긴 BGM은 전체 디코딩 버퍼 상주 대신 streaming을 고려한다.
+
+## 9.6 Chunk Streaming — 장기 요구사항
+
+필요한 청크만 활성화하고 플레이어 주변의 필요한 청크만 메싱한다. 먼 청크는 메시를
+해제하고 데이터만 유지할 수 있으며, 더 먼 데이터의 상주·퇴거는 별도 예산으로 관리한다.
+로드된 청크라도 dirty일 때만 다시 메싱하며 9.2의 revision 검증을 유지한다.
+미로드 이웃을 air로 간주해 잘못된 면·경로·방을 확정하지 않는다. 언로드 시 미완료
+Worker 결과, 청크 경계를 넘는 방·시설 예약·경로의 처리 계약을 먼저 정한다 (2.3).
+MVP의 전체 섬 로드·초기 메싱·23.4의 로드 재구축은 그대로 허용한다.
+
 ---
 
 # 10. 방 인식
@@ -665,6 +784,10 @@ MVP_SPEC 11.6의 거리 상한과 y 범위로 문 인덱스를 조회한다.
 오래된 작업은 재시작한다. 진단과 자동 탐색을 합쳐 프레임당 3ms이며 셀 사이에서 양보한다.
 큐가 비면 최신 상태와 일치해야 한다. 매 변경마다 월드 전체를 스캔하지 않는다.
 
+대규모 마을에서도 `Block Changed → 영향 받은 Room/문 후보 dirty → Room Detection
+Queue → frame budget 내 처리`를 유지한다. 방 수가 늘었다는 이유로 전역 flood fill로
+바꾸지 않는다. 방 결과의 시설 목록은 주민 AI가 바로 조회하는 인덱스의 원천이다 (14.5).
+
 ## 10.6 방·시설 무효화의 연쇄
 
 ROOM_UNREGISTERED / ROOM_TYPE_CHANGED / ROOM_FACILITIES_CHANGED에서
@@ -794,6 +917,27 @@ export class MovementController {
 간격 제한이 없으면 문 앞에 두 NPC 가 겹쳤을 때 매 프레임 A* 가 돌아
 프레임이 무너진다.
 
+## 11.6 Hierarchical Navigation과 Worker — 장기 요구사항
+
+큰 월드에서 주민마다 전체 복셀 공간 A*를 반복하지 않는다. 장기 계층은 다음과 같다.
+
+```text
+World Region → Village District → Local Nav → Facility Approach Cell
+예: 광산 → 도로 → 마을 → 주택가 → 집 → 문 → 침대 접근 셀
+```
+
+지역 간 연결을 먼저 선택하고 필요한 국소 경로를 구한다. 시설 접근은 기존
+approachCells 계약으로 끝나며 고체 침대 자체를 경로 목표로 삼지 않는다.
+상위 연결도 블록 변경·청크 상태에 따라 무효화하고 실제 도달 가능성을 재검증한다.
+지역 연결 그래프·캐시·미로드 지역 요청 규칙은 확장 시 정하며 MVP A*를 유지한다.
+
+Pathfinding은 Web Worker로 분리 가능한 순수 계산 경계를 유지한다. Nav 스케줄러가
+요청·공유 예산·취소·결과 적용을 소유하고, Action은 즉시 결과가 나온다는 가정 없이
+대기할 수 있어야 한다. 향후 Worker에는 실제 NavigationGraph 클래스나 가변 GameWorld를
+보내지 않고 필요한 지역의 읽기 snapshot과 requestId/revision을 전달한다.
+오래된 응답은 폐기하며 `NO_PATH`와 예산 중단·미로드 대기를 혼동하지 않는다.
+현재 PathResult는 유지하고 미로드 상태 표현은 스트리밍 도입 시 확장한다.
+
 ---
 
 # 12. Entity 와 View
@@ -835,7 +979,9 @@ View    →  Entity 를 읽어서 그린다. Entity 를 고치지 않는다
 
 렌더는 매 프레임 `syncFrom` 을 호출한다.
 
-보간을 하지 않는다. `GameWorld.update` 와 `render` 가 같은 프레임에 돌기 때문이다.
+MVP에서는 `GameWorld.update`와 `render`가 같은 프레임에 돌므로 직접 동기화해도 된다.
+3.2의 다중 주기를 도입하면 이전/현재 시뮬레이션 snapshot과 시각으로 렌더 위치를
+보간한다. 시각적 보간 결과를 게임 위치·충돌·시설 예약에 역으로 쓰지 않는다.
 
 ---
 
@@ -950,6 +1096,53 @@ export function decideAction(ctx: NPCContext): Action | null;
 
 `decideAction` 은 아무것도 바꾸지 않는다.
 바꾸는 것은 반환된 Action 의 `start` / `update` 다.
+
+## 14.4 Job System / Job Queue
+
+장기 주민 AI는 **현재 욕구 + 스케줄 + 등록된 작업 + 사용할 수 있는 시설**로 판단한다.
+MVP의 욕구는 기존 식사·취침 구간으로 표현한다. 매 NPC가 월드 전체를 검색해 할 일을
+발견하는 구조를 금지하고 작업 후보의 발견은 해당 도메인 소유자에게 모은다.
+
+```text
+월드 사건 → 담당 시스템이 작업 후보 생성/갱신 → Job Queue → 적합한 NPC가 claim
+작물 성숙 → HarvestJob
+음식 부족 → CookingJob
+건물 파괴 → RepairJob
+운반 필요 → HaulJob
+```
+
+이는 장기 Job 종류의 예시다. MVP 요리 조건은 계속 MVP_SPEC 16장의 역할 시간·주방·
+crop 조건이며 음식 부족 조건을 추가하지 않는다. HaulJob·운반 메커닉도 MVP에 추가하지 않는다.
+
+MVP는 FarmSystem·CookingSystem·RepairSystem이 블록/작물/저장소/시설 변경과 예정 시각에서
+갱신하는 후보 목록과 기존 예약으로 시작한다. 후보 발견을 NPC마다 중복 실행하지
+않고 NPCDecisionSystem이 읽기 전용 후보를 조립한다. 14장의 Context는 MVP 계약이며
+범용 Job 조회 포트로의 구체 확장은 도입 시 명세화한다. 방 전체·피해 전체를 주민마다
+복사하지 말고 소유자 조회로 관련 후보를 좁힌다. 첫 취침에는 범용 큐가 필요 없다.
+
+장기 JobSystem은 고유 작업 키, 중복 생성 방지, 역할·지역·우선순위별 조회, 단일 claim,
+취소/재배정/완료를 소유한다. NPCSystem은 claim 이후 기존 Action을 실행한다.
+시설 배정은 SleepSystem, 임시 시설 예약은 NPCSystem, 자원 소비·결과 확정은 각 도메인
+서비스가 계속 소유한다. Job은 같은 상태를 복제해 별도의 NPC state를 만들지 않는다.
+대상 파괴·방 dirty·경로 실패·위협 중단 시 claim과 예약을 해제하고, 같은 결과를
+두 번 확정하지 않는다. Job 생성·배정도 예산과 기아 방지를 적용해 사건 폭주를 분산한다.
+
+## 14.5 조회 인덱스와 소유권
+
+| 조회 개념 | 원천 및 소유자 | 제공할 후보 |
+| --- | --- | --- |
+| RoomIndex | RoomRegistry | Bedroom / Kitchen / DiningRoom / Storeroom, 지역·타입별 유효 방 |
+| FacilityIndex | RoomRegistry의 matchRecipe 결과 | objectId / approachCells / usePosition, 유효 시설 |
+| ResourceIndex | 자원 담당 시스템; MVP 밭·작물은 FarmSystem | 종류·지역·가용 상태별 자원 |
+| JobIndex | 장기 JobSystem | 종류·역할·지역·claim 상태별 작업 |
+| spatial partition / region index | 각 원천 소유 모듈 | 인근 주민·자원·시설 후보 |
+
+이 이름은 논리적 조회 책임이며 같은 이름의 클래스를 모두 미리 만들라는 요구가 아니다.
+ResourceIndex의 장기 wood / stone / food / water 분류는 조회 예시이고 MVP의
+VillageStorage(seed/crop/food) 필드나 수자원 시스템을 늘리지 않는다.
+인덱스는 원천 상태에서 파생하며 변경·삭제·로드 때 갱신/재구축한다. 예약 가능 여부는
+현재 소유자에게 재검증한다. RoomRegistry의 시설 결과를 이용하고 NPC가 가구 블록을
+다시 훑지 않는다. 현재 방 인식과 주민 생활의 직접 연결을 대형 월드에서도 유지한다.
 
 ---
 
@@ -1264,7 +1457,8 @@ ADR 010 을 유지한다.
 "밭흙을 4 칸 만들어 주세요"      (2 / 4)
 ```
 
-`ObjectiveSystem` 이 매 프레임 현재 수치를 다시 센다.
+MVP의 `ObjectiveSystem`은 매 프레임 원천 소유자의 인덱스/집계에서 현재 수치를 조회한다.
+목표 표시를 위해 전체 복셀을 다시 스캔하지 않는다. 장기에는 원천 변경에 따라 갱신할 수 있다.
 
 **"마을을 벽으로 둘러싸 주세요" 에는 수치를 붙이지 않는다.**
 벽을 채점하지 않는다는 ADR 015 의 결정 때문이다.
@@ -1682,7 +1876,7 @@ Service Locator
 DI 컨테이너
 상태 관리 라이브러리
 물리 엔진
-Fixed timestep 시뮬레이션
+전역 Fixed timestep 시뮬레이션 (MVP; 3.2의 장기 다중 주기 확장을 막지 않는다)
 클라이언트-서버 분리
 옥트리 / 스파스 복셀
 복셀 광원 전파
@@ -1742,7 +1936,9 @@ Fixed timestep 시뮬레이션
 014  복셀 청크 16³ + 그리디 메싱               Accepted
 015  3D 통행 그래프 + 파괴 가능한 벽            Accepted (016으로 보완)
 016  설계 검토 반영: 공간·진행·저장 계약          Accepted
-017  MVP 5명과 100명·대형 월드 확장 경계          Accepted
+017  MVP 5명과 100명·대형 월드 확장 경계          Accepted (018로 구체화)
+018  사건 기반 작업·다중 주기·LOD·계층 경로       Accepted (장기 계약)
+019  Web-first, not Browser-only / 에셋 경계    Accepted (장기 계약)
 ```
 
 ---

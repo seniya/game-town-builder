@@ -5,6 +5,10 @@ Date: 2026-09-22
 Evidence: docs/research/2026-09-22-voxel-web-stack.md
 Related: ADR 011
 
+> 적용 범위 보완 (ADR 017~019): 아래 월드 크기·전체 상주·아틀라스 1장은 MVP 선택이다.
+> 장기에도 Chunk/TypedArray/dirty 메싱은 유지하되 스트리밍·활성 영역·에셋 팩을 확장할
+> 수 있다. 주민 수나 대형 월드의 고정 상한을 뜻하지 않는다.
+
 ## 배경
 
 ADR 011 이 3D 복셀 월드를 결정했다.
