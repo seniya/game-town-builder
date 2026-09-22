@@ -2,16 +2,21 @@
 
 # Small Village Restoration Game — Architecture Guide
 
-Version: 0.1
-Status: Initial MVP Architecture
+Version: 0.2
+Status: MVP Architecture Baseline (문서 정합성 정리 반영)
 Related Documents:
 
 ```text
-GAME_DESIGN.md
-MVP_SPEC.md
-ARCHITECTURE.md
-TASKS.md
+docs/project/GAME_DESIGN.md
+docs/project/MVP_SPEC.md
+docs/project/ARCHITECTURE.md
+docs/project/TASKS.md
+docs/adr/
 ```
+
+이 문서는 **인터페이스와 구조의 정본**이다.
+
+수치와 조건식의 정본은 `MVP_SPEC.md`이다.
 
 ---
 
@@ -43,27 +48,46 @@ MVP에서는 완벽한 범용 게임 프레임워크를 만드는 것이 목적�
 게임 구조는 크게 다음 다섯 계층으로 나눈다.
 
 ```text
-┌──────────────────────────────┐
-│          Presentation        │
-│     Phaser Scene / UI        │
-├──────────────────────────────┤
-│           Entities           │
-│ Player / NPC / Monster       │
-├──────────────────────────────┤
-│           Systems            │
-│ AI / Building / Clock / etc  │
-├──────────────────────────────┤
-│          World Model         │
-│ State / Query / Navigation   │
-├──────────────────────────────┤
-│            Data              │
-│ Config / Balance / Content   │
-└──────────────────────────────┘
+┌──────────────────────────────────────────┐
+│  Presentation                            │
+│  Phaser Scene / UI / EntityView          │
+├──────────────────────────────────────────┤
+│  Systems                                 │
+│  AI / Building / Clock / Event / ...     │
+├──────────────────────────────────────────┤
+│  World Model                             │
+│  State / Query / Navigation / Registry   │
+├──────────────────────────────────────────┤
+│  Entities (Pure Data)                    │
+│  Player / NPC / Monster / Building       │
+├──────────────────────────────────────────┤
+│  Data                                    │
+│  Config / Balance / Content              │
+└──────────────────────────────────────────┘
 ```
 
-각 계층은 아래 계층에 의존할 수 있다.
+각 계층은 **아래 계층에만** 의존한다.
 
-반대 방향의 의존성은 최소화한다.
+반대 방향의 의존성을 만들지 않는다.
+
+## 2.1 Entities 를 World Model 아래에 두는 이유
+
+이전 판의 계층도는 `Entities`를 `Systems` 위에 두었다.
+
+그 배치는 이 문서의 규칙을 스스로 위반한다.
+
+```text
+WorldQuery (World Model) 는 EntityRegistry 를 탐색한다
+    ↓
+World Model 이 위쪽 계층인 Entities 를 참조한다
+    ↓
+"아래 계층에만 의존한다" 위반
+```
+
+Entity를 **Phaser 의존성이 없는 순수 데이터**로 정의하면(9장)
+Entity는 사실상 Data에 가까운 계층이 되고 배치 모순이 사라진다.
+
+화면 표현은 Entity가 아니라 `EntityView`가 담당하며, 이는 Presentation 계층이다.
 
 ---
 
@@ -268,46 +292,55 @@ MVP에서는 자체적인 간단한 EventBus를 사용한다.
 
 ```ts
 export interface GameEventMap {
-  FARM_BUILT: {
-    buildingId: string;
-  };
+  // ── 건설 ───────────────────────────────────────
+  BUILDING_PLACED: { buildingId: EntityId; type: BuildingType };
+  BUILDING_UNLOCKED: { type: BuildingType };
+  NAVIGATION_CHANGED: { tiles: GridPosition[] };
 
-  KITCHEN_BUILT: {
-    buildingId: string;
-  };
+  // ── 생산 ───────────────────────────────────────
+  CROP_PLANTED: { farmId: EntityId };
+  CROP_HARVESTED: { farmId: EntityId; amount: number };
+  FOOD_COOKED: { amount: number };
+  MEAL_EATEN: { npcId: EntityId; amount: number };
 
-  HOUSE_BUILT: {
-    buildingId: string;
-  };
+  // ── 위험 ───────────────────────────────────────
+  MONSTER_SPAWNED: { monsterId: EntityId };
+  MONSTER_THREAT_STARTED: void;
+  MONSTER_THREAT_ENDED: void;
+  VILLAGE_BREACHED: void;
 
-  BARRIER_BUILT: {
-    buildingId: string;
-  };
+  // ── 진행 ───────────────────────────────────────
+  GAME_EVENT_TRIGGERED: { id: GameEventId };
+  NEW_RESIDENT_ARRIVED: { npcId: EntityId };
 
-  CROP_HARVESTED: {
-    amount: number;
-  };
-
-  FOOD_COOKED: {
-    amount: number;
-  };
-
-  MONSTER_SPAWNED: {
-    monsterId: string;
-  };
-
-  MONSTER_THREAT_STARTED: undefined;
-
-  MONSTER_THREAT_ENDED: undefined;
-
-  NEW_RESIDENT_ARRIVED: undefined;
+  // ── 표시 갱신 (UI 전용) ─────────────────────────
+  INVENTORY_CHANGED: { inventory: Readonly<InventoryState> };
+  STORAGE_CHANGED: { storage: Readonly<VillageStorage> };
+  WORLD_STATE_CHANGED: { state: WorldStateView };
+  OBJECTIVE_CHANGED: { objective: Objective | null };
+  GAME_HOUR_CHANGED: { time: GameTime; phase: DayPhase };
 }
 ```
 
-권장 구현:
+## 7.1 건물별 이벤트를 하나로 통합한다
+
+이전 판에는 `FARM_BUILT` / `KITCHEN_BUILT` / `HOUSE_BUILT` / `BARRIER_BUILT`
+4개가 별도로 있었다.
+
+페이로드가 동일하므로 `BUILDING_PLACED { type }` 하나로 통합한다.
+
+건물이 추가될 때마다 이벤트를 늘리지 않아도 된다.
+
+## 7.2 payload 가 없는 이벤트
+
+`void` 페이로드 이벤트는 `emit`에 두 번째 인자를 요구하지 않는다.
 
 ```ts
-class EventBus<TEventMap> {
+type VoidEventKey<M> = {
+  [K in keyof M]: M[K] extends void ? K : never;
+}[keyof M];
+
+export class EventBus<TEventMap> {
   on<K extends keyof TEventMap>(
     event: K,
     listener: (payload: TEventMap[K]) => void
@@ -318,11 +351,23 @@ class EventBus<TEventMap> {
     listener: (payload: TEventMap[K]) => void
   ): void;
 
-  emit<K extends keyof TEventMap>(
-    event: K,
-    payload: TEventMap[K]
-  ): void;
+  emit<K extends VoidEventKey<TEventMap>>(event: K): void;
+  emit<K extends keyof TEventMap>(event: K, payload: TEventMap[K]): void;
 }
+```
+
+이전 판의 `MONSTER_THREAT_STARTED: undefined`와 필수 payload 시그니처는
+호출할 때마다 다음을 쓰게 만들었다.
+
+```ts
+// 이전 판에서 강제되던 형태
+eventBus.emit('MONSTER_THREAT_STARTED', undefined);
+```
+
+오버로드를 두면 다음처럼 쓸 수 있다.
+
+```ts
+eventBus.emit('MONSTER_THREAT_STARTED');
 ```
 
 ---
@@ -350,7 +395,32 @@ EventBus는 모든 것을 연결하는 전역 메시지 버스로 사용하지 �
 - 단순 함수 호출로 충분한 경우
 ```
 
-즉, EventBus는 "도메인 사건"에만 사용한다.
+## 8.1 표시 갱신 이벤트는 예외로 허용한다
+
+`*_CHANGED` 이벤트는 도메인 사건이 아니지만 허용한다.
+
+```text
+INVENTORY_CHANGED
+STORAGE_CHANGED
+WORLD_STATE_CHANGED
+OBJECTIVE_CHANGED
+GAME_HOUR_CHANGED
+```
+
+이유는 UI가 매 프레임 Registry를 탐색하는 것을 막기 위해서다(58장).
+
+규칙은 두 가지다.
+
+```text
+1. UI 는 구독만 한다. UI 는 emit 하지 않는다.
+2. 값이 실제로 바뀐 프레임에만 emit 한다. 매 프레임 emit 하지 않는다.
+```
+
+`GAME_HOUR_CHANGED`는 이름 그대로 **시(hour)가 바뀔 때만** 발행한다.
+
+분 단위로 발행하면 도메인 사건이 아니라 프레임 신호가 된다.
+
+즉, EventBus는 "도메인 사건"과 "값 변경 통지"에만 사용한다.
 
 ---
 
@@ -373,28 +443,104 @@ Entity는 다음을 포함할 수 있다.
 
 ```text
 - ID
-- Position
-- Sprite
-- 현재 상태
+- Tile Position
+- 현재 Action
 - 간단한 데이터
+- EntityView 참조 (선택)
 ```
 
 Entity는 복잡한 판단을 하지 않는다.
 
-예:
+## 9.1 Entity 는 Phaser 를 import 하지 않는다
 
 ```ts
-export class NPC {
-  readonly id: string;
+// src/game/entities/npc/NPC.ts
+// Phaser import 없음
 
-  state: NPCState = 'idle';
+export class NPC {
+  currentAction: NPCAction;
+  view: EntityView | null = null;
 
   constructor(
-    public readonly sprite: Phaser.GameObjects.Sprite,
-    public readonly role: NPCRole
-  ) {}
+    readonly id: EntityId,
+    readonly role: NPCRole,
+    public tile: GridPosition
+  ) {
+    this.currentAction = new IdleAction();
+  }
+
+  /** 표시용 상태 라벨. 별도 state 필드를 두지 않는다. */
+  get stateLabel(): NPCStateLabel {
+    return this.currentAction.stateLabel;
+  }
 }
 ```
+
+## 9.2 EntityView
+
+화면 표현은 Entity가 아니라 `EntityView`가 담당한다.
+
+위치:
+
+```text
+src/game/views/EntityView.ts
+src/game/views/PhaserSpriteView.ts
+```
+
+```ts
+export interface EntityView {
+  setPosition(position: WorldPosition): void;
+  playAnimation(name: string): void;
+  setVisible(visible: boolean): void;
+  destroy(): void;
+}
+```
+
+```ts
+export class PhaserSpriteView implements EntityView {
+  constructor(private readonly sprite: Phaser.GameObjects.Sprite) {}
+  // ...
+}
+```
+
+`Player`, `Monster`도 같은 패턴을 사용한다.
+
+## 9.3 왜 분리하는가
+
+이전 판의 `NPC`는 생성자에서 `Phaser.GameObjects.Sprite`를 필수로 요구했다.
+
+그러면 다음이 불가능해진다.
+
+```text
+75장   "NPC Decision 을 Phaser 와 분리한다"
+77장   "NPCDecisionSystem 을 우선 테스트한다"
+```
+
+`NPCDecisionSystem`을 테스트하려면 `NPC` 인스턴스가 필요하고,
+`NPC`를 만들려면 Phaser Scene과 Sprite가 필요해진다.
+
+Vitest에서 Phaser를 띄우는 것은 MVP 테스트 전략과 맞지 않다.
+
+`view`를 선택적 필드로 분리하면 테스트에서는 다음으로 충분하다.
+
+```ts
+const npc = new NPC('npc_farmer_001', 'farmer', { x: 10, y: 10 });
+// view 는 null. 판단 로직 테스트에 렌더링이 필요하지 않다.
+```
+
+## 9.4 위치 동기화
+
+Entity의 `tile`이 진실의 원천이고, View는 그것을 따라간다.
+
+```text
+MovementController 가 entity.tile 과 보간 위치를 갱신
+    ↓
+같은 프레임에서 view.setPosition(gridToWorldCenter(...)) 호출
+```
+
+View가 위치를 소유하지 않는다.
+
+Sprite 좌표를 읽어서 게임 로직을 판단하지 않는다.
 
 ---
 
@@ -447,7 +593,7 @@ EntityRegistry는 Entity를 소유하는 거대한 Manager가 아니다.
 
 # 12. WorldState
 
-`WorldState`는 마을 전체의 추상적 상태를 저장한다.
+`WorldState`는 마을 전체의 추상적 상태를 **계산해서 제공한다.**
 
 위치:
 
@@ -455,33 +601,142 @@ EntityRegistry는 Entity를 소유하는 거대한 Manager가 아니다.
 src/game/world/WorldState.ts
 ```
 
-예:
-
 ```ts
-export interface WorldStateData {
-  foodLevel: number;
-  safetyLevel: number;
-  housingLevel: number;
-  happinessLevel: number;
-  population: number;
+export interface WorldStateView {
+  readonly foodLevel: number;       // 0 ~ 100
+  readonly safetyLevel: number;     // 0 ~ 100
+  readonly housingLevel: number;    // 0 ~ 100
+  readonly happinessLevel: number;  // 0 ~ 100
+  readonly population: number;
 }
 ```
 
-WorldState는 단순 데이터 객체보다 약간의 도메인 메서드를 제공할 수 있다.
+## 12.1 WorldState 는 상태를 저장하지 않는다
 
-예:
+`WorldState`는 필드를 갖지 않는 **순수 계산기**다.
 
 ```ts
 export class WorldState {
-  private state: WorldStateData;
+  constructor(
+    private readonly registry: EntityRegistry,
+    private readonly storage: VillageStorage,
+    private readonly gate: VillageGate,
+    private readonly balance: typeof GAME_BALANCE
+  ) {}
 
-  increaseFood(amount: number): void {}
-  increaseSafety(amount: number): void {}
-  increaseHousing(amount: number): void {}
+  /** 현재 마을 상태로부터 지표를 계산한다. */
+  compute(): WorldStateView;
 }
 ```
 
-단, NPC AI나 Event 조건 로직까지 넣지 않는다.
+변경 API를 제공하지 않는다.
+
+```text
+increaseFood()      없다
+increaseSafety()    없다
+increaseHousing()   없다
+setPopulation()     없다
+```
+
+## 12.2 계산식
+
+계산식과 수치의 정본은 `MVP_SPEC.md` 42장이다.
+
+```text
+foodLevel      storage.food / (population * mealsPerDay * foodPerMeal * targetDays)
+safetyLevel    막힌 입구 타일 수 / balance.village.gateTiles
+housingLevel   전체 침대 수 / population
+happinessLevel foodLevel*0.4 + housingLevel*0.3 + safetyLevel*0.3
+population     registry.npcs.size
+```
+
+전부 `Math.round` 후 `clamp(0, 100)`을 적용하며, `population`은 예외다.
+
+`Math.round`는 0.5를 올림한다(half-up).
+
+`happinessLevel`은 가중 평균이므로 `.5`가 자주 발생하므로
+다른 반올림 방식을 쓰면 테스트가 환경에 따라 실패한다.
+(`MVP_SPEC.md` 42.2.1)
+
+`population == 0`이면 `foodLevel`과 `housingLevel`은 `0`을 반환한다.
+
+0으로 나누지 않도록 반드시 가드를 둔다.
+
+## 12.3 순수 함수로 분리한다
+
+계산 본체는 클래스 밖의 순수 함수로 둔다.
+
+```ts
+export function computeWorldState(input: {
+  population: number;
+  food: number;
+  bedCount: number;
+  blockedGateTiles: number;
+  gateTiles: number;
+  balance: WorldStateBalance;
+}): WorldStateView;
+```
+
+이렇게 하면 `EntityRegistry`나 Phaser 없이 테스트할 수 있다.
+
+```text
+Given population=3, food=12, bedCount=3, blockedGateTiles=5, gateTiles=5
+Then foodLevel=67, housingLevel=100, safetyLevel=100, happinessLevel=87
+```
+
+## 12.4 왜 파생값으로 바꾸었는가
+
+이전 판은 `WorldState`가 값을 저장하고 `increaseSafety()` 등으로 변경하는 구조였다.
+
+세 가지 모순이 있었다.
+
+**1. 건물 효과 키가 필드명과 일치하지 않았다**
+
+```text
+필드      foodLevel, safetyLevel, housingLevel, happinessLevel
+건물 효과  foodProduction, foodEfficiency, happiness, housing, safety
+```
+
+`worldStateEffects: Partial<WorldStateData>`는 `WorldStateData`의 키만 허용하므로
+`foodProduction`과 `foodEfficiency`를 표현할 수 없었다.
+
+또한 `increaseHappiness()`가 정의되어 있지 않았다.
+
+**2. 지표가 내려갈 수 없었다**
+
+건설로만 증가하므로 값은 단조 증가한다.
+
+`foodLevel < 20` 조건은 구조적으로 발생 불가능했다.
+
+**3. population 이 두 곳에 존재했다**
+
+`WorldState.population`과 `EntityRegistry.npcs.size`의 동기화 주체가 없었다.
+
+105장의 `WorldState ≠ EntityRegistry` 경계를 스스로 위반했다.
+
+파생값으로 만들면 세 문제가 동시에 사라진다.
+
+관련 ADR:
+
+```text
+docs/adr/004-worldstate-as-derived-projection.md
+```
+
+## 12.5 캐싱
+
+`compute()`는 매 프레임 호출해도 문제없을 만큼 가볍다.
+
+그래도 UI 갱신을 위해 값이 바뀐 프레임만 감지해야 한다.
+
+```text
+GameWorld.update 끝에서 compute() 를 1회 호출
+    ↓
+이전 프레임 결과와 비교
+    ↓
+다르면 WORLD_STATE_CHANGED emit
+```
+
+시스템마다 `compute()`를 중복 호출하지 않는다.
 
 ---
 
@@ -495,29 +750,54 @@ export class WorldState {
 src/game/world/WorldQuery.ts
 ```
 
-예:
-
 ```ts
-findNearestBuilding(
-  position: GridPosition,
-  type: BuildingType
-): Building | null;
+export interface WorldQuery {
+  // ── 건물 ────────────────────────────────────────
+  findNearestBuilding(from: GridPosition, type: BuildingType): Building | null;
+  countBuildings(type: BuildingType): number;
 
-findNearestFood(
-  position: GridPosition
-): FoodSource | null;
+  // ── 침대 배정 ───────────────────────────────────
+  /** 전체 침대 수. 집들의 residentCapacity 합계. */
+  getBedCount(): number;
+  /** 이 NPC 에게 배정된 침대. 없으면 null. NPC id 순서로 결정적으로 배정. */
+  getAssignedBed(npcId: EntityId): { houseId: EntityId; door: GridPosition } | null;
 
-findSafePosition(
-  from: GridPosition
-): GridPosition | null;
+  // ── 마을 입구 ───────────────────────────────────
+  /** 입구 타일 목록. village_gate 기준 가로 gateTiles 칸. */
+  getGateTiles(): readonly GridPosition[];
+  /** 입구 타일 중 Barrier 로 막힌 수. safetyLevel 계산에 사용. */
+  countBlockedGateTiles(): number;
 
-isMonsterNearby(
-  position: GridPosition,
-  radius: number
-): boolean;
+  // ── 장소 ────────────────────────────────────────
+  getPlazaPosition(): GridPosition;
+  findSafePosition(from: GridPosition): GridPosition | null;
+  findDiningSpot(): GridPosition | null;
+
+  // ── 위험 ────────────────────────────────────────
+  isThreatNear(position: GridPosition, radiusTiles: number): boolean;
+}
 ```
 
-NPCSystem은 Registry 내부 구조를 직접 탐색하지 않고 가능하면 WorldQuery를 사용한다.
+## 13.1 findNearestFood 를 두지 않는다
+
+이전 판에는 `findNearestFood(position): FoodSource | null`이 있었다.
+
+MVP에서 음식은 월드에 놓인 오브젝트가 아니라 `VillageStorage.food` 숫자다.
+
+따라서 위치를 검색할 대상이 없다.
+
+음식 보유 여부는 `storage.food >= foodPerMeal`로 판정하고,
+식사 장소는 `findDiningSpot()`이 제공한다.
+
+## 13.2 WorldQuery 는 조회만 한다
+
+`getAssignedBed()`는 배정 결과를 **계산해서 반환**하며, 어떤 상태도 기록하지 않는다.
+
+배정을 NPC id 순서로 결정적으로 수행하므로 호출할 때마다 같은 결과가 나온다.
+
+같은 상황에서 매번 다른 NPC가 노숙하면 재현과 디버깅이 불가능해진다.
+
+NPCSystem은 Registry 내부 구조를 직접 탐색하지 않고 WorldQuery를 사용한다.
 
 ---
 
@@ -542,9 +822,43 @@ export interface WorldPosition {
 공통 변환 Utility:
 
 ```ts
-gridToWorld(position: GridPosition): WorldPosition;
+/** 타일의 좌상단 월드 좌표. x*32, y*32 */
+gridToWorldTopLeft(position: GridPosition): WorldPosition;
 
+/** 타일의 중심 월드 좌표. x*32+16, y*32+16 */
+gridToWorldCenter(position: GridPosition): WorldPosition;
+
+/** floor(x/32), floor(y/32) */
 worldToGrid(position: WorldPosition): GridPosition;
+```
+
+## 14.1 gridToWorld 라는 이름을 쓰지 않는다
+
+기준점이 드러나지 않는 이름은 사용하지 않는다.
+
+```text
+gridToWorld(10, 5)   →  (320, 160) 인가 (336, 176) 인가?
+```
+
+호출부에서 기준점을 알 수 없으면 Sprite 배치와 충돌 판정이
+한 타일씩 어긋나는 문제가 반드시 발생한다.
+
+## 14.2 사용 규칙
+
+```text
+Sprite 배치        gridToWorldCenter
+Tilemap 인덱싱      gridToWorldTopLeft
+건물 origin        항상 좌상단 타일
+```
+
+건물 Sprite는 점유 영역 전체의 중심에 배치한다.
+
+```ts
+const topLeft = gridToWorldTopLeft(building.origin);
+const center = {
+  x: topLeft.x + (config.width * TILE_SIZE) / 2,
+  y: topLeft.y + (config.height * TILE_SIZE) / 2,
+};
 ```
 
 두 좌표계를 혼용하지 않는다.
@@ -564,22 +878,50 @@ src/game/world/NavigationGrid.ts
 NavigationGrid가 관리하는 정보:
 
 ```text
-Walkable
-Blocked
-Building
-Barrier
-MapCollision
+MapCollision   맵의 Collision 레이어
+Building       건물이 점유한 타일 (방벽 제외)
+Barrier        방벽 타일
 ```
 
-예:
+## 15.1 통행 레이어는 두 개다
 
 ```ts
-isWalkable(position: GridPosition): boolean;
+export type PathActor = 'ground' | 'monster';
 
-setBlocked(position: GridPosition): void;
+export interface NavigationGrid {
+  isWalkable(position: GridPosition, actor: PathActor): boolean;
 
-setWalkable(position: GridPosition): void;
+  setBuildingBlocked(tiles: readonly GridPosition[]): void;
+  setBarrier(tiles: readonly GridPosition[]): void;
+  clear(tiles: readonly GridPosition[]): void;
+
+  /** 그리드가 변경될 때마다 증가한다. 경로 무효화 판정에 사용. */
+  readonly version: number;
+}
 ```
+
+```text
+actor = 'ground'    Player / NPC.  Barrier 를 통과 가능으로 취급한다.
+actor = 'monster'   Monster.       Barrier 를 Blocked 로 취급한다.
+```
+
+방벽이 몬스터만 막는 이유는 `MVP_SPEC.md` 29.1에 있다.
+
+관련 ADR:
+
+```text
+docs/adr/005-barrier-blocks-monsters-only.md
+```
+
+`isWalkable`을 인자 없이 호출할 수 없게 만든다.
+
+기본값을 두면 호출부가 어느 레이어를 의도했는지 알 수 없게 된다.
+
+## 15.2 version 이 필요한 이유
+
+건설로 그리드가 바뀌면 **이미 이동 중인** NPC와 Monster의 경로가 낡는다.
+
+`version`을 비교해 낡은 경로를 감지한다. (17.2 참조)
 
 ---
 
@@ -615,15 +957,25 @@ Pathfinding은 Phaser Sprite를 직접 이동시키지 않는다.
 
 # 17. MovementController
 
-실제 Entity 이동은 별도의 MovementController 또는 MovementSystem이 담당한다.
-
-예:
+실제 Entity 이동은 별도의 MovementController가 담당한다.
 
 ```ts
-moveAlongPath(
-  entity: MovableEntity,
-  path: GridPosition[]
-): void;
+export interface PathFollow {
+  path: readonly GridPosition[];
+  index: number;
+  goal: GridPosition;
+  actor: PathActor;
+  /** 경로를 계산한 시점의 NavigationGrid.version */
+  navigationVersion: number;
+}
+
+export interface MovementController {
+  follow(entity: MovableEntity, follow: PathFollow): void;
+  update(entity: MovableEntity, delta: number): MoveStatus;
+  stop(entity: MovableEntity): void;
+}
+
+export type MoveStatus = 'moving' | 'arrived' | 'blocked';
 ```
 
 이렇게 하면 다음 책임이 분리된다.
@@ -632,9 +984,73 @@ moveAlongPath(
 PathfindingSystem
 = 어디로 갈지 경로 계산
 
-Movement
+MovementController
 = 실제 이동 처리
 ```
+
+## 17.1 도착 판정
+
+```text
+현재 위치와 다음 타일 중심의 거리 < balance.npc.arriveThresholdPx
+    ↓
+index++
+```
+
+마지막 타일에 도달하면 `arrived`를 반환한다.
+
+## 17.2 경로 무효화와 재계산
+
+건설이나 철거로 그리드가 바뀌면 이미 진행 중인 경로를 반드시 다시 계산한다.
+
+```text
+BuildingSystem 이 NavigationGrid 를 변경
+    ↓
+NavigationGrid.version++
+    ↓
+NAVIGATION_CHANGED emit
+    ↓
+MovementController.update 가 매번 확인한다
+      follow.navigationVersion !== grid.version ?
+    ↓
+불일치 → 현재 타일에서 goal 까지 재계산
+    ↓
+경로 있음  → follow 갱신, 계속 이동
+경로 없음  → MoveStatus 'blocked' 반환
+    ↓
+호출한 Action 이 'failed' 로 종료
+    ↓
+NPCDecisionSystem 이 다음 행동을 다시 결정
+```
+
+## 17.3 왜 이 규칙이 필요한가
+
+이전 판에는 이 규칙이 없었다.
+
+그런데 80장은 "Barrier 추가 후 경로 변경" 테스트를 요구한다.
+
+규칙이 없으면 다음이 발생한다.
+
+```text
+몬스터가 마을로 가는 경로를 계산했다
+    ↓
+플레이어가 그 경로 위에 방벽을 세웠다
+    ↓
+몬스터는 낡은 경로를 그대로 따라가 방벽을 통과한다
+```
+
+즉 방벽이 작동하지 않는다.
+
+Acceptance Test 6이 실패하는 가장 흔한 원인이 이것이다.
+
+## 17.4 재계산 빈도 제한
+
+`NAVIGATION_CHANGED`가 연속으로 발생할 수 있다.
+(방벽을 5개 연속 설치하는 경우)
+
+같은 프레임에 여러 번 재계산하지 않도록 `balance.npc.repathIntervalSeconds`
+간격으로만 재계산을 시도한다.
+
+단, `blocked`가 확정된 경우는 즉시 Action을 종료한다.
 
 ---
 
@@ -811,30 +1227,54 @@ src/game/systems/building/BuildingSystem.ts
 
 건물 관련 데이터는 `data/buildings.ts`에서 관리한다.
 
-예:
-
 ```ts
 export interface BuildingConfig {
   type: BuildingType;
   width: number;
   height: number;
-  cost: Partial<Record<ItemId, number>>;
-  worldStateEffects: Partial<WorldStateData>;
+  cost: Partial<Record<InventoryItemId, number>>;
+
+  /** 이 건물이 제공하는 침대 수. 집만 > 0 */
+  residentCapacity: number;
+
+  /** 이 건물이 몬스터의 통행을 막는가. 방벽만 true */
+  blocksMonsters: boolean;
 }
 ```
-
-예:
 
 ```ts
 farm: {
+  type: 'farm',
   width: 3,
   height: 3,
-  cost: {
-    wood: 6,
-    stone: 2
-  }
+  cost: { wood: 6, stone: 2, seed: 3 },
+  residentCapacity: 0,
+  blocksMonsters: false,
 }
 ```
+
+수치의 정본은 `MVP_SPEC.md` 77.2이다.
+
+## 24.1 worldStateEffects 를 두지 않는다
+
+이전 판에는 다음 필드가 있었다.
+
+```ts
+worldStateEffects: Partial<WorldStateData>;
+```
+
+이 필드는 사용하지 않는다.
+
+`WorldState`가 파생값이므로 건물이 지표를 직접 올리지 않는다(12장).
+
+건물은 **자신이 제공하는 기능**만 선언한다.
+
+```text
+residentCapacity    →  침대 수 →  housingLevel 이 계산된다
+blocksMonsters      →  입구 커버리지 →  safetyLevel 이 계산된다
+```
+
+같은 숫자를 두 곳에서 관리하지 않으므로 어긋날 수 없다.
 
 ---
 
@@ -847,30 +1287,53 @@ Player presses B
 ↓
 Build Menu
 ↓
-Building 선택
+Building 선택 (해금된 것만)
 ↓
 Build Mode
 ↓
-Mouse 위치 → Grid Position
+Mouse 위치 → worldToGrid → origin
 ↓
-BuildValidator
+BuildValidator.validate({ config, origin, inventory })
 ↓
-Valid / Invalid Preview
+Valid / Invalid Preview  (Invalid 사유 표시)
 ↓
 Click
 ↓
-Resource 확인
+[Valid 인 경우에만 진행]
 ↓
-Building 생성
+BuildingFactory.createBuilding()
 ↓
-Inventory 감소
+Inventory 차감
 ↓
-NavigationGrid 갱신
+(Farm 인 경우) seed 비용을 VillageStorage.seed 로 이전
 ↓
-WorldState 변경
+Ruins 타일 제거
 ↓
-Domain Event emit
+EntityRegistry 등록
+↓
+NavigationGrid 갱신 (+ version++)
+↓
+NAVIGATION_CHANGED emit
+↓
+BUILDING_PLACED emit
+↓
+INVENTORY_CHANGED / STORAGE_CHANGED emit
 ```
+
+## 25.1 클릭 이후 재검증하지 않는다
+
+클릭 시점에는 Preview가 이미 Valid로 판정된 상태다.
+
+자원 검사는 Preview 단계에서 끝났으므로 차감만 수행한다.
+
+## 25.2 WorldState 를 직접 변경하지 않는다
+
+이전 판의 흐름에는 `WorldState 변경` 단계가 있었다.
+
+`WorldState`는 파생값이므로 건설이 직접 값을 바꾸지 않는다(12장).
+
+`BUILDING_PLACED`와 `STORAGE_CHANGED` 이후 `GameWorld`가 `compute()`를 호출하면
+지표가 자동으로 새 값을 반영한다.
 
 ---
 
@@ -886,23 +1349,72 @@ Domain Event emit
 src/game/systems/building/BuildValidator.ts
 ```
 
-예:
-
 ```ts
-validate(
-  config: BuildingConfig,
-  position: GridPosition
-): BuildValidationResult;
-```
+export interface BuildValidationInput {
+  config: BuildingConfig;
+  /** 점유 영역의 좌상단 타일 */
+  origin: GridPosition;
+  inventory: Readonly<InventoryState>;
+}
 
-결과:
+export type BuildInvalidReason =
+  | 'out_of_bounds'
+  | 'map_collision'
+  | 'overlaps_building'
+  | 'outside_buildable_area'
+  | 'insufficient_resources';
 
-```ts
-interface BuildValidationResult {
+export interface BuildValidationResult {
   valid: boolean;
   reason?: BuildInvalidReason;
+  /** insufficient_resources 인 경우 부족한 항목 */
+  missing?: Partial<Record<InventoryItemId, number>>;
 }
+
+export function validate(input: BuildValidationInput): BuildValidationResult;
 ```
+
+## 26.1 자원 검사는 Validator 안에서 한다
+
+`inventory`를 입력으로 받는 이유는 자원 부족도 Invalid로 표시해야 하기 때문이다.
+
+```text
+MVP_SPEC 19장   Preview 판단 조건에 "필요한 Resource 가 있는가" 포함
+81장            Build Validation 테스트에 "자원 부족 → Invalid" 포함
+```
+
+이전 판의 시그니처 `validate(config, position)`은 Inventory를 받지 않아
+이 두 요구사항을 만족할 수 없었다.
+
+또한 이전 판의 25장 흐름은 자원 확인을 클릭 **이후**에 두고 있었다.
+
+그러면 다음이 발생한다.
+
+```text
+Ghost Preview 가 Valid (녹색) 로 표시된다
+    ↓
+플레이어가 클릭한다
+    ↓
+자원 부족으로 실패한다
+```
+
+Preview의 의미가 사라진다.
+
+## 26.2 Ruins 는 막지 않는다
+
+`Ruins` 레이어 타일은 어떤 Invalid 사유에도 해당하지 않는다.
+
+폐허 위에 건설할 수 있어야 "무너진 밭을 복구한다"는 서사가 성립한다.
+(`MVP_SPEC.md` 8.2)
+
+## 26.3 순수 함수로 둔다
+
+`validate`는 클래스가 아니라 순수 함수로 둔다.
+
+Phaser, Scene, Registry에 의존하지 않고
+`NavigationGrid`와 `BuildableArea`를 인자 또는 클로저로 받는다.
+
+81장의 테스트를 Vitest에서 그대로 작성할 수 있어야 한다.
 
 ---
 
@@ -982,19 +1494,86 @@ decide(npc: NPC, context: NPCContext): NPCAction;
 
 Decision이 필요한 정보는 Context 형태로 제공한다.
 
-예:
-
 ```ts
-interface NPCContext {
-  gameTime: GameTime;
-  monsterNearby: boolean;
-  foodAvailable: boolean;
-  assignedWorkplaceExists: boolean;
-  houseExists: boolean;
+export interface NPCContext {
+  readonly gameTime: GameTime;
+  readonly dayPhase: DayPhase;
+  /** Schedule 이 이 시각에 지정한 활동 */
+  readonly scheduledActivity: ScheduledActivity;
+
+  // ── 위험 ────────────────────────────────────────
+  readonly threatNearby: boolean;
+
+  // ── 마을 자원 ───────────────────────────────────
+  readonly storage: Readonly<VillageStorageState>;
+
+  // ── 이 NPC 가 쓸 수 있는 시설 ────────────────────
+  readonly farm: { id: EntityId; phase: FarmPhase; tile: GridPosition } | null;
+  readonly kitchen: { id: EntityId; tile: GridPosition } | null;
+  readonly bed: { houseId: EntityId; door: GridPosition } | null;
+
+  // ── 장소 ────────────────────────────────────────
+  readonly plaza: GridPosition;
+  readonly diningSpot: GridPosition | null;
+
+  // ── 이 NPC 의 상태 ──────────────────────────────
+  /** 이번 식사 시간대에 이미 먹었는가 */
+  readonly hasEatenThisMeal: boolean;
 }
 ```
 
-NPCDecisionSystem이 Scene이나 Registry를 무분별하게 직접 참조하지 않도록 한다.
+## 30.1 이전 Context 로는 판단이 불가능했다
+
+이전 판의 Context는 다음 5개였다.
+
+```ts
+gameTime, monsterNearby, foodAvailable,
+assignedWorkplaceExists, houseExists
+```
+
+그런데 각 역할의 판단에는 다음이 필요하다.
+
+```text
+농부   밭의 phase           empty 면 심고, ready 면 수확하고, growing 이면 대기
+       storage.seed         씨앗이 없으면 심을 수 없다
+요리사  storage.crop         cropPerBatch 이상 있어야 조리한다
+전원   bed                  침대가 배정되었는지 (집 존재 여부만으로는 부족)
+       hasEatenThisMeal     같은 식사 시간에 반복 식사를 막는다
+```
+
+`assignedWorkplaceExists: boolean`으로는 "밭이 있는가"만 알 수 있고
+"지금 밭에서 무엇을 해야 하는가"를 알 수 없다.
+
+`houseExists: boolean`으로는 침대 부족 상황(집은 있지만 내 침대는 없음)을
+표현할 수 없다.
+
+## 30.2 Context 는 Decision 직전에 조립한다
+
+```text
+NPCSystem 이 NPC 별로 WorldQuery + VillageStorage + GameClock 에서 값을 모아
+NPCContext 를 만든다
+    ↓
+NPCDecisionSystem.decide(npc, context) 는 Context 만 읽는다
+```
+
+`NPCDecisionSystem`은 `EntityRegistry`, `Scene`, `WorldQuery`를
+직접 참조하지 않는다.
+
+이것이 78장의 테스트를 객체 리터럴 하나로 작성할 수 있게 만든다.
+
+## 30.3 우선순위는 4단계다
+
+```text
+1. 위험 회피      threatNearby
+2. 필수 스케줄    식사 / 취침
+3. 직업 행동      농사 / 요리 / 점검
+4. 자유 행동      Idle
+```
+
+이전 판의 "2. 생존 행동"은 Hunger 수치를 전제했으나
+MVP는 Hunger를 구현하지 않고 일정 기반 식사를 사용한다(40장).
+
+비어 있는 단계이므로 삭제했다.
 
 ---
 
@@ -1002,31 +1581,41 @@ NPCDecisionSystem이 Scene이나 Registry를 무분별하게 직접 참조하지
 
 NPC 행동은 Action 단위로 구현한다.
 
-예:
+MVP의 Action 목록:
 
 ```text
-IdleAction
-MoveToAction
-FarmAction
-HarvestAction
-CollectCropAction
-CookAction
-EatAction
-SleepAction
-FleeAction
-TalkAction
+IdleAction       제자리 대기 / 가벼운 배회
+MoveToAction     목표 타일까지 이동
+PlantAction      씨앗 심기          (seed -1)
+HarvestAction    수확               (crop +4, seed +1)
+CookAction       조리               (crop -2, food +3)
+InspectAction    목수의 시설 점검 연출
+EatAction        식사               (food -1)
+SleepAction      배정된 침대에서 취침  (Sprite 숨김)
+RestAction       광장에서 밤 보내기   (Sprite 보임)
+FleeAction       safe_spot 으로 도피
+TalkAction       대화 중 정지
 ```
+
+`FarmAction`을 `PlantAction`과 `HarvestAction`으로 나눈 이유는
+두 행동의 조건과 결과가 완전히 다르기 때문이다.
+
+`CollectCropAction`은 두지 않는다.
+
+작물이 `VillageStorage`의 숫자이므로 "가져오는" 단계에 상태 변화가 없다(39.1).
 
 공통 Interface:
 
 ```ts
-interface NPCAction {
-  start(npc: NPC): void;
+export interface NPCAction {
+  readonly kind: NPCActionKind;
 
-  update(
-    npc: NPC,
-    delta: number
-  ): ActionStatus;
+  /** 애니메이션과 Debug Panel 이 사용하는 표시 상태 */
+  readonly stateLabel: NPCStateLabel;
+
+  start(npc: NPC, context: NPCContext): void;
+
+  update(npc: NPC, delta: number): ActionStatus;
 
   cancel(npc: NPC): void;
 }
@@ -1035,11 +1624,69 @@ interface NPCAction {
 상태:
 
 ```ts
-type ActionStatus =
-  | 'running'
-  | 'success'
-  | 'failed';
+export type ActionStatus = 'running' | 'success' | 'failed';
 ```
+
+## 31.1 Action 이 NPC 상태의 유일한 원천이다
+
+`npc.state` 필드를 따로 두지 않는다.
+
+```ts
+export class NPC {
+  currentAction: NPCAction;
+
+  get stateLabel(): NPCStateLabel {
+    return this.currentAction.stateLabel;
+  }
+}
+```
+
+이전 판은 `MVP_SPEC.md`의 `NPCState` 유니온과 이 Action 목록을
+동시에 유지하려 했다.
+
+그러면 진실의 원천이 두 개가 된다.
+
+```text
+npc.state = 'working'
+npc.currentAction = HarvestAction
+```
+
+둘을 일치시키는 코드가 모든 전이마다 필요해지고, 한쪽만 갱신하는 버그가 생긴다.
+
+Action 구조를 도입한 목적이 거대한 switch문 제거였는데,
+State 필드를 남기면 `Action → State` 매핑 switch문이 새로 생긴다.
+
+관련 ADR:
+
+```text
+docs/adr/008-action-as-single-npc-state.md
+```
+
+## 31.2 RestAction 과 SleepAction 은 다른 Action 이다
+
+```text
+SleepAction   침대가 배정된 NPC. 문으로 들어가 Sprite 가 숨겨진다.
+RestAction    침대가 없는 NPC. 광장에 앉아 화면에 계속 보인다.
+```
+
+집을 짓기 전 밤에 주민들이 광장에 앉아 있는 모습이 보여야
+플레이어가 집이 필요하다는 것을 인식할 수 있다.
+
+두 Action을 하나로 합치면 이 차이가 사라진다.
+
+## 31.3 복합 Action 은 만들지 않는다
+
+`MoveToAndPlantAction`처럼 여러 단계를 묶은 Action을 만들지 않는다.
+
+이동은 `MoveToAction`이 끝낸 뒤 Decision을 다시 수행한다.
+
+```text
+MoveToAction (밭으로) → success
+    ↓
+Decision 재평가 → PlantAction
+```
+
+이렇게 하면 이동 중에 위협이 발생했을 때 중단 처리가 단순해진다.
 
 ---
 
@@ -1132,41 +1779,89 @@ CarpenterBehavior
 ```text
 Work Time
 ↓
-Farm 존재 확인
+context.farm 존재 확인      없으면 Idle
 ↓
-Farm으로 이동
+Farm 으로 이동
 ↓
-Farm 상태 확인
+context.farm.phase 확인
 ↓
-Empty → Plant
-Growing → Wait / other task
-Ready → Harvest
-↓
-Crop 증가
+empty    → storage.seed >= 1 ?
+             YES → PlantAction   (seed -1)
+             NO  → Idle (씨앗 대기)
+growing  → Idle 또는 광장 배회
+ready    → HarvestAction        (crop +4, seed +1)
 ```
 
-농부는 Farm Entity 내부 상태를 직접 임의 수정하지 않는다.
+## 35.1 씨앗이 없으면 심지 못한다
 
-가능하면 Farm 관련 도메인 메서드를 사용한다.
+`storage.seed`가 0이면 농부는 밭 앞에서 기다린다.
+
+플레이어가 밭에 `[E]`로 씨앗을 기부하면 다시 심기 시작한다.
+
+수확 시 `seed +1`이 나오므로 정상 운영 중에는 씨앗이 고갈되지 않는다.
+(`MVP_SPEC.md` 77.5)
+
+## 35.2 성장은 농부와 무관하게 진행된다
+
+`FarmSystem`이 `totalGameMinutes`만으로 `growing → ready`를 판정한다.
+
+농부가 밭 앞에 서 있어야 자라는 구조가 아니다.
+
+농부는 `growing` 중에 다른 일을 하거나 광장을 배회할 수 있다.
+
+농부는 Farm 상태를 직접 수정하지 않는다.
+
+`FarmSystem.plant()` / `FarmSystem.harvest()`만 호출한다.
 
 ---
 
 # 36. Farm 상태
 
-Farm 상태는 Building 자체 또는 FarmComponent에 저장할 수 있다.
-
-MVP 권장 구조:
+Farm 상태는 `FarmSystem`이 `buildingId`별로 보관한다.
 
 ```ts
-interface FarmState {
-  phase: 'empty' | 'planted' | 'growing' | 'ready';
-  plantedAt?: number;
+export type FarmPhase = 'empty' | 'growing' | 'ready';
+
+export interface FarmState {
+  phase: FarmPhase;
+  /** growing 진입 시각. empty 면 의미 없음. */
+  plantedAtTotalGameMinutes: number;
 }
 ```
 
-Farm 생산 로직은 `FarmSystem`으로 분리해도 된다.
+```text
+empty    ──plant()────────────▶  growing
+growing  ──growMinutes 경과───▶  ready
+ready    ──harvest()──────────▶  empty
+```
 
-MVP 초기에는 `BuildingSystem`과 분리된 작은 `FarmSystem`을 권장한다.
+## 36.1 상태를 3개로 줄였다
+
+이전 판은 `'empty' | 'planted' | 'growing' | 'ready'` 4개였고,
+`MVP_SPEC.md`의 Life Cycle은 `Harvested`를 포함한 6개였다.
+
+두 문서가 달랐고, 두 가지 문제가 있었다.
+
+```text
+planted 와 growing 의 전이 기준이 정의되지 않았다
+  심은 직후가 planted 라면 언제 growing 이 되는가?
+
+Harvested 는 상태가 아니라 사건이다
+  harvest() 직후 곧바로 empty 가 되므로 머무르는 시간이 0 이다
+```
+
+`planted`를 `growing`에 흡수하고 `Harvested`를 삭제했다.
+
+"수확했다"는 `CROP_HARVESTED` 이벤트로 표현한다.
+
+## 36.2 시간 단위를 이름에 넣었다
+
+이전 판의 `plantedAt?: number`는 단위가 명시되지 않아
+실시간 ms인지 게임분인지 알 수 없었다.
+
+실시간을 쓰면 저장·불러오기와 Time Scale 변경에서 성장 타이머가 깨진다.
+
+`FarmSystem`은 `BuildingSystem`과 분리된 작은 System으로 둔다.
 
 ---
 
@@ -1201,16 +1896,23 @@ getStatus(farmId: string): FarmStatus;
 
 # 38. Food Storage 모델
 
-MVP에서 Crop과 Food는 월드에 실제 Item Entity로 대량 생성하지 않아도 된다.
+MVP에서 Seed, Crop, Food는 월드에 실제 Item Entity로 생성하지 않는다.
 
-단순 저장소 형태를 사용할 수 있다.
-
-예:
+마을 공유 저장소의 숫자로 관리한다.
 
 ```ts
-interface VillageStorage {
+export interface VillageStorageState {
+  seed: number;
   crop: number;
   food: number;
+}
+
+export class VillageStorage {
+  add(item: keyof VillageStorageState, amount: number): void;
+  remove(item: keyof VillageStorageState, amount: number): boolean;
+  has(item: keyof VillageStorageState, amount: number): boolean;
+  get(item: keyof VillageStorageState): number;
+  snapshot(): Readonly<VillageStorageState>;
 }
 ```
 
@@ -1219,6 +1921,46 @@ interface VillageStorage {
 ```text
 src/game/world/VillageStorage.ts
 ```
+
+## 38.1 seed 를 저장소에 두는 이유
+
+이전 판의 `VillageStorage`에는 `crop`과 `food`만 있었다.
+
+그러면 농부가 심을 씨앗의 출처가 정의되지 않는다.
+
+```text
+seed 는 플레이어 Inventory 에만 존재했다
+그런데 씨앗을 심는 주체는 NPC 다
+NPC 가 플레이어 Inventory 를 직접 읽어야 하는가?
+```
+
+NPC가 플레이어 Inventory를 읽는 구조는 만들지 않는다.
+
+`seed`를 마을 저장소에 두고, 플레이어가 저장소로 옮겨주는 경로를 둔다.
+
+```text
+1. 밭 건설 비용의 seed 3 이 VillageStorage.seed 로 이전된다
+2. 밭에 [E] 로 상호작용하여 seed 를 1개씩 기부한다
+```
+
+## 38.2 Inventory 와 VillageStorage 는 별개다
+
+```text
+InventoryState        wood / stone / seed    플레이어 소유
+VillageStorageState   seed / crop / food     마을 공유
+```
+
+`seed`만 양쪽에 존재하며, 위 두 경로로만 이동한다.
+
+`InventorySystem`과 `VillageStorage`는 서로를 직접 참조하지 않는다.
+
+이전은 `BuildingSystem`과 `InteractionSystem`이 중개한다.
+
+## 38.3 변경 시 이벤트
+
+`VillageStorage`가 변경되면 `STORAGE_CHANGED`를 발행한다.
+
+UI와 `GameEventSystem`이 이를 구독한다.
 
 이렇게 하면 MVP 구현이 단순해진다.
 
@@ -1229,20 +1971,33 @@ src/game/world/VillageStorage.ts
 ```text
 Work Time
 ↓
-Crop 존재 확인
+context.kitchen 존재 확인                없으면 Idle
 ↓
-Kitchen 존재 확인
+context.storage.crop >= cropPerBatch ?   아니면 Idle (작물 대기)
 ↓
-Kitchen 이동
+Kitchen 으로 이동
 ↓
-Cooking Action
+CookAction (cookSeconds 실시간 6초)
 ↓
-Crop 감소
+storage.crop -= 2
+storage.food += 3
 ↓
-Food 증가
-↓
+STORAGE_CHANGED emit
 FOOD_COOKED emit
 ```
+
+## 39.1 작물을 들고 오는 연출과 수량 이동을 분리한다
+
+요리사가 밭에서 작물을 들고 주방으로 가는 장면은 **스프라이트 연출**이다.
+
+실제 수량은 `VillageStorage`에서 이동하며, 월드에 작물 Entity를 만들지 않는다.
+
+`CollectCropAction`을 별도로 두지 않는다.
+
+작물이 저장소의 숫자이므로 "가져오는" 단계에 상태 변화가 없고,
+Action을 하나 늘리는 만큼의 이득이 없다.
+
+이동 연출이 필요하면 `MoveToAction`으로 밭을 경유하게 만든다.
 
 ---
 
@@ -1251,46 +2006,101 @@ FOOD_COOKED emit
 NPC가 식사 시간에 다음을 수행한다.
 
 ```text
-Food 존재?
+scheduledActivity == 'eat'
+AND context.hasEatenThisMeal == false
 ↓
-YES
+context.storage.food >= foodPerMeal ?
 ↓
-식사 위치 이동
+YES                                   NO
+↓                                     ↓
+diningSpot 으로 이동                    Idle (식사 건너뜀)
 ↓
-EatAction
+EatAction (eatSeconds 실시간 4초)
 ↓
-Food 감소
+storage.food -= 1
+hasEatenThisMeal = true
 ↓
-NPC 상태 정상화
+MEAL_EATEN / STORAGE_CHANGED emit
 ```
 
-MVP에서는 Hunger 수치를 복잡하게 구현하지 않는다.
+## 40.1 Hunger 수치를 만들지 않는다
 
-일정 기반 식사를 우선한다.
+MVP는 `hunger: number` 같은 누적 수치를 구현하지 않는다.
+
+식사는 **일정 기반**이다.
+
+```text
+07:00 / 12:00 / 18:00 의 식사 시간대에 1회 먹는다
+```
+
+## 40.2 hasEatenThisMeal 이 필요한 이유
+
+식사 시간대는 여러 프레임에 걸쳐 지속된다.
+
+플래그가 없으면 같은 시간대에 음식을 계속 먹어 저장소가 순식간에 비워진다.
+
+플래그는 식사 시간대가 바뀔 때 초기화한다.
+
+```text
+GameClockSystem 이 새 식사 시간대에 진입
+    ↓
+모든 NPC 의 hasEatenThisMeal = false
+```
+
+## 40.3 음식이 없으면 그냥 넘어간다
+
+MVP에서는 굶주림에 따른 페널티를 구현하지 않는다.
+
+음식 부족의 결과는 `foodLevel` 하락으로 나타나고,
+그것이 플레이어에게 보이는 신호다.
+
+체력 감소나 사망은 구현하지 않는다.
 
 ---
 
 # 41. Sleep 흐름
 
 ```text
-22:00
+22:00 (scheduledActivity == 'sleep')
 ↓
-House 존재 확인
+context.bed 확인  (WorldQuery.getAssignedBed)
 ↓
-House 이동
-↓
-Door Position 도착
-↓
-NPC Sprite 숨김
-↓
-Sleeping
-↓
-06:00
-↓
-NPC Sprite 표시
-↓
-House 출구에서 활동 시작
+있음                              없음
+↓                                 ↓
+bed.door 로 이동                   plaza 로 이동
+↓                                 ↓
+SleepAction                       RestAction
+  view.setVisible(false)            화면에 계속 보인다
+  stateLabel = 'sleeping'           stateLabel = 'resting'
+  집 조명 ON
+↓                                 ↓
+06:00                             06:00
+↓                                 ↓
+view.setVisible(true)             기상
+door 위치에서 활동 시작
 ```
+
+## 41.1 SleepAction 과 RestAction 을 분리한다
+
+침대가 없는 NPC는 잠들지 않고 광장에 앉아 밤을 보낸다.
+
+두 Action을 하나로 합치면 집이 있을 때와 없을 때의 차이가 화면에 보이지 않는다.
+
+플레이어가 집을 지어야 한다는 것을 인식하는 유일한 단서가
+"밤에 주민들이 광장에 앉아 있다"는 장면이다.
+
+## 41.2 침대 배정
+
+`WorldQuery.getAssignedBed(npcId)`가 배정을 계산한다.
+
+```text
+전체 침대 수 = 집들의 residentCapacity 합계
+배정 순서   = NPC id 순서 (결정적)
+```
+
+주민 4명 + 집 1채(침대 3)이면 마지막 NPC가 `RestAction`을 수행한다.
+
+같은 상황에서 매번 다른 NPC가 노숙하면 재현과 디버깅이 불가능하다.
 
 MVP에서는 실제 Interior Scene을 구현하지 않는다.
 
@@ -1364,7 +2174,7 @@ DayNight UI 및 Monster Spawn이 이 값을 사용할 수 있다.
 
 ---
 
-# 45. DayNightSystem
+# 45. DayNightVisualSystem
 
 GameClock과 시각 효과를 분리한다.
 
@@ -1391,16 +2201,21 @@ src/game/systems/monster/MonsterSystem.ts
 책임:
 
 ```text
-- Monster Spawn
+- Monster Spawn (GameEventSystem 의 spawnMonsters 커맨드로 호출)
 - Village Target 설정
-- Pathfinding
+- Pathfinding ('monster' 통행 레이어 사용)
 - 이동
-- Barrier 충돌
-- Threat 상태
+- 경로 차단 시 AttackObstacle 전이
+- Threat 상태 제공 (isThreatActive / isThreatNear)
 - Despawn
+- aliveMonsterCount 제공 (EventContext 용)
 ```
 
 Monster 종류는 MVP에서 하나만 사용한다.
+
+Monster는 항상 `actor = 'monster'` 레이어로 경로를 계산한다(15.1).
+
+이 레이어에서만 Barrier가 Blocked로 취급된다.
 
 ---
 
@@ -1408,19 +2223,66 @@ Monster 종류는 MVP에서 하나만 사용한다.
 
 Monster AI는 단순하다.
 
-```text
-Spawn
-↓
-Village Entry 방향 이동
-↓
-Path blocked?
-↓
-Barrier 공격 또는 정지
-↓
-시간 종료
-↓
-Despawn
+```ts
+export type MonsterState = 'spawn' | 'moveToVillage' | 'attackObstacle' | 'leave';
 ```
+
+```text
+spawn
+↓
+moveToVillage          목표: 마을 중심 타일
+↓
+A* ('monster' 레이어) 결과에 따라 분기
+↓
+경로 있음                        경로 없음
+↓                                ↓
+이동                              입구 방향에서 가장 가까운
+↓                                Barrier 앞 타일로 이동
+마을 중심 도달                      ↓
+↓                                attackObstacle
+VILLAGE_BREACHED emit             (attackObstacleSeconds)
+↓                                ↓
+leave                            leave
+↓
+맵 밖 도달 또는 despawnHour 경과
+↓
+Despawn → MONSTER_THREAT_ENDED
+```
+
+## 47.1 Barrier 는 파괴되지 않는다
+
+`attackObstacle`은 **연출 전용 상태**다.
+
+Barrier에 HP가 없고 피해를 받지 않는다.
+
+이유는 `MVP_SPEC.md` 29.3에 있다.
+
+관련 ADR:
+
+```text
+docs/adr/005-barrier-blocks-monsters-only.md
+```
+
+## 47.2 경로 없음 상태를 반드시 정의한다
+
+이전 판에는 "Path blocked? → Barrier 공격 또는 정지"만 있었다.
+
+"정지"의 종료 조건이 없으면 몬스터가 제자리에서 멈춘 채 사라지지 않는다.
+
+그러면 `aliveMonsterCount`가 0이 되지 않아
+`EVENT_BARRIER_REQUEST`가 영구히 발생하지 않는다.
+
+즉 게임 진행이 막힌다.
+
+`attackObstacleSeconds` 경과 후 반드시 `leave`로 전이하고,
+`despawnHour`(05:00)를 지나면 상태와 무관하게 강제 Despawn한다.
+
+## 47.3 이미 이동 중인 몬스터
+
+플레이어가 몬스터의 경로 위에 방벽을 세우면
+`NavigationGrid.version`이 올라가고 경로가 무효화된다(17.2).
+
+이 재계산이 없으면 몬스터가 낡은 경로로 방벽을 통과한다.
 
 플레이어 전투는 고려하지 않는다.
 
@@ -1435,13 +2297,23 @@ MonsterSystem 또는 별도의 ThreatSystem이 다음 정보를 제공한다.
 ```ts
 isThreatActive(): boolean;
 
-isThreatNear(
-  position: GridPosition,
-  radius: number
-): boolean;
+isThreatNear(position: GridPosition, radiusTiles: number): boolean;
+
+aliveMonsterCount(): number;
 ```
 
-NPCDecisionSystem은 이를 통해 Flee 판단을 한다.
+`NPCSystem`이 `isThreatNear(npc.tile, balance.monster.threatRadiusTiles)`를
+호출해 `NPCContext.threatNearby`를 채운다.
+
+`NPCDecisionSystem`은 Context의 boolean만 읽고 몬스터 목록을 보지 않는다.
+
+`aliveMonsterCount()`는 `EventContext`에 들어가
+`EVENT_BARRIER_REQUEST`의 조건 판정에 사용된다.
+
+MVP에서는 별도의 `ThreatSystem` 파일을 만들지 않고 `MonsterSystem`이 제공한다.
+
+104장의 기준(별도 상태를 갖는가 / 독립적인 규칙을 갖는가)에 비추어
+위협 판정은 Monster 목록의 조회에 불과하므로 System을 분리할 가치가 없다.
 
 ---
 
@@ -1450,22 +2322,48 @@ NPCDecisionSystem은 이를 통해 Flee 판단을 한다.
 NPC가 Monster를 감지하면:
 
 ```text
-현재 Action cancel
+context.threatNearby == true
 ↓
-SafePosition 검색
+현재 Action.cancel()
 ↓
-Pathfinding
+WorldQuery.findSafePosition(npc.tile)
 ↓
-Flee
+Pathfinding ('ground' 레이어)
 ↓
-Threat 종료
+FleeAction
+↓
+safe_spot 도착 후 대기
+↓
+MONSTER_THREAT_ENDED
 ↓
 Decision 재평가
 ```
 
-이전 작업을 정확히 이어갈 필요는 없다.
+## 49.1 도피 지점은 맵이 정의한다
 
-다시 Decision을 수행하면 된다.
+`safe_spot` 오브젝트가 마을 안쪽, 입구에서 가장 먼 곳에 배치된다
+(`MVP_SPEC.md` 14.3).
+
+`findSafePosition()`은 그중 현재 위협에서 가장 먼 곳을 반환한다.
+
+임의의 빈 타일을 계산해서 도망치게 만들지 않는다.
+
+그러면 NPC가 몬스터 쪽으로 도망치는 경우가 발생한다.
+
+## 49.2 방벽은 NPC 의 도피를 막지 않는다
+
+NPC는 `'ground'` 레이어로 경로를 계산하므로 방벽을 통과할 수 있다(15.1).
+
+방벽이 모든 Entity를 막으면 NPC가 마을에 갇혀 도피가 불가능해진다.
+
+## 49.3 이전 작업을 이어가지 않는다
+
+`FleeAction`이 끝나면 Decision을 처음부터 다시 수행한다.
+
+중단된 Action을 저장하고 복원하지 않는다.
+
+농부가 밭으로 다시 걸어가는 것은 자연스러운 동작이며,
+복원 로직을 추가할 이득이 없다.
 
 ---
 
@@ -1495,24 +2393,53 @@ src/game/systems/events/GameEventSystem.ts
 
 # 51. GameEventDefinition
 
-예:
-
 ```ts
-interface GameEventDefinition {
+export interface GameEventDefinition {
   id: GameEventId;
   once: boolean;
 
   canTrigger(context: EventContext): boolean;
 
-  execute(context: EventContext): void;
+  /** 부작용을 직접 일으키지 않고 수행할 커맨드를 반환한다. */
+  execute(context: EventContext): GameEventCommand[];
 }
 ```
 
----
-
-# 52. EventContext
+## 51.1 execute 는 커맨드를 반환한다
 
 ```ts
+export type GameEventCommand =
+  | { kind: 'dialogue'; dialogueId: string }
+  | { kind: 'markNpcHasDialogue'; role: NPCRole; dialogueId: string }
+  | { kind: 'objective'; objective: Objective | null }
+  | { kind: 'unlockBuilding'; type: BuildingType }
+  | { kind: 'spawnMonsters'; count: number }
+  | { kind: 'spawnResident'; role: NPCRole; at: GridPosition }
+  | { kind: 'cameraFocus'; at: GridPosition; durationMs: number }
+  | { kind: 'showMessage'; text: string };
+```
+
+`GameEventSystem`이 반환된 커맨드를 해당 시스템으로 전달한다.
+
+```text
+dialogue / markNpcHasDialogue  →  DialogueSystem
+objective                      →  ObjectiveSystem
+unlockBuilding                 →  BuildingSystem
+spawnMonsters                  →  MonsterSystem
+spawnResident                  →  NPCFactory + EntityRegistry
+cameraFocus / showMessage      →  Presentation
+```
+
+## 51.2 왜 커맨드 반환인가
+
+이전 판의 `execute(context): void`는 실행할 수 없는 구조였다.
+
+97장은 이벤트가 Dialogue / Objective / Monster / NPC를 트리거해야 한다고 정의한다.
+
+그런데 `EventContext`에는 그 넷에 접근할 경로가 없었다.
+
+```ts
+// 이전 판
 interface EventContext {
   worldState: WorldState;
   worldQuery: WorldQuery;
@@ -1520,6 +2447,103 @@ interface EventContext {
   triggeredEvents: ReadonlySet<GameEventId>;
 }
 ```
+
+`execute`가 아무것도 할 수 없다.
+
+해결 방법은 두 가지였다.
+
+```text
+A. Context 에 dialogueSystem, monsterSystem 등을 넣는다
+B. execute 가 커맨드 목록을 반환하고 System 이 그것을 실행한다
+```
+
+B를 선택한 이유:
+
+```text
+이벤트 정의가 순수 함수가 된다  →  Vitest 에서 조건과 결과를 그대로 검증한다
+71장의 "UI 와 Domain Logic 을 직접 연결하지 않는다" 를 지킨다
+    GameEventSystem → DialogueBox 직접 호출이 발생하지 않는다
+이벤트가 무엇을 하는지 정의만 읽고 알 수 있다
+```
+
+관련 ADR:
+
+```text
+docs/adr/007-game-event-commands.md
+```
+
+## 51.3 이벤트 정의 예시
+
+```ts
+export const EVENT_KITCHEN_REQUEST: GameEventDefinition = {
+  id: 'EVENT_KITCHEN_REQUEST',
+  once: true,
+
+  canTrigger: (ctx) => ctx.storage.crop >= 1,
+
+  execute: () => [
+    { kind: 'markNpcHasDialogue', role: 'cook', dialogueId: 'cook_wants_kitchen' },
+    { kind: 'objective', objective: { id: 'build_kitchen', text: '요리사를 위해 주방을 지으세요.' } },
+    { kind: 'unlockBuilding', type: 'kitchen' },
+  ],
+};
+```
+
+테스트:
+
+```ts
+expect(EVENT_KITCHEN_REQUEST.canTrigger(makeContext({ crop: 0 }))).toBe(false);
+expect(EVENT_KITCHEN_REQUEST.canTrigger(makeContext({ crop: 1 }))).toBe(true);
+```
+
+---
+
+# 52. EventContext
+
+```ts
+export interface EventContext {
+  readonly gameTime: GameTime;
+  readonly dayPhase: DayPhase;
+
+  /** 계산된 지표 스냅샷. WorldState 인스턴스가 아니다. */
+  readonly worldState: WorldStateView;
+
+  /** 마을 저장소 스냅샷 */
+  readonly storage: Readonly<VillageStorageState>;
+
+  /** 건물 수 조회 등 읽기 전용 질의 */
+  readonly worldQuery: WorldQuery;
+
+  /** 살아있는 몬스터 수 */
+  readonly aliveMonsterCount: number;
+
+  readonly triggeredEvents: ReadonlySet<GameEventId>;
+}
+```
+
+## 52.1 Context 는 전부 읽기 전용이다
+
+`WorldState` 인스턴스가 아니라 `compute()` 결과 스냅샷을 넣는다.
+
+이벤트 정의가 실수로 상태를 변경할 수 없게 만든다.
+
+## 52.2 45장의 조건을 이 Context 로 모두 평가할 수 있다
+
+```text
+EVENT_FARM_REQUEST      항상 참
+EVENT_KITCHEN_REQUEST   storage.crop >= 1
+EVENT_HOUSE_REQUEST     storage.food >= 1
+EVENT_FIRST_MONSTER     triggeredEvents.has('EVENT_HOUSE_REQUEST')
+                        && worldQuery.countBuildings('house') >= 1
+                        && dayPhase === 'night'
+EVENT_BARRIER_REQUEST   triggeredEvents.has('EVENT_FIRST_MONSTER')
+                        && aliveMonsterCount === 0
+EVENT_NEW_RESIDENT      triggeredEvents.has('EVENT_BARRIER_REQUEST')
+                        && worldState.safetyLevel === 100
+                        && dayPhase === 'morning'
+```
+
+조건식의 정본은 `MVP_SPEC.md` 45장이다.
 
 ---
 
@@ -1688,36 +2712,137 @@ src/game/systems/save/SaveSystem.ts
 
 # 60. SaveData
 
-예:
+**원인이 되는 실제 상태만 저장한다.**
 
 ```ts
-interface SaveData {
-  version: number;
+export interface SaveData {
+  version: 1;
+  savedAt: string;                  // ISO 8601
 
-  player: {
-    position: GridPosition;
-  };
+  /** 게임 시간의 유일한 원천 */
+  gameClock: { totalGameMinutes: number };
+
+  player: { tile: GridPosition };
 
   inventory: InventoryState;
 
+  villageStorage: VillageStorageState;   // seed / crop / food
+
   buildings: SavedBuilding[];
+  resourceNodes: SavedResourceNode[];
+  npcs: SavedNPC[];
 
-  worldState: WorldStateData;
+  triggeredEvents: GameEventId[];
+  unlockedBuildings: BuildingType[];
+  objectiveId: string | null;
+}
 
-  gameClock: {
-    totalGameMinutes: number;
+export interface SavedBuilding {
+  id: EntityId;
+  type: BuildingType;
+  /** 점유 영역의 좌상단 타일 */
+  origin: GridPosition;
+  /** Farm 인 경우에만 존재 */
+  farm?: {
+    phase: FarmPhase;
+    plantedAtTotalGameMinutes: number;
   };
+}
 
-  triggeredEvents: string[];
+export interface SavedResourceNode {
+  id: EntityId;
+  type: ResourceNodeType;
+  tile: GridPosition;
+  harvested: boolean;
+  respawnAtTotalGameMinutes: number | null;
+}
 
-  villageStorage: {
-    crop: number;
-    food: number;
-  };
+export interface SavedNPC {
+  id: EntityId;
+  role: NPCRole;
+  tile: GridPosition;
 }
 ```
 
-NPC runtime path나 현재 animation frame 등은 저장할 필요가 없다.
+## 60.1 저장하지 않는 것
+
+```text
+WorldState 지표      파생값이므로 불러오기 후 재계산한다
+NPC 의 현재 Action   불러오기 후 Decision 을 다시 실행한다
+NPC 의 현재 경로
+Animation frame
+Monster             밤 이벤트가 다시 발생하므로 저장하지 않는다
+```
+
+## 60.2 이전 판에서 빠져 있던 것
+
+이전 판의 저장 목록은 다음과 같았다.
+
+```text
+player.position, inventory, buildings, worldState,
+gameClock, triggeredEvents, villageStorage
+```
+
+세 가지가 빠져 있었고, 각각 실제 버그를 만든다.
+
+**1. Farm 의 phase 와 심은 시각**
+
+`SavedBuilding`에 밭 상태가 포함되는지 정의되지 않았다.
+
+빠지면 불러오기 후 자라던 작물이 사라진다.
+(61장의 Load 전략은 "Building 복원"만 명시했다)
+
+**2. ResourceNode 의 채집 / Respawn 상태**
+
+빠지면 불러오기 시 모든 나무와 돌이 부활한다.
+
+플레이어가 저장·불러오기로 자원을 무한히 얻을 수 있다.
+
+**3. NPC 목록**
+
+가장 심각하다.
+
+`population`은 `EntityRegistry`에서 파생되므로 NPC를 복원하지 않으면
+엔딩 후 저장했을 때 4번째 주민이 사라진다.
+
+```text
+엔딩 도달 (주민 4명) → 저장 → 불러오기
+    ↓
+61장의 "NPC 기본 생성" 은 초기 3명을 의미한다
+    ↓
+주민이 3명으로 되돌아간다
+    ↓
+새 주민 이벤트는 이미 triggeredEvents 에 있어 다시 발생하지 않는다
+    ↓
+4번째 주민이 영구히 소실된다
+```
+
+## 60.3 모든 시간값은 게임 시간 기준이다
+
+```text
+gameClock.totalGameMinutes
+farm.plantedAtTotalGameMinutes
+resourceNode.respawnAtTotalGameMinutes
+```
+
+실시간 ms(`Date.now()`, `performance.now()`)를 저장하지 않는다.
+
+이전 판의 `plantedAt?: number`는 단위가 명시되지 않아 다음이 발생할 수 있었다.
+
+```text
+실시간 ms 로 저장 → 하루 뒤에 불러오면 모든 타이머가 만료 상태
+Time Scale 변경  → 성장 시간이 의도와 달라진다
+```
+
+필드 이름에 `TotalGameMinutes`를 명시하여 단위 혼동을 차단한다.
+
+`savedAt`만 실시간이며, 이것은 표시 전용이고 게임 로직에 사용하지 않는다.
+
+## 60.4 Save Version
+
+`version`이 현재 버전과 다르면 마이그레이션 없이 **명확한 Error를 발생시킨다**(85장).
+
+MVP에서는 version 1만 존재하므로 마이그레이션 코드를 미리 작성하지 않는다.
 
 ---
 
@@ -1728,22 +2853,50 @@ Load 시:
 ```text
 SaveData 읽기
 ↓
+version 검증        불일치 → Error
+↓
 Map 기본 생성
 ↓
-Building 복원
+GameClock 복원      totalGameMinutes
+↓
+Inventory 복원
+↓
+VillageStorage 복원  seed / crop / food
+↓
+Building 복원        origin, type, 그리고 Farm 이면 phase + plantedAt
+↓
+Ruins 타일 제거      건물이 점유한 타일
 ↓
 NavigationGrid 재생성
 ↓
-WorldState 복원
+ResourceNode 복원    harvested, respawnAt
 ↓
-NPC 기본 생성
+NPC 복원            저장된 npcs[] 그대로. 초기 3명을 가정하지 않는다.
 ↓
-현재 시간 복원
+triggeredEvents / unlockedBuildings / objective 복원
+↓
+WorldState compute() 재계산
 ↓
 NPC Decision 재실행
 ```
 
-NPC의 현재 행동을 완전히 복원할 필요는 없다.
+## 61.1 NPC 는 저장된 목록으로 복원한다
+
+"NPC 기본 생성"을 하지 않는다.
+
+초기 3명을 하드코딩해서 만들면 4번째 주민이 사라진다(60.2).
+
+## 61.2 NPC 의 현재 행동은 복원하지 않는다
+
+위치와 역할만 복원하고 Decision을 다시 수행한다.
+
+불러온 직후 농부가 밭으로 다시 걸어가는 것은 자연스러운 동작이다.
+
+## 61.3 WorldState 는 복원하지 않고 계산한다
+
+`VillageStorage`, `Buildings`, `npcs`가 복원된 뒤 `compute()`를 호출한다.
+
+지표를 저장하고 복원하면 저장된 지표와 실제 상태가 어긋날 수 있다.
 
 ---
 
@@ -1772,30 +2925,47 @@ dialogues.ts
 
 # 63. balance.ts 예
 
+**밸런스 초기값의 정본은 `MVP_SPEC.md` 77.1이다.**
+
+이 장은 구조만 보여준다.
+
 ```ts
 export const GAME_BALANCE = {
-  gameClock: {
-    realSecondsPerGameHour: 20
-  },
-
-  player: {
-    moveSpeed: 160
-  },
-
-  npc: {
-    moveSpeed: 90
-  },
-
-  monster: {
-    moveSpeed: 70,
-    threatRadius: 6
-  },
-
-  farm: {
-    growMinutes: 120
-  }
+  gameClock: { realSecondsPerGameHour: 20, startTotalGameMinutes: 480 },
+  player:    { moveSpeed: 160, gatherSeconds: 1.2, interactRadiusTiles: 1.5 },
+  npc:       { moveSpeed: 90, repathIntervalSeconds: 0.5, arriveThresholdPx: 4 },
+  monster:   { moveSpeed: 70, threatRadiusTiles: 6, spawnCount: 3,
+               attackObstacleSeconds: 8, despawnHour: 5 },
+  resource:  { yield: { tree: 3, rock: 3, plant: 1 },
+               respawnMinutes: { tree: 240, rock: 240, plant: 180 } },
+  farm:      { growMinutes: 120, seedPerPlant: 1, cropPerHarvest: 4,
+               seedPerHarvest: 1, plantSeconds: 2, harvestSeconds: 2 },
+  kitchen:   { cropPerBatch: 2, foodPerBatch: 3, cookSeconds: 6 },
+  meal:      { foodPerMeal: 1, mealsPerDay: 3, eatSeconds: 4 },
+  worldState:{ foodLevelTargetDays: 2,
+               happinessWeights: { food: 0.4, housing: 0.3, safety: 0.3 } },
+  village:   { gateTiles: 5 },
 } as const;
 ```
+
+## 63.1 단위를 이름에 넣는다
+
+```text
+...Seconds       실시간 초
+...Minutes       게임분
+...Tiles         타일 수
+...Px            픽셀
+moveSpeed        px/s
+```
+
+이전 판의 `threatRadius: 6`은 타일인지 픽셀인지 알 수 없었다.
+
+64장이 `GAME_BALANCE.monster.threatRadiusPx`를 예시로 쓰는데
+실제 정의는 `threatRadius`여서 이름도 일치하지 않았다.
+
+`growMinutes`가 게임분이라는 것도 이름만으로는 알 수 없었다.
+
+단위를 이름에 넣으면 이런 혼동이 구조적으로 발생하지 않는다.
 
 ---
 
@@ -1813,7 +2983,9 @@ if (distance < 192) {
 권장:
 
 ```ts
-if (distance < GAME_BALANCE.monster.threatRadiusPx) {
+const radiusPx = GAME_BALANCE.monster.threatRadiusTiles * TILE_SIZE;
+
+if (distance < radiusPx) {
 }
 ```
 
@@ -1826,29 +2998,38 @@ if (distance < GAME_BALANCE.monster.threatRadiusPx) {
 위치:
 
 ```text
-src/shared/types/
+src/game/types/
 ```
 
-또는 게임 전용 타입은:
+`src/shared/types/`는 **두지 않는다.**
+
+같은 타입이 두 위치에 생기는 것을 막기 위해 게임 도메인 타입은 한 곳에만 둔다.
+
+`src/shared/`에는 게임과 무관한 범용 유틸만 둔다.
 
 ```text
-src/game/types/
+src/game/types/     게임 도메인 타입 (정본)
+src/shared/utils/   clamp, 배열 헬퍼 등 범용 함수
 ```
 
 다음 타입을 명확하게 정의한다.
 
 ```text
-GridPosition
-WorldPosition
-EntityId
-BuildingType
-NPCRole
-NPCState
-NPCAction
-GameTime
-GameEventId
-ItemId
+entity.ts    EntityId, EntityView, MovableEntity
+world.ts     GridPosition, WorldPosition, GameTime, DayPhase,
+             WorldStateView, VillageStorageState, PathActor
+npc.ts       NPCRole, NPCActionKind, NPCStateLabel, NPCAction,
+             ActionStatus, NPCContext, ScheduledActivity
+building.ts  BuildingType, BuildingConfig, FarmPhase,
+             BuildInvalidReason, BuildValidationResult
+events.ts    GameEventId, GameEventMap, GameEventCommand,
+             EventContext, Objective
+item.ts      InventoryItemId, InventoryState, ResourceNodeType
 ```
+
+`NPCState`는 정의하지 않는다.
+
+Action이 상태의 유일한 원천이므로 표시용 `NPCStateLabel`만 둔다(31.1).
 
 string을 아무 곳에서나 직접 사용하지 않는다.
 
@@ -1858,24 +3039,53 @@ string을 아무 곳에서나 직접 사용하지 않는다.
 
 GameWorld의 update 순서는 고정한다.
 
-권장:
-
 ```text
-1. InputSystem
-2. GameClockSystem
-3. ResourceSystem
-4. FarmSystem
-5. MonsterSystem
-6. NPCSystem
-7. BuildingSystem
-8. GameEventSystem
-9. Visual Systems
-10. DebugSystem
+ 1. InputSystem          입력 수집
+ 2. GameClockSystem       시간 진행
+ 3. BuildingSystem        건설 확정 / NavigationGrid 갱신
+ 4. ResourceSystem        채집 / Respawn
+ 5. FarmSystem            작물 성장
+ 6. MonsterSystem         스폰 / 이동 / Threat 갱신
+ 7. NPCSystem             Decision / Action / Movement
+ 8. GameEventSystem       조건 확인 / 커맨드 실행
+ 9. WorldState compute    지표 계산 + 변경 시 emit
+10. Visual Systems        DayNightVisualSystem / UI 갱신
+11. DebugSystem
 ```
 
-BuildingSystem은 대부분 Input Event 기반이라 매 프레임 처리량은 작다.
+## 66.1 BuildingSystem 을 NPCSystem 앞에 둔다
+
+이전 판은 `BuildingSystem`을 7번(`NPCSystem` 뒤)에 두었다.
+
+그러면 건설된 프레임에 NPC가 **낡은 NavigationGrid**를 보고 경로를 계산한다.
+
+```text
+프레임 N
+  6. NPCSystem     → 아직 방벽이 없는 그리드로 경로 계산
+  7. BuildingSystem → 방벽 설치, 그리드 갱신
+```
+
+건설은 입력 기반이므로 처리량이 작고, 앞으로 옮기는 비용이 거의 없다.
+
+`MonsterSystem`(6)도 `BuildingSystem`(3) 뒤에 있으므로
+방벽을 세운 즉시 몬스터 경로 판정에 반영된다.
+
+단, 이 순서만으로 경로 문제가 완전히 해결되지는 않는다.
+
+**이미 이동 중인** Entity의 경로는 17.2의 `version` 비교로 무효화해야 한다.
+
+## 66.2 WorldState compute 를 NPCSystem 뒤에 둔다
+
+지표는 같은 프레임의 모든 상태 변경(수확, 조리, 식사, 건설)이 끝난 뒤 계산한다.
+
+`GameEventSystem`(8)은 `compute()` 전에 실행되므로
+**이전 프레임의 지표 스냅샷**을 본다.
+
+1프레임 지연은 무해하며, 같은 프레임 안에서 지표가 두 번 바뀌는 것을 막는다.
 
 정확한 순서는 구현 과정에서 조정 가능하지만 명시적으로 관리한다.
+
+순서를 바꿀 때는 이 장을 함께 수정한다.
 
 ---
 
@@ -1940,20 +3150,43 @@ Building 비용이나 배치 조건 판단은 Factory의 책임이 아니다.
 직접 참조가 허용되는 경우:
 
 ```text
-NPCSystem → PathfindingSystem
-BuildingSystem → InventorySystem
-BuildingSystem → NavigationGrid
-GameEventSystem → WorldState
+NPCSystem        → PathfindingSystem / MovementController / WorldQuery
+BuildingSystem   → InventorySystem / NavigationGrid / BuildingFactory
+MonsterSystem    → PathfindingSystem / NavigationGrid
+FarmSystem       → GameClockSystem / VillageStorage
+GameEventSystem  → WorldState / WorldQuery
+GameWorld        → 모든 System (조립 담당)
 ```
 
-직접 참조를 피해야 하는 경우:
+## 71.1 GameEventSystem 은 커맨드로 전달한다
+
+`GameEventSystem`이 `DialogueSystem`, `MonsterSystem`, `ObjectiveSystem`을
+직접 호출하는 것도 피한다.
+
+이벤트 정의는 커맨드를 반환하고(51.1),
+`GameEventSystem`이 그 커맨드를 해당 시스템에 전달한다.
 
 ```text
-FarmSystem → DialogueBox
-NPC → EventSystem
-Monster → HUD
-Kitchen → ObjectivePanel
+허용   GameEventSystem → MonsterSystem.spawn()     커맨드 실행 지점에서 1회
+금지   EVENT_FIRST_MONSTER.execute() 안에서 monsterSystem.spawn() 호출
 ```
+
+차이는 **이벤트 정의 자체가 순수 함수로 남는지**다.
+
+## 71.2 직접 참조를 피해야 하는 경우
+
+```text
+FarmSystem      → DialogueBox
+NPC (Entity)    → 모든 System
+Monster         → HUD
+KitchenSystem   → ObjectivePanel
+UI              → 모든 System 의 상태 변경 메서드
+EventBus        → (UI 가 emit 하는 것)
+```
+
+Entity는 System을 호출하지 않는다.
+
+Entity가 순수 데이터이므로(9.1) 구조적으로 호출할 수 없다.
 
 UI와 Domain Logic이 직접 연결되지 않도록 한다.
 
@@ -2045,15 +3278,33 @@ Rendering
 우선 테스트 대상:
 
 ```text
-InventorySystem
-BuildValidator
-WorldState
-GameClockSystem
-Pathfinding
-NPCDecisionSystem
-FarmSystem
-GameEventSystem
+대상                    테스트 형태
+──────────────────────────────────────────────────────────
+InventorySystem         add / remove / has 경계값
+BuildValidator          순수 함수. 81장의 5가지 Invalid 사유
+computeWorldState       순수 함수. 42.3 의 계산 예시
+GameClockSystem         totalGameMinutes → day/hour/minute/dayPhase
+A* Pathfinding          80장의 4가지 케이스 + 두 통행 레이어
+NPCDecisionSystem       NPCContext 리터럴 → 기대 Action
+FarmSystem              plant / 성장 판정 / harvest 수지
+GameEventDefinition     canTrigger 조건표 (45장) 전체
+VillageStorage          seed 수지 (심기 -1, 수확 +1)
+SaveSystem              직렬화 → 역직렬화 왕복
 ```
+
+## 77.1 전부 Phaser 없이 테스트 가능해야 한다
+
+위 목록은 모두 Phaser를 import하지 않는다.
+
+이것이 가능한 이유는 다음 두 가지 결정 때문이다.
+
+```text
+Entity 가 Phaser Sprite 를 요구하지 않는다        (9.1)
+이벤트 정의가 커맨드를 반환하고 직접 호출하지 않는다  (51.1)
+```
+
+이 두 결정 중 하나라도 무너지면 테스트에서 Phaser Scene을 띄워야 하고,
+MVP 테스트 전략 전체가 성립하지 않는다.
 
 Scene 전체 테스트는 MVP 필수 조건이 아니다.
 
@@ -2228,37 +3479,87 @@ undefined와 null을 혼용하지 않는다.
 
 여러 시스템이 같은 데이터를 직접 수정하지 않는다.
 
-예:
+## 87.1 WorldState 는 변경하지 않는다
 
-WorldState는 WorldState API를 통해 변경한다.
-
-```text
-BuildingSystem
-↓
-worldState.increaseSafety()
-```
-
-다음 형태를 피한다.
+`WorldState`에는 변경 API가 없다(12.1).
 
 ```ts
+// 둘 다 존재하지 않는다
+worldState.increaseSafety(10);
 worldState.data.safetyLevel += 10;
 ```
+
+지표를 바꾸려면 **원인이 되는 실제 상태**를 바꾼다.
+
+```text
+safetyLevel 을 올린다    →  BuildingSystem 이 입구에 Barrier 를 세운다
+foodLevel 을 올린다      →  CookAction 이 VillageStorage.food 를 늘린다
+housingLevel 을 올린다   →  BuildingSystem 이 House 를 세운다
+population 을 늘린다     →  EntityRegistry 에 NPC 를 등록한다
+```
+
+다음 프레임의 `compute()`가 자동으로 새 값을 반영한다.
+
+## 87.2 각 상태의 소유자
+
+```text
+상태                     변경 권한을 가진 곳
+──────────────────────────────────────────────────
+InventoryState           InventorySystem
+VillageStorageState      VillageStorage (FarmSystem / CookAction / EatAction 경유)
+NavigationGrid           BuildingSystem
+EntityRegistry           Factory + GameEventSystem (spawnResident)
+FarmState                FarmSystem
+NPC.currentAction        NPCSystem
+Monster.state            MonsterSystem
+triggeredEvents          GameEventSystem
+Objective                ObjectiveSystem
+```
+
+이 표에 없는 곳에서 해당 상태를 쓰면 안 된다.
+
+## 87.3 population 을 두 곳에서 관리하지 않는다
+
+이전 판은 `WorldState.population`과 `EntityRegistry.npcs.size`를
+동시에 유지하려 했고 동기화 주체가 정의되지 않았다.
+
+105장의 `WorldState ≠ EntityRegistry` 경계를 스스로 위반하는 구조였다.
+
+이제 `population`은 `registry.npcs.size`의 파생값이며 저장되지 않는다.
 
 ---
 
 # 88. NPC State 변경
 
-NPC 상태도 가능하면 NPCSystem을 통해 변경한다.
-
-예:
+NPC 상태는 **Action 전환으로만** 바뀐다.
 
 ```ts
+// 존재하지 않는다
 npcSystem.setState(npc, 'fleeing');
 ```
 
-또는 Action 전환 과정에서 내부적으로 변경한다.
+`npc.state` 필드가 없으므로 설정할 대상이 없다(31.1).
 
-UI나 다른 System이 NPC State를 직접 수정하지 않는다.
+상태를 바꾸려면 Action을 교체한다.
+
+```ts
+npcSystem.setAction(npc, new FleeAction(safePosition));
+```
+
+`setAction`은 다음을 수행한다.
+
+```text
+현재 Action.cancel(npc)
+    ↓
+새 Action 을 currentAction 에 대입
+    ↓
+새 Action.start(npc, context)
+```
+
+`npc.stateLabel`은 `currentAction.stateLabel`을 읽는 getter이므로
+별도 갱신이 필요하지 않다.
+
+UI나 다른 System이 NPC Action을 직접 교체하지 않는다.
 
 ---
 
@@ -2305,6 +3606,8 @@ WorldQuery는 조회만 담당한다.
 
 # 91. 폴더 구조 최종안
 
+**이 장이 폴더 구조의 정본이다.**
+
 ```text
 src/
 ├─ main.ts
@@ -2325,17 +3628,23 @@ src/
 │  ├─ world/
 │  │  ├─ GameWorld.ts
 │  │  ├─ WorldState.ts
+│  │  ├─ computeWorldState.ts
 │  │  ├─ WorldQuery.ts
 │  │  ├─ EntityRegistry.ts
 │  │  ├─ NavigationGrid.ts
+│  │  ├─ VillageGate.ts
 │  │  └─ VillageStorage.ts
 │  │
-│  ├─ entities/
+│  ├─ entities/              ← Phaser 를 import 하지 않는다
 │  │  ├─ player/
 │  │  ├─ npc/
 │  │  ├─ monster/
 │  │  ├─ building/
 │  │  └─ resource/
+│  │
+│  ├─ views/                 ← Phaser 렌더 어댑터
+│  │  ├─ EntityView.ts
+│  │  └─ PhaserSpriteView.ts
 │  │
 │  ├─ systems/
 │  │  ├─ input/
@@ -2343,9 +3652,16 @@ src/
 │  │  ├─ inventory/
 │  │  ├─ resource/
 │  │  ├─ building/
+│  │  │  ├─ BuildingSystem.ts
+│  │  │  └─ BuildValidator.ts
 │  │  ├─ pathfinding/
 │  │  ├─ movement/
 │  │  ├─ npc/
+│  │  │  ├─ NPCSystem.ts
+│  │  │  ├─ NPCDecisionSystem.ts
+│  │  │  ├─ NPCSchedule.ts
+│  │  │  ├─ actions/
+│  │  │  └─ behaviors/
 │  │  ├─ farm/
 │  │  ├─ clock/
 │  │  ├─ daynight/
@@ -2375,7 +3691,8 @@ src/
 │  │  ├─ world.ts
 │  │  ├─ npc.ts
 │  │  ├─ building.ts
-│  │  └─ events.ts
+│  │  ├─ events.ts
+│  │  └─ item.ts
 │  │
 │  └─ ui/
 │     ├─ Hud.ts
@@ -2385,10 +3702,24 @@ src/
 │     └─ DebugPanel.ts
 │
 ├─ shared/
-│  └─ utils/
+│  └─ utils/                 ← 게임과 무관한 범용 유틸만
 │
 └─ styles/
 ```
+
+## 91.1 이전 판과 달라진 점
+
+```text
++ views/                     Entity 와 Phaser 를 분리하기 위해 추가 (9.2)
++ world/computeWorldState.ts  순수 함수로 분리 (12.3)
++ world/VillageGate.ts        입구 타일 정의 (MVP_SPEC 14.1)
+- shared/types/              src/game/types/ 로 통합 (65장)
+- shared/constants/          data/ 와 types/ 로 흡수
+```
+
+`MVP_SPEC.md` 73장의 폴더 구조는 이 장의 요약이다.
+
+두 문서가 다르면 이 장을 따른다.
 
 ---
 
@@ -2401,22 +3732,28 @@ BuildMenu
 ↓
 BuildingSystem
 ↓
-BuildValidator
+BuildValidator          (config + origin + inventory)
 ↓
-InventorySystem
+InventorySystem         차감
+↓
+VillageStorage          (Farm 이면 seed 이전)
 ↓
 BuildingFactory
 ↓
 EntityRegistry
 ↓
-NavigationGrid
+NavigationGrid          (+ version++)
 ↓
-WorldState
+EventBus                NAVIGATION_CHANGED / BUILDING_PLACED
 ↓
-EventBus
+NPC / GameEvent / UI 반응
 ↓
-NPC / Event / UI 반응
+WorldState.compute()    지표 재계산 (프레임 끝)
 ```
+
+`WorldState`는 흐름의 **끝**에 있다.
+
+건설이 지표를 직접 바꾸는 단계는 존재하지 않는다(87.1).
 
 ---
 
@@ -2445,49 +3782,60 @@ Entity Position
 # 94. 핵심 데이터 흐름 — 농업
 
 ```text
-Farm Built
+Farm 건설
 ↓
-EventBus
+BUILDING_PLACED
 ↓
-NPC가 Farm 인식
+VillageStorage.seed += 3     (건설 비용의 seed)
+↓
+NPCContext.farm 이 채워진다
 ↓
 Farmer Work Decision
 ↓
-MoveTo Farm
+MoveToAction (밭)
 ↓
-FarmSystem.plant()
+FarmSystem.plant()           seed -1, phase = growing
 ↓
-GameClock
+GameClockSystem              totalGameMinutes 진행
 ↓
-FarmSystem Growing
+FarmSystem 성장 판정          growMinutes 경과 → phase = ready
 ↓
-Ready
+Farmer Decision 재평가
 ↓
-Farmer Harvest
+HarvestAction
 ↓
-VillageStorage.crop++
+FarmSystem.harvest()         crop +4, seed +1, phase = empty
+↓
+CROP_HARVESTED / STORAGE_CHANGED
+↓
+(EVENT_KITCHEN_REQUEST 조건 충족)
 ```
+
+`seed`의 수지가 0이므로 밭 하나는 영구히 순환한다.
 
 ---
 
 # 95. 핵심 데이터 흐름 — 요리
 
 ```text
-VillageStorage.crop > 0
+VillageStorage.crop >= 2
 ↓
 Cook Decision
 ↓
-Kitchen 검색
+NPCContext.kitchen 확인
 ↓
-Kitchen 이동
+MoveToAction (주방)
 ↓
-CookAction
+CookAction (6초)
 ↓
-VillageStorage.crop--
+VillageStorage.crop -= 2
+VillageStorage.food += 3
 ↓
-VillageStorage.food++
+STORAGE_CHANGED / FOOD_COOKED
 ↓
-FOOD_COOKED
+(EVENT_HOUSE_REQUEST 조건 충족)
+↓
+WorldState.compute() → foodLevel 상승
 ```
 
 ---
@@ -2495,36 +3843,71 @@ FOOD_COOKED
 # 96. 핵심 데이터 흐름 — 위험
 
 ```text
-GameClock = Night
+집 건설 완료 + dayPhase == 'night'
 ↓
-GameEventSystem
+GameEventSystem            EVENT_FIRST_MONSTER.canTrigger
+↓
+execute() → [{ kind: 'spawnMonsters', count: 3 }]
 ↓
 MonsterSystem.spawn()
 ↓
-MONSTER_THREAT_STARTED
+MONSTER_SPAWNED / MONSTER_THREAT_STARTED
 ↓
-NPCDecisionSystem
+NPCContext.threatNearby = true
+↓
+NPCDecisionSystem          우선순위 1단계
+↓
+현재 Action.cancel()
 ↓
 FleeAction
 ↓
-SafePosition
+WorldQuery.findSafePosition()
+↓
+(몬스터 전원 Despawn)
+↓
+MONSTER_THREAT_ENDED       aliveMonsterCount == 0
+↓
+Decision 재평가 → 원래 일정으로 복귀
+↓
+(EVENT_BARRIER_REQUEST 조건 충족)
 ```
+
+몬스터 스폰은 `GameEventSystem`이 커맨드로 요청한다.
+
+이벤트 정의가 `MonsterSystem`을 직접 호출하지 않는다(71.1).
 
 ---
 
 # 97. 핵심 데이터 흐름 — 진행 이벤트
 
 ```text
-World State / Building / Time
-            ↓
-      GameEventSystem
-            ↓
-      Condition Check
-            ↓
-          Trigger
-            ↓
-Dialogue / Objective / Monster / NPC
+WorldStateView / VillageStorage / Buildings / GameTime / aliveMonsterCount
+                            ↓
+                      EventContext 조립
+                            ↓
+              GameEventDefinition.canTrigger()
+                            ↓
+                         true
+                            ↓
+              GameEventDefinition.execute()
+                            ↓
+                  GameEventCommand[]
+                            ↓
+                     GameEventSystem
+                            ↓
+        ┌───────────┬────────────┬──────────────┬──────────────┐
+        ▼           ▼            ▼              ▼              ▼
+  DialogueSystem  Objective   BuildingSystem  MonsterSystem  NPCFactory
+                  System      (unlock)        (spawn)        (resident)
+                            ↓
+                  triggeredEvents 에 추가
+                            ↓
+                  GAME_EVENT_TRIGGERED emit
 ```
+
+이벤트 정의는 순수 함수다.
+
+조건을 읽고 커맨드를 반환하는 것 외에 아무 일도 하지 않는다.
 
 ---
 
@@ -2574,15 +3957,21 @@ Backend 추가
 
 구조적으로 중요한 결정은 `docs/adr/`에 기록할 수 있다.
 
-예:
+현재 기록된 ADR:
 
 ```text
-docs/
-└─ adr/
-   ├─ 001-use-phaser-3.md
-   ├─ 002-use-prefab-building.md
-   └─ 003-no-react-for-mvp.md
+docs/adr/
+├─ 001-use-phaser-3-and-vite-spa.md
+├─ 002-prefab-building-placement.md
+├─ 003-no-react-for-mvp.md
+├─ 004-worldstate-as-derived-projection.md
+├─ 005-barrier-blocks-monsters-only.md
+├─ 006-entity-view-separation.md
+├─ 007-game-event-commands.md
+└─ 008-action-as-single-npc-state.md
 ```
+
+각 ADR은 배경 / 결정 / 검토한 대안 / 예상되는 결과를 포함한다.
 
 모든 사소한 결정에 ADR을 만들 필요는 없다.
 
@@ -2619,15 +4008,32 @@ Rendering 방식 변경
 각 Task를 시작할 때 다음 과정을 따른다.
 
 ```text
-1. GAME_DESIGN.md 확인
-2. MVP_SPEC.md 해당 기능 확인
-3. ARCHITECTURE.md 책임 위치 확인
-4. TASKS.md Acceptance Criteria 확인
+1. docs/project/TASKS.md 에서 Task 와 Acceptance Criteria 확인
+2. docs/project/MVP_SPEC.md 에서 수치와 조건 확인
+3. docs/project/ARCHITECTURE.md 에서 책임 위치와 인터페이스 확인
+4. 필요하면 docs/project/GAME_DESIGN.md 에서 의도 확인
 5. 구현
-6. 테스트
-7. 실행 확인
-8. Task 완료 기록
+6. 테스트 작성 및 통과
+7. 브라우저에서 실행 확인
+8. 주요 결정이 있었다면 docs/adr/ 에 ADR 추가
+9. docs/state/ 에 완료 기록과 다음 할 일 작성
+10. commit
 ```
+
+## 102.1 문서가 서로 다르면
+
+```text
+수치 / 조건식       →  MVP_SPEC.md
+인터페이스 / 구조    →  ARCHITECTURE.md
+작업 순서 / 완료 조건 →  TASKS.md
+의도 / 감정 목표     →  GAME_DESIGN.md
+```
+
+## 102.2 문서와 코드가 다르면
+
+문서를 먼저 고친다.
+
+코드만 고치고 문서를 남겨두면 다음 Task에서 같은 모순을 다시 만난다.
 
 ---
 
