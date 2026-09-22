@@ -42,7 +42,7 @@
 ## 현재 상태
 
 ```text
-단계    v1.3 문서 정합성·실행 계약 보완. 구현·플레이 검증 미착수 (TASK-001부터)
+단계    v1.3 게임 명세·개발 로드맵 준비 검토 완료. 구현·플레이 검증 미착수 (TASK-001부터)
 범위    수직 슬라이스 — 90~120 분
 월드    128 × 64 × 128 복셀 섬 1 개
 블록    22 종
@@ -51,6 +51,10 @@
 레벨    마을 레벨 1 → 3
 습격    2 회
 ```
+
+[전체 로드맵](docs/project/ROADMAP.md)에 단계별 결과와 MVP 이후의 조건부 확장 계획을,
+[세부 계획](docs/project/TASKS.md)에 55개 Task의 순서·의존·완료 조건을 정리했다.
+TASK-001은 착수 가능하다. 후속 미결정 정책은 TASKS 2.5의 기한에 맞춰 구현 전에 확정한다.
 
 ## 확장 원칙
 
@@ -105,6 +109,7 @@ docs/project/GAME_DESIGN.md   왜 만드는가 / 무엇이 재미여야 하는�
 docs/project/MVP_SPEC.md      무엇을 만드는가          수치와 조건식의 정본
 docs/project/ARCHITECTURE.md  어떤 구조로 만드는가      인터페이스의 정본
 docs/project/TASKS.md         어떤 순서로 만드는가      Acceptance Criteria 의 정본
+docs/project/ROADMAP.md       전체 이정표·현재 준비 상태·조건부 확장 계획 (TASKS를 요약)
 docs/adr/                     구조적 결정 기록
 docs/research/                외부 조사 기록과 출처        결정이 기댄 사실의 근거
 docs/state/                   작업 완료 기록과 다음 할 일
