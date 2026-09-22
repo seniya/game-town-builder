@@ -184,7 +184,7 @@ Acceptance Criteria:
 
 ```text
 Chunk (Uint16Array 4096, index = x + z*16 + y*256)
-VoxelWorld (128 × 64 × 128, getBlock / setBlock)
+VoxelWorld (크기는 데이터로 주입, MVP 128 × 64 × 128, getBlock / setBlock)
 dirty 청크 추적. 경계 블록이면 인접 청크도 dirty
 PlacementIndex + 원자적 editObject. meshRevision 추적
 ```
@@ -199,6 +199,7 @@ Acceptance Criteria:
 - [ ] 침대·문의 점유 칸과 메타데이터가 함께 변경된다. 일부만 실패하면 모두 롤백한다
 - [ ] AO를 위해 padded에 변경점을 포함하는 모서리·꼭짓점 이웃도 dirty/revision이 갱신된다
 - [ ] 다중 칸 객체에 단일 setBlock을 직접 적용하면 거부한다
+- [ ] 월드 크기를 데이터로 주입한다. MVP와 다른 크기의 작은 fixture에서도 경계·청크 좌표 검사가 통과한다
 
 ---
 
@@ -835,6 +836,7 @@ Acceptance Criteria:
 - [ ] `MoveAction` 으로 지정 좌표까지 걸어간다
 - [ ] 디버그 패널에 각 NPC 의 현재 Action label 이 보인다
 - [ ] `npc.state` 같은 필드가 없다 (ADR 008)
+- [ ] 주민 수를 고정하지 않는다. 게임 진행과 분리한 registry fixture에 100개의 고유 NPC id를 등록·조회·제거할 수 있다 (생활·성능 검증과 별개)
 
 ---
 
@@ -1474,6 +1476,7 @@ Acceptance Criteria:
 - [ ] 드로우콜이 600 미만이다
 - [ ] 방 재판정이 프레임당 3ms 이하다
 - [ ] MVP_SPEC 39 장의 Acceptance Test 10 개가 전부 통과한다
+- [ ] ARCHITECTURE 2.3의 확장 경계를 검토하고, 100명·대형 월드 확장 시 남은 병목과 미검증 항목을 기록한다. MVP 측정을 확장 성능 검증으로 간주하지 않는다
 
 ---
 
