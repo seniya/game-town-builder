@@ -1,7 +1,15 @@
 # ADR 001. 게임 엔진으로 Phaser 3 을, 빌드 도구로 Vite SPA 를 사용한다
 
-Status: Accepted
+Status: Superseded by ADR 011
 Date: 2026-09-22
+Superseded: 2026-09-22
+
+> **이 결정은 더 이상 유효하지 않다.**
+>
+> 3D 복셀로 전환하면서 Phaser 3 와 Tiled 를 버리고 Three.js 를 채택했다.
+> Vite / SPA / pnpm / Node 24 / TypeScript strict 결정은 ADR 011 이 그대로 승계한다.
+>
+> 대체 결정은 ADR 011 를 읽는다.
 
 ## 배경
 

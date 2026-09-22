@@ -1,7 +1,15 @@
 # ADR 009. 마을 입구 타일에는 방벽만 지을 수 있다
 
-Status: Accepted
+Status: Superseded by ADR 015
 Date: 2026-09-22
+Superseded: 2026-09-22
+
+> **이 결정은 더 이상 유효하지 않다.**
+>
+> 이 ADR 은 ADR 005 의 "입구 5 타일" 정의 위에 세워져 있었다.
+> 자유 건축에서는 입구 타일도 BuildValidator 도 존재하지 않는다.
+>
+> 대체 결정은 ADR 015 를 읽는다.
 
 ## 배경
 

@@ -1,118 +1,79 @@
 # MVP_SPEC.md
 
-# Small Village Restoration Game — MVP Specification
+# Small Village Restoration Game — Vertical Slice Specification
 
-Version: 0.3
-Status: MVP Spec Baseline (2차 정합성 정리 반영)
-Target: Desktop Web Browser
-Genre: 2D Top-down Village Restoration / Life Simulation
+Version: 1.0
+Status: DQB2 Redesign Baseline
+Date: 2026-09-22
 
 ---
 
 # 1. 문서 목적
 
-이 문서는 `GAME_DESIGN.md`에서 정의한 게임 경험을 실제로 구현하기 위한 MVP 개발 명세이다.
+이 문서는 **무엇을 만드는가** 를 정의한다.
 
-AI 코딩 에이전트는 개발을 시작하기 전에 다음 문서를 순서대로 읽는다.
-
-```text
-docs/project/GAME_DESIGN.md
-    ↓
-docs/project/MVP_SPEC.md
-    ↓
-docs/project/ARCHITECTURE.md
-    ↓
-docs/project/TASKS.md
-```
-
-각 문서의 역할은 다음과 같다.
-
-```text
-GAME_DESIGN.md
-왜 이 게임을 만드는가?
-무엇이 재미여야 하는가?
-
-MVP_SPEC.md
-첫 버전에서 정확히 무엇을 만드는가?
-수치와 조건식의 정본.
-
-ARCHITECTURE.md
-각 시스템을 어떤 코드 구조로 구현하는가?
-인터페이스의 정본.
-
-TASKS.md
-무엇을 어떤 순서로 구현하는가?
-Acceptance Criteria의 정본.
-```
+**수치와 조건식의 정본은 이 문서다.**
 
 ## 1.1 문서 간 충돌 시 우선순위
 
-같은 내용이 여러 문서에 다르게 적혀 있으면 다음 순서로 따른다.
-
 ```text
-수치 / 조건식      →  MVP_SPEC.md
-인터페이스 / 구조   →  ARCHITECTURE.md
-작업 순서 / 완료 조건 →  TASKS.md
-의도 / 감정 목표    →  GAME_DESIGN.md
+수치 / 조건식         →  MVP_SPEC.md      (이 문서)
+인터페이스 / 구조      →  ARCHITECTURE.md
+작업 순서 / 완료 조건  →  TASKS.md
+의도 / 감정 목표      →  GAME_DESIGN.md
 ```
 
-`GAME_DESIGN.md`에 등장하는 수치는 의도를 설명하기 위한 예시다.
+`GAME_DESIGN.md` 에 등장하는 수치는 의도를 설명하기 위한 예시이며 구현 기준이 아니다.
 
-구현 기준이 아니다.
+## 1.2 이 문서는 한 번 전면 개정되었다
 
-## 1.2 부수 문서
+Version 0.2 는 2D Top-down / Prefab 건물 4 종 / 20~30 분 MVP 를 정의했다.
+
+Version 1.0 에서 목표가 **드래곤 퀘스트 빌더즈 2 형 게임** 으로 재정의되었다.
 
 ```text
-docs/adr/     구조적 결정 기록 (ADR)
-docs/state/   작업 완료 기록과 다음 할 일
+ADR 011   Phaser 3 / 2D  →  Three.js / 3D 복셀
+ADR 012   Prefab 배치     →  자유 건축 + 방 인식
+ADR 013   감사 포인트 + 마을 레벨 도입
+ADR 014   복셀 청크 16³ + 그리디 메싱
+ADR 015   3D 통행 그래프 + 파괴 가능한 벽
 ```
 
-이 문서에서 정의하지 않은 기능은 원칙적으로 MVP에 포함하지 않는다.
+폐기된 ADR: 001, 002, 005, 009.
 
 ---
 
-# 2. MVP의 최종 목표
+# 2. 수직 슬라이스의 최종 목표
 
-플레이어가 약 20~30분 동안 플레이한 뒤 다음 감정을 느끼는 것을 목표로 한다.
+플레이어가 약 90~120 분 플레이한 뒤 다음을 느끼는 것을 목표로 한다.
 
-> 내가 만든 것 때문에 이 사람들이 살아가기 시작했다.
+> 내가 쌓은 벽 안에서, 내가 놓은 침대에 사람들이 누워 잔다.
 
-그리고 이어서 다음 생각이 자연스럽게 발생해야 한다.
+그리고 이어서
 
 > 이 마을을 조금 더 키워보고 싶다.
 
-MVP는 게임의 크기를 검증하지 않는다.
+## 2.1 검증 대상
 
-다음 핵심 루프가 재미있는지를 검증한다.
+세 개의 루프가 전부 돌아가는지 검증한다.
 
 ```text
-문제 발생
-    ↓
-주민이 문제 표현
-    ↓
-탐험 / 자원 수집
-    ↓
-건설
-    ↓
-주민 행동 변화
-    ↓
-마을 모습 변화
-    ↓
-새로운 사건
+요청 루프    주민의 요청 → 건설 → 진행
+인식 루프    자유 건축 → 게임이 방으로 인식 → 주민이 사용      ★ 최우선
+성장 루프    감사 포인트 → 종 → 마을 레벨 → 해금
 ```
 
-핵심 루프:
+## 2.2 범위
 
 ```text
-Problem
-  ↓
-Explore
-  ↓
-Build
-  ↓
-Life
-  ↓
-Change
+분량         90 ~ 120 분
+월드         128 × 64 × 128 복셀 섬 1 개
+블록         22 종 (air 제외)
+방 레시피     5 종 (빈 방 / 창고 / 침실 / 주방 / 식당)
+주민         3 명 시작 → 최대 5 명
+마을 레벨     1 → 3
+몬스터 습격    2 회
+진행 이벤트    8 개
 ```
 
 ---
@@ -121,782 +82,599 @@ Change
 
 ## 3.1 기능보다 반응을 먼저 만든다
 
-새로운 기능을 추가하기 전에 기존 플레이어 행동에 대한 NPC와 월드의 반응을 먼저 만든다.
-
-예:
-
-잘못된 우선순위:
-
 ```text
-건물 20개
-아이템 100개
-NPC 30명
-```
+잘못된 우선순위            올바른 우선순위
 
-올바른 우선순위:
-
-```text
-밭 1개
-    ↓
-농부가 발견
-    ↓
-밭으로 이동
-    ↓
-농사
-    ↓
-작물 생성
-    ↓
-요리사가 작물 사용
-    ↓
-주민이 음식 섭취
+블록 100 종               침대 1 개
+가구 50 종                    ↓
+방 레시피 20 종            방이 인식된다
+주민 30 명                     ↓
+                          주민이 밤에 들어간다
+                              ↓
+                          침대에 눕는다
+                              ↓
+                          감사 포인트가 뜬다
 ```
 
 콘텐츠 개수보다 연결성이 중요하다.
+
+## 3.2 판정 실패는 반드시 설명한다
+
+방이 인식되지 않았을 때 플레이어가 이유를 알 수 없으면 게임이 그 자리에서 끝난다.
+
+**방 진단 UI 는 선택 기능이 아니다.** 방 인식 시스템과 같은 Task 에서 구현한다.
 
 ---
 
 # 4. 플랫폼
 
-MVP 대상 플랫폼은 Desktop Web Browser이다.
-
-우선 지원:
-
-* Chrome
-* Edge
-* Chromium 기반 브라우저
-
-입력 장치는 **키보드와 마우스만** 사용한다.
-
-게임패드는 MVP 범위에서 제외한다.
-
-이유는 Build Mode가 마우스 커서 위치를 기준으로 동작하기 때문이다.
-
-게임패드를 지원하려면 스틱으로 조작하는 별도의 가상 커서와 스냅 규칙이 필요하고,
-이것은 핵심 재미 검증과 무관한 추가 작업이다.
-
-모바일 지원도 MVP 범위에서 제외한다.
-
-서버는 사용하지 않는다.
-
-게임 전체가 클라이언트에서 실행되어야 한다.
+```text
+대상        Desktop Web Browser
+입력        키보드 + 마우스
+해상도      1280 × 720 기준. 창 크기에 맞춰 스케일
+Gamepad     구현하지 않는다
+모바일       구현하지 않는다
+```
 
 ---
 
 # 5. 기술 스택
 
-## Runtime
-
 ```text
-Node.js 24 LTS
+Runtime          Node.js 24 LTS
+Package Manager  pnpm (lockfile 커밋)
+Language         TypeScript 5.x (strict: true)
+Renderer         three 0.18x 이상  —  WebGLRenderer (WebGL2)
+Build            Vite 8.x  —  SPA
+Test             Vitest 3.x
+Worker           표준 Web Worker (Vite 의 ?worker import)
 ```
 
-## Package Manager
+사용하지 않는다:
 
 ```text
-pnpm
+Phaser          (ADR 011 로 폐기)
+Tiled           (맵을 데이터로 생성한다)
+React / Next.js (ADR 003 유지)
+Redux / Zustand / MobX / RxJS
+물리 엔진 (Rapier / Havok / cannon)
+WebGPURenderer  (ADR 011 의 전환 조건 참조)
 ```
 
-프로젝트 생성 이후 `pnpm-lock.yaml`을 반드시 커밋한다.
+## 5.1 버전 정본은 lockfile 이다
 
-## 5.1 버전 정본은 lockfile이다
+`package.json` 과 `pnpm-lock.yaml` 이 정본이다.
+문서는 메이저 버전 제약만 규정한다.
 
-이 문서는 **메이저 버전 제약만** 규정한다.
-
-정확한 버전의 정본은 `package.json`과 `pnpm-lock.yaml`이다.
+## 5.2 엔진 격리 규칙
 
 ```text
-Node.js    24.x LTS
-Phaser     3.x      (3.90 이상, 4.x 금지)
-Vite       8.x
-TypeScript 5.x
-Vitest     3.x
-Tiled      1.12 이상
+src/game/**     three 를 import 하지 않는다. 순수 TypeScript.
+src/render/**   three 를 import 한다.
+src/ui/**       DOM 만 쓴다. three 를 import 하지 않는다.
+src/workers/**  three 를 import 하지 않는다.
 ```
 
-프로젝트 셋업 시 다음을 확인한다.
-
-```text
-설치한 Vite 메이저 버전이 Node 24에서 지원되는가
-설치한 Phaser 버전이 3.x 범위인가
-```
-
-메이저 버전을 올리는 것은 임의로 수행하지 않는다.
-
-패치·마이너 버전은 lockfile로 고정하며, 갱신은 별도 작업으로 분리한다.
+ESLint 의 `no-restricted-imports` 로 강제한다.
+이 규칙을 깨는 PR 은 병합하지 않는다.
 
 ---
 
-## Language
+# 6. 테스트
 
 ```text
-TypeScript
+Phaser 가 없던 것처럼, three 없이 실행 가능해야 한다
 ```
 
-TypeScript는 strict mode를 사용한다.
-
-```json
-{
-  "compilerOptions": {
-    "strict": true
-  }
-}
-```
-
-다음 사용을 원칙적으로 금지한다.
+테스트 대상:
 
 ```text
-any
-@ts-ignore
-@ts-nocheck
+그리디 메싱 함수          순수 함수. 입력 블록 배열 → 정점 배열
+방 인식                  순수 함수. 블록 배열 + 시작점 → RoomDetectionResult
+방 레시피 매칭            순수 함수. 가구 목록 → RoomType
+통행 판정 / A*            순수 함수
+World State 계산          순수 함수
+감사 포인트 / 레벨 게이트   순수 함수
+NPC Decision              Context → Action
+진행 이벤트 조건           EventContext → boolean
+인벤토리 / 저장소          상태 전이
 ```
 
-불가피한 경우 반드시 이유를 주석으로 남긴다.
+`src/render/` 는 단위 테스트 대상이 아니다. 수동 확인한다.
 
 ---
 
-# 6. Game Engine
+# 7. 월드
 
-게임 엔진:
+## 7.1 크기
 
 ```text
-Phaser 3.90.0
+x   128
+y    64
+z   128
 ```
 
-MVP에서는 Phaser 4로 업그레이드하지 않는다.
-
-게임의 다음 기능은 Phaser가 담당한다.
-
-* Canvas Rendering
-* Scene
-* Sprite
-* Animation
-* Input
-* Camera
-* Tilemap
-* Collision
-* Audio
-* Particle
-* Game Loop
-
----
-
-# 7. Build Tool
-
 ```text
-Vite 8.x
+y = 0        bedrock. 파괴 불가
+y = 1 ~ 23   돌
+y = 24       해수면
+y = 25 ~ 34  지표면 (섬의 기복)
+y = 35 ~ 63  하늘
 ```
 
-프로젝트는 SPA 형태로 빌드한다.
+사방이 바다다. 절차적 생성을 쓰지 않는다.
+섬 지형은 고정 데이터로 생성한다.
 
-Next.js를 사용하지 않는다.
-
-React 역시 MVP에서는 사용하지 않는다.
-
-게임 UI는 Phaser 또는 필요한 최소한의 HTML/CSS UI로 구현한다.
-
-MVP 단계에서 React를 포함하지 않는 이유는 게임 상태와 React 상태를 이중으로 관리하는 복잡성을 만들지 않기 위해서다.
-
----
-
-# 8. Map Editor
-
-맵 제작 도구:
+## 7.2 청크
 
 ```text
-Tiled 1.12.x
+청크 크기     16 × 16 × 16
+청크 개수     8 × 4 × 8 = 256
+인덱스        index = x + z * 16 + y * 256
+저장          Uint16Array(4096)
 ```
 
-Tiled에서 제작한 맵을 JSON 형식으로 export하여 사용한다.
-
-맵에서는 다음 Layer를 사용한다.
+## 7.3 좌표계
 
 ```text
-Ground            지형 타일
-GroundDecoration  풀, 흙, 자갈 등 장식 (충돌 없음)
-Objects           정적 장식 오브젝트 (충돌 없음)
-Ruins             폐허 — 건설 가능, 충돌 없음
-Collision         이동 불가 타일
-BuildableArea     건설 허용 영역
-SpawnPoints       시작 위치 / 자원 노드 오브젝트
+BlockPos       정수 복셀 좌표 { x, y, z }
+Vec3           실수 월드 좌표 { x, y, z }
 ```
 
-자원 노드도 `SpawnPoints` 레이어의 오브젝트로 배치한다.
-
-별도의 `Interaction` 레이어를 두지 않는다.
-
-상호작용 대상을 두 레이어에 나누어 두면 파싱 경로가 두 개가 되고,
-어느 쪽에 넣어야 하는지 판단할 기준이 없다.
-
-## 8.1 Buildings 레이어를 두지 않는다
-
-플레이어가 짓는 건물은 **전부 런타임에 생성**된다.
-
-Tiled 맵에 `Buildings` 레이어를 두면 "맵에 미리 그려진 건물"과
-"플레이어가 지은 건물"이 같은 레이어에 섞여 건설 충돌 판정이 모호해진다.
-
-맵에 미리 존재하는 것은 건물이 아니라 **폐허**이며, `Ruins` 레이어에 둔다.
-
-## 8.2 Ruins 레이어
-
-폐허는 다음 성질을 가진다.
+블록 한 변의 길이는 월드 좌표 1.0 이다.
 
 ```text
-Collision 아님          플레이어와 NPC가 지나갈 수 있다
-BuildableArea 안에 있음  그 위에 건물을 지을 수 있다
-건설 시 제거됨          해당 타일의 폐허 타일이 사라지고 건물이 들어선다
+blockToWorldMin(p)     = { x: p.x,       y: p.y,       z: p.z       }
+blockToWorldCenter(p)  = { x: p.x + 0.5, y: p.y + 0.5, z: p.z + 0.5 }
+worldToBlock(v)        = { x: floor(v.x), y: floor(v.y), z: floor(v.z) }
 ```
 
-각 폐허 타일에는 힌트 속성을 부여할 수 있다.
+**변환 함수 이름에 기준점을 명시한다.** `blockToWorld` 라는 이름을 쓰지 않는다.
+어느 지점인지 모르면 캐릭터가 블록 모서리에 서는 버그가 반복된다.
+
+## 7.4 섬 구성
 
 ```text
-hint = "farm" | "house" | "generic"
+영역          중심 좌표 (x, z)    내용
+마을 터        (64, 64)           폐허. 부서진 판자벽과 기초. 마을의 종 1 개
+숲            (40, 48)           나무 24 그루 (log + leaves)
+채석장         (88, 52)           노출된 돌 지대
+물가           (64, 96)           담수. 점토
+어두운 외곽     (64, 24) / (24,64) 몬스터 스폰 지점 2 곳
+바다           섬 바깥             y=24 까지 물
 ```
 
-Ghost Preview는 이 힌트를 사용해 안내를 표시한다.
+마을의 종은 `(64, 지표면, 64)` 에 고정 배치된다. 플레이어가 부술 수 없다.
+
+## 7.5 스폰
 
 ```text
-여기에 밭을 복구할 수 있습니다.
-```
-
-이 규칙이 있어야 **"무너진 밭을 복구한다"는 서사**와
-**"Prefab 건물을 배치한다"는 메커니즘**이 충돌하지 않는다.
-
-폐허를 Collision으로 만들면 밭을 복구할 수 없게 되므로 반드시 통과 가능해야 한다.
-
-## 8.3 SpawnPoints 오브젝트
-
-`SpawnPoints` 레이어에는 다음 이름의 오브젝트를 배치한다.
-
-```text
-player           플레이어 시작 위치            1개
-npc_farmer       농부 시작 위치               1개
-npc_cook         요리사 시작 위치              1개
-npc_carpenter    목수 시작 위치               1개
-plaza            마을 광장 (마을 중심 타일)      1개
-village_gate     마을 입구 기준 타일            1개
-monster_spawn    몬스터 스폰 위치              1개 이상
-safe_spot        NPC 도피 지점                1개 이상
-resource_tree    나무                        12개 이상
-resource_rock    돌                           8개 이상
-resource_plant   야생 식물                     4개 이상
-```
-
-이름이 빠져 있으면 게임 시작 시 명확한 Error를 발생시킨다.
-
-자원 노드 개수도 검사 대상이다. 최소 개수보다 적으면 Error를 발생시킨다.
-
-### plaza 는 세 가지 용도로 쓰인다
-
-```text
-1. 집이 없거나 침대가 부족한 NPC 의 밤 위치 (RestAction)
-2. 주방이 없을 때의 식사 장소 (39.2 참조)
-3. 몬스터의 목표 지점 = 마을 중심 타일 (55.2 참조)
-```
-
-세 용도가 모두 "마을의 한가운데"를 뜻하므로 오브젝트를 따로 두지 않는다.
-
-### 자원 노드 최소 개수의 근거
-
-첫 사이클에 필요한 채집은 나무 12회 / 돌 6회 / 야생 식물 3회다(77.3).
-
-노드 수가 이보다 적으면 플레이어가 Respawn(실시간 80초)을 기다려야 하고,
-첫 저녁까지의 3분 20초(40.1) 안에 첫 사이클을 끝낼 수 없다.
-
-최소 개수는 **첫 사이클을 Respawn 없이 충당할 수 있는 양**으로 정한다.
-
----
-
-# 9. 테스트
-
-게임 로직 테스트:
-
-```text
-Vitest
-```
-
-특히 다음 로직은 Phaser Scene과 분리하여 테스트 가능하도록 작성한다.
-
-* Inventory
-* WorldState
-* GameClock
-* EventCondition
-* BuildValidation
-* NPC State 결정
-* Resource 계산
-
-렌더링 자체에 대한 자동 테스트는 MVP 필수 조건이 아니다.
-
----
-
-# 10. MVP 게임 표현 방식
-
-게임은 다음 형태의 2D Top-down 게임으로 구현한다.
-
-```text
-       북
-
-        ↑
-
-서 ← Player → 동
-
-        ↓
-
-       남
-```
-
-그래픽 스타일은 MVP 단계에서 Pixel Art Placeholder를 허용한다.
-
-중요한 것은 그래픽 품질이 아니라 행동이 시각적으로 구분되는 것이다.
-
----
-
-# 11. 기본 해상도
-
-게임 논리 해상도:
-
-```text
-1280 × 720
-```
-
-브라우저 크기에 따라 비율을 유지하면서 Scale한다.
-
-화면 비율:
-
-```text
-16:9
+플레이어 시작   (64, 지표면+1, 70)
+농부           (62, 지표면+1, 62)
+요리사          (66, 지표면+1, 62)
+목수           (64, 지표면+1, 60)
 ```
 
 ---
 
-# 12. Tile 크기
+# 8. 블록
 
-기본 Tile:
-
-```text
-32 × 32 px
-```
-
-모든 주요 월드 좌표는 Tile Grid를 기준으로 한다.
-
-## 12.1 좌표 변환은 기준점을 명시한다
-
-Tile 좌표를 World 좌표로 바꿀 때 **좌상단 기준**과 **중심 기준**을 반드시 구분한다.
+## 8.1 블록 목록
 
 ```text
-gridToWorldTopLeft(10, 5)  →  x = 320, y = 160
-gridToWorldCenter(10, 5)   →  x = 336, y = 176
-worldToGrid(336, 176)      →  (10, 5)
+id  name            kind       solid  opaque  terrain  breakSec  비고
+ 0  air             air        F      F       -        -
+ 1  bedrock         terrain    T      T       T        -         파괴 불가
+ 2  dirt            terrain    T      T       T        0.6
+ 3  grass           terrain    T      T       T        0.6
+ 4  stone           terrain    T      T       T        1.5
+ 5  sand            terrain    T      T       T        0.5
+ 6  log             terrain    T      T       T        1.0
+ 7  leaves          terrain    T      F       T        0.2
+ 8  water           fluid      F      F       T        -         파괴 불가
+ 9  plank           build      T      T       F        0.8       벽 / 바닥
+10  stone_brick     build      T      T       F        2.0       벽. 더 단단하다
+11  door            door       F*     F       F        0.8       * 아래 8.3
+12  window          build      T      F       F        0.8       벽으로 인정된다
+13  torch           light      F      F       F        0.1       조명
+14  bed             furniture  T      T       F        0.8
+15  cooking_stove   furniture  T      T       F        1.2
+16  water_pot       furniture  T      T       F        0.8
+17  table           furniture  T      T       F        0.8
+18  chair           furniture  T      T       F        0.6
+19  chest           furniture  T      T       F        0.8
+20  farmland        build      T      T       F        0.5       밭흙
+21  crop            crop       F      F       F        0.2       farmland 위에만
+22  bell            special    T      T       F        -         파괴 불가. 1 개
 ```
 
-계산식:
+## 8.2 terrain 플래그의 의미
 
 ```text
-topLeft.x = tile.x * 32
-topLeft.y = tile.y * 32
-
-center.x  = tile.x * 32 + 16
-center.y  = tile.y * 32 + 16
-
-tile.x    = floor(world.x / 32)
-tile.y    = floor(world.y / 32)
+terrain = true    몬스터가 파괴하지 않는다. 우회한다
+terrain = false   몬스터가 파괴한다
 ```
 
-## 12.2 사용 규칙
+플레이어가 `dirt` 를 캐서 다시 놓아도 `terrain` 이다.
+"누가 놓았는가" 를 추적하지 않는다. 블록 종류만 본다.
+
+이 규칙이 없으면 플레이어가 흙벽으로 무적 요새를 짓는다.
+**방어용 벽은 반드시 `plank` / `stone_brick` / `window` / `door` 여야 한다.**
+
+## 8.3 door 는 통행에서만 비고체다
 
 ```text
-Sprite 배치        gridToWorldCenter
-Tilemap 인덱싱      gridToWorldTopLeft
-건물의 origin       항상 좌상단 타일
+Player / NPC    통과할 수 있다  (통행 판정에서 비고체)
+Monster         통과할 수 없다  (통행 판정에서 고체, 파괴 대상)
+방 인식          벽으로 인정된다
+충돌             플레이어는 통과한다
 ```
 
-건물의 `origin`은 **점유 영역의 좌상단 타일**이다.
+문의 열림 / 닫힘 상태를 두지 않는다. 항상 이 규칙으로 동작한다.
 
-3 × 3 밭의 `origin`이 `(10, 5)`이면 점유 타일은 다음과 같다.
+## 8.4 벽으로 인정되는 블록
+
+방 인식에서 경계로 인정되는 블록은 다음뿐이다.
 
 ```text
-(10,5) (11,5) (12,5)
-(10,6) (11,6) (12,6)
-(10,7) (11,7) (12,7)
+plank / stone_brick / window / door
 ```
 
-건물 Sprite는 점유 영역 전체의 중심에 배치한다.
+`dirt`, `stone`, `log` 같은 지형 블록은 **벽으로 인정되지 않는다.**
+
+이유는 산비탈을 파고 들어가 "동굴이 방이다" 라고 주장하는 것을 막기 위해서다.
+방은 플레이어가 지은 것이어야 한다.
+
+## 8.5 제작
+
+제작대를 두지 않는다. 인벤토리에서 바로 제작한다.
 
 ```text
-3 × 3 건물의 Sprite 중심 = gridToWorldTopLeft(origin) + (3 * 32 / 2)
+plank         × 4   ←  log × 1
+stone_brick   × 4   ←  stone × 2
+door          × 1   ←  plank × 4
+window        × 2   ←  plank × 2 + sand × 1
+torch         × 4   ←  log × 1
+bed           × 1   ←  plank × 4 + leaves × 4
+cooking_stove × 1   ←  stone × 6
+water_pot     × 1   ←  stone × 3
+table         × 1   ←  plank × 4
+chair         × 1   ←  plank × 2
+chest         × 1   ←  plank × 6
+farmland      × 1   ←  dirt × 1
 ```
 
-기준점을 문서화하지 않으면 Ghost Preview와 BuildValidator가
-한 타일씩 어긋나는 문제가 반드시 발생한다.
+점토(clay)를 도입하지 않는다. 제작 재료는 8.1 표에 있는 블록으로만 구성한다.
+재료 종류를 늘리는 것은 38 장의 금지 사항이다.
 
 ---
 
-# 13. MVP 월드 크기
+# 9. 플레이어
 
-기본 테스트 맵:
-
-```text
-64 × 64 tiles
-```
-
-실제 월드 크기:
+## 9.1 제원
 
 ```text
-2048 × 2048 px
+높이         1.8 (블록 2 칸 공간 필요)
+폭           0.6 × 0.6 (AABB)
+이동 속도     4.5 / 초
+달리기        7.0 / 초  (Shift)
+점프 높이     1.25 (한 칸 오르기 가능)
+중력         -22 / 초²
+최대 낙하 속도 -30 / 초
+체력         20
 ```
 
-MVP에서는 하나의 맵만 존재한다.
+## 9.2 입력
+
+```text
+W A S D        이동
+Shift          달리기
+Space          점프
+마우스 이동      카메라 회전
+좌클릭          블록 파괴 / 몬스터 공격
+우클릭          블록 설치
+1 ~ 9          핫바 선택
+휠             핫바 이동
+E              인벤토리 / 제작 열기
+F              상호작용 (NPC 대화 / 종 치기)
+Tab            방 진단 모드 토글
+Esc            메뉴
+F3             디버그 패널
+```
+
+## 9.3 카메라
+
+```text
+3 인칭 고정 거리 카메라
+거리        5.0
+피치 제한    -80° ~ +60°
+충돌        카메라가 블록을 관통하면 거리를 줄인다
+```
+
+1 인칭을 구현하지 않는다. 자기가 만든 마을을 보는 게임이다.
+
+## 9.4 충돌
+
+물리 엔진을 쓰지 않는다. 축 분리 AABB 스윕으로 직접 계산한다.
+
+```text
+1. x 축으로 이동시키고 겹치는 고체 블록을 찾아 밀어낸다
+2. z 축으로 같은 과정
+3. y 축으로 같은 과정. 지면에 닿으면 onGround = true
+```
+
+한 칸 자동 오르기(step-up)를 구현한다. 높이 1.0 이하의 턱은 자동으로 오른다.
 
 ---
 
-# 14. 월드 구성
+# 10. 블록 파괴와 설치
 
-맵은 크게 다섯 영역으로 구성한다.
+## 10.1 대상 선택
+
+시선 방향으로 레이캐스트한다.
 
 ```text
-        숲
-
-         │
-         │
-
-채석장 ─ 마을 ─ 물가
-
-         │
-         │
-
-      위험 지역
+최대 거리        5.0
+알고리즘         복셀 DDA (Amanatides & Woo)
+결과            { blockPos, faceNormal } 또는 null
 ```
 
-## Village
-
-핵심 플레이 공간.
-
-포함:
-
-* 폐허
-* 기존 NPC
-* 건설 가능 공간
-* 광장
-* 무너진 밭
-
----
-
-## Forest
-
-주요 획득 자원:
+## 10.2 파괴
 
 ```text
-Wood
-Seed
+좌클릭을 누르고 있는다
+    ↓
+진행도 += dt / blockDefinition.breakSeconds
+    ↓
+진행도 >= 1 이면 블록이 air 가 되고 drops 가 인벤토리에 들어간다
 ```
 
----
+대상이 바뀌면 진행도는 0 으로 초기화된다.
 
-## Quarry
+`breakSeconds` 가 `-` 인 블록(bedrock / water / bell)은 파괴되지 않는다.
 
-주요 획득 자원:
+## 10.3 설치
 
 ```text
-Stone
+우클릭
+    ↓
+targetBlockPos + faceNormal 위치가 air 인가
+    ↓
+그 위치가 플레이어 AABB 와 겹치지 않는가
+    ↓
+핫바의 현재 아이템이 1 개 이상인가
+    ↓
+설치 규칙(10.4)을 만족하는가
+    ↓
+설치. 아이템 1 소모
 ```
 
----
-
-## Water Area
-
-MVP에서는 탐험용 공간이다.
-
-추후 낚시 등의 기능을 추가할 수 있지만 MVP에서는 구현하지 않는다.
-
----
-
-## Dangerous Area
-
-밤이 되면 몬스터가 접근하는 방향이다.
-
----
-
-## 14.1 마을 입구는 정확히 한 곳이다
-
-맵은 다음 제약을 반드시 만족해야 한다.
+## 10.4 블록별 설치 규칙
 
 ```text
-위험 지역에서 마을로 들어오는 통로는 한 곳이다.
-그 통로의 폭은 정확히 5 타일이다.
+crop          바로 아래가 farmland 여야 한다. 플레이어는 설치하지 않는다 (농부만)
+farmland      바로 아래가 고체여야 한다
+bed           수평으로 2 칸을 차지한다. 두 칸 모두 비어 있어야 한다
+table/chair   바로 아래가 고체여야 한다
+torch         바로 아래 또는 옆면이 고체여야 한다
+door          바로 아래가 고체여야 한다
+bell          플레이어가 설치할 수 없다
 ```
 
-이 통로를 **마을 입구(Village Gate)** 라고 부른다.
+`bed` 가 2 칸을 차지하는 것은 방 판정에서 침대 접근성 조건을 의미 있게 만들기 위해서다.
 
-입구 타일은 `SpawnPoints` 레이어의 `village_gate` 오브젝트를 기준으로
-가로 5칸으로 결정한다.
+## 10.5 변경 이후의 처리
 
-```text
-village_gate = (32, 40)
-
-→ 입구 타일 = (30,40) (31,40) (32,40) (33,40) (34,40)
-```
-
-입구 타일은 `BuildableArea` 안에 있어야 한다. 방벽을 세워야 하기 때문이다.
-
-대신 입구에는 **방벽만** 지을 수 있다. 다른 건물은 Invalid 다(19.2).
-
-## 14.2 왜 이 제약이 필요한가
-
-`EVENT_NEW_RESIDENT`의 조건은 "방벽으로 입구를 막았다"이다.
-
-"막았다"를 판정하려면 **막아야 하는 타일 집합이 확정**되어 있어야 한다.
-
-입구가 여러 곳이거나 폭이 가변이면 다음을 판정할 수 없다.
+블록이 바뀌면 다음이 순서대로 발생한다.
 
 ```text
-safetyLevel 은 몇인가?
-"방벽 완료"는 언제인가?
-Acceptance Test 6 (몬스터가 통과하지 못함)은 통과했는가?
-```
-
-숲 / 채석장 / 물가는 마을과 자유롭게 연결되어도 된다.
-
-몬스터는 위험 지역에서만 스폰하고 입구를 통해서만 진입하므로,
-막아야 하는 곳은 입구 한 곳이다.
-
-## 14.3 NPC 도피 지점
-
-`safe_spot` 오브젝트는 입구에서 가장 먼 마을 안쪽에 배치한다.
-
-`WorldQuery.findSafePosition()`은 이 지점들 중
-현재 위협에서 가장 먼 곳을 반환한다.
-
----
-
-# 15. 플레이어
-
-플레이어는 하나의 캐릭터를 조작한다.
-
-필수 기능:
-
-* 이동
-* 자원 채집
-* NPC 대화
-* 건설
-* 오브젝트 상호작용
-
----
-
-# 16. 플레이어 이동
-
-기본 키:
-
-```text
-W / ↑ = Up
-
-S / ↓ = Down
-
-A / ← = Left
-
-D / → = Right
-```
-
-대각선 이동을 지원한다.
-
-대각선 이동 속도가 직선보다 빨라지지 않도록 normalize한다.
-
----
-
-# 17. 상호작용
-
-기본 Interaction Key:
-
-```text
-E
-```
-
-사용 대상:
-
-* NPC
-* Resource
-* Building
-* Interactive Object
-
-상호작용 가능한 대상 근처에서는 간단한 표시를 보여준다.
-
-예:
-
-```text
-[E] 대화
-```
-
-또는
-
-```text
-[E] 채집
+1. VoxelWorld 가 블록을 쓴다
+2. 해당 청크와 경계를 공유하는 인접 청크를 메싱 큐에 넣는다
+3. 통행 그래프의 해당 좌표 주변 3 × 3 × 3 캐시를 무효화한다
+4. 방 재판정 큐에 해당 좌표를 넣는다
+5. BLOCK_CHANGED 이벤트를 발행한다
 ```
 
 ---
 
-# 18. 건설 모드
+# 11. 방 인식
 
-건설 메뉴 키:
+**이 장이 이 프로젝트의 핵심이다.**
 
-```text
-B
-```
-
-건물을 선택하면 Build Mode에 진입한다.
-
-Build Mode에서는 마우스를 사용하여 위치를 선택한다.
-
-건물은 Tile Grid에 Snap된다.
-
----
-
-# 19. 건설 Preview
-
-배치 전 건물의 Ghost Preview를 표시한다.
-
-배치 가능한 경우:
+## 11.1 파라미터
 
 ```text
-Valid
+roomMinFloorArea      4       2 × 2 미만은 방이 아니다
+roomMaxFloorArea      100
+roomMinWallHeight     2
+roomDetectBudgetMs    3       프레임당 방 재판정 예산
 ```
 
-배치 불가능한 경우:
+## 11.2 빈 방 조건
+
+다음을 모두 만족하면 `EmptyRoom` 이다.
 
 ```text
-Invalid
+1  내부 셀이 전부 비고체다
+2  내부 셀 바로 아래(y-1)가 전부 고체다
+3  내부 셀 집합의 수평 경계가 전부 벽 블록이다 (8.4 참조)
+4  경계 블록이 바닥 위 roomMinWallHeight 칸 이상 연속으로 존재한다
+5  경계에 door 가 1 개 이상 있다
+6  roomMinFloorArea <= 내부 셀 수 <= roomMaxFloorArea
 ```
 
-판단 조건은 다음 6개이며, 전부 `BuildValidator` **한 곳에서** 판정한다.
+천장은 요구하지 않는다.
+
+## 11.3 알고리즘
 
 ```text
-out_of_bounds             점유 타일이 맵 밖으로 나가는가
-map_collision             Collision 레이어 타일을 포함하는가
-overlaps_building         기존 건물과 겹치는가
-outside_buildable_area    BuildableArea 밖인가
-blocks_village_gate       입구 타일을 방벽이 아닌 건물로 점유하는가
-insufficient_resources    비용만큼의 자원이 Inventory에 있는가
+입력   변경된 블록 좌표 집합
+
+1  좌표 주변에서 door 블록을 수집한다
+2  각 door 의 수평 인접 4 셀 중 비고체이고 바로 아래가 고체인 셀을 시작점으로 잡는다
+3  시작점의 y 를 고정하고 4 방향 flood fill 한다
+     비고체 셀            → 확장한다
+     벽 블록(8.4)         → 경계에 기록하고 멈춘다
+     그 외 고체 / 지형 블록 → 실패: NOT_ENCLOSED
+     바닥이 없는 셀        → 실패: NO_FLOOR
+     월드 경계            → 실패: NOT_ENCLOSED
+     방문 수 > 100        → 실패: TOO_LARGE
+4  방문 수 < 4            → 실패: TOO_SMALL
+5  경계 셀마다 y+1 이 벽 블록인지 검사      → 실패: WALL_TOO_LOW
+6  경계에 door 가 없다                    → 실패: NO_DOOR
+7  성공. RoomDetectionResult 를 만든다
 ```
 
-`Ruins` 레이어 타일은 **막지 않는다.**
+**3 번의 "그 외 고체" 가 실패인 것이 중요하다.**
 
-폐허 위에는 건설할 수 있어야 한다. (8.2 참조)
+흙이나 돌을 벽으로 쓸 수 없다는 8.4 의 규칙이 여기서 강제된다.
 
-## 19.1 자원 검사는 Preview 단계에서 수행한다
-
-자원 부족도 Ghost Preview에서 Invalid로 표시한다.
-
-따라서 `BuildValidator`는 Inventory를 입력으로 받는다.
+## 11.4 실패 사유는 전부 좌표를 들고 있다
 
 ```ts
-validate(input: {
-  config: BuildingConfig;
-  origin: GridPosition;
-  inventory: InventoryState;
-  gateTiles: readonly GridPosition[];
-}): BuildValidationResult;
+type RoomFailure =
+  | { reason: 'NOT_ENCLOSED'; at: BlockPos }
+  | { reason: 'NO_FLOOR';     at: BlockPos }
+  | { reason: 'NO_DOOR' }
+  | { reason: 'WALL_TOO_LOW'; at: BlockPos }
+  | { reason: 'TOO_LARGE' }
+  | { reason: 'TOO_SMALL' };
 ```
 
-클릭 이후에는 재검증 없이 **차감만** 수행한다.
+`at` 이 있는 실패는 진단 모드에서 그 좌표를 빨갛게 표시한다.
 
-자원 검사를 클릭 이후로 미루면
-"배치 가능하다고 표시됐는데 클릭하니 실패"하는 상태가 발생한다.
-
-Invalid 사유는 화면에 표시한다.
+## 11.5 진단 모드 (Tab)
 
 ```text
-나무가 부족합니다 (6 / 4)
+인식된 방        초록 경계 + 방 이름
+판정 실패한 공간   빨간 표시 + 실패 사유 문구 + 원인 좌표 하이라이트
 ```
 
-## 19.2 입구 타일에는 방벽만 지을 수 있다
-
-입구 5 타일(14.1)은 `BuildableArea` 안에 있어야 한다.
-
-방벽을 그 위에 세워야 `safetyLevel`이 올라가기 때문이다.
-
-그러나 다른 건물까지 허용하면 게임이 진행 불가능해진다.
+판정 실패한 공간을 찾는 방법:
 
 ```text
-집(4×4)으로 입구 5칸 중 4칸을 덮는다
-    ↓
-그 타일에 방벽을 세울 수 없다  (overlaps_building)
-    ↓
-safetyLevel 이 영원히 100 에 도달하지 못한다
-    ↓
-EVENT_NEW_RESIDENT 가 발생하지 않는다  →  엔딩 도달 불가
+플레이어가 서 있는 위치에서 11.3 의 flood fill 을 시도한다
+(door 가 없어도 플레이어 위치를 시작점으로 강제한다)
 ```
+
+이렇게 하면 "문을 아직 안 달았다" 도 진단할 수 있다.
+
+## 11.6 재판정 범위
+
+블록 하나가 바뀌면 다음만 재판정한다.
 
 ```text
-밭(3×3) + 주방(2×2) 으로 입구 5칸을 전부 덮는다
-    ↓
-건물 타일은 두 통행 레이어 모두 Blocked 다 (29.2)
-    ↓
-플레이어 · NPC · 새 주민 전원이 통과할 수 없다  →  완전한 진행 불능
+1  그 좌표를 내부 셀 또는 경계로 포함하는 기존 방
+2  그 좌표가 door 이거나 door 에 인접하면, 그 door 기준 새 판정
 ```
 
-따라서 다음 규칙을 둔다.
+월드 전체를 스캔하지 않는다.
+
+재판정은 큐에 쌓이고 프레임당 `roomDetectBudgetMs` 안에서 처리한다.
+같은 방이 큐에 중복으로 들어가면 합친다.
+
+## 11.7 방이 해제될 때
+
+인식되어 있던 방이 조건을 잃으면:
 
 ```text
-점유 타일이 입구 타일을 하나라도 포함하고
-config.blocksMonsters !== true 이면
-    →  blocks_village_gate
+ROOM_UNREGISTERED 이벤트 발행
+그 방에 배정된 침대 사용자는 배정을 잃는다
+그 방을 목적지로 이동 중이던 NPC 는 현재 Action 을 취소한다
+자고 있던 NPC 는 깨어난다
+경고음과 함께 방 이름이 사라진다
 ```
 
-방벽만 `blocksMonsters === true`이므로 입구에는 방벽만 지을 수 있다.
-
-Invalid 사유는 화면에 표시한다.
-
-```text
-마을 입구에는 방벽만 세울 수 있습니다
-```
+**감사 포인트는 회수하지 않는다.** ADR 013 의 비가역 원칙이다.
 
 ---
 
-# 20. MVP에서는 자유 블록 건설을 구현하지 않는다
+# 12. 방 레시피
 
-드래곤 퀘스트 빌더즈 스타일의 블록 단위 자유 건축은 MVP 범위에서 제외한다.
-
-MVP에서는 다음 방식만 사용한다.
+## 12.1 목록
 
 ```text
-Prefab Building Placement
+priority  type         조건
+   40     DiningRoom   table >= 1
+                       그 table 에 수평 인접한 chair >= 2
+   30     Kitchen      cooking_stove >= 1 AND water_pot >= 1
+                       cooking_stove 에 수평 인접한 비고체 셀 >= 1
+   20     Bedroom      접근 가능한 bed >= 1
+   10     Storeroom    chest >= 1
+                       chest 에 수평 인접한 비고체 셀 >= 1
+    0     EmptyRoom    조건 없음
 ```
 
-예:
+`priority` 내림차순으로 검사하여 최초로 만족하는 타입을 부여한다.
+한 방은 하나의 타입만 가진다.
+
+## 12.2 접근 가능한 bed 의 정의
 
 ```text
-Farm
-Kitchen
-House
-Barrier
+bed 가 차지한 2 칸 중 적어도 한 칸이,
+그 방의 내부 셀과 수평으로 인접해 있고,
+그 인접 셀이 통행 가능하다
 ```
 
-이유는 자유 건축 시스템이 핵심 재미 검증보다 훨씬 많은 개발 비용을 필요로 하기 때문이다.
+이 조건이 없으면 벽 틈에 낀 침대가 방 판정을 통과한다.
+주민이 도달할 수 없으므로 게임이 멈춘다.
 
-MVP의 목적은
+## 12.3 식당에 음식을 요구하지 않는다
+
+DQB2 는 식탁 위의 음식을 요구한다.
+
+이 프로젝트는 요구하지 않는다.
 
 ```text
-건설 → 주민 행동 변화
+음식을 요구한다   →  식당이 있어야 요리사가 배식한다
+                    요리사가 배식해야 식당이 인식된다
+                    → 순환 조건. 게임이 시작되지 않는다
 ```
 
-가 재미있는지를 검증하는 것이다.
+음식은 요리사가 식사 시간에 식탁 위에 올리는 **연출** 이다. 판정 조건이 아니다.
 
-자유 건축은 MVP 성공 이후 검토한다.
+## 12.4 방 타입이 주민에게 주는 것
+
+```text
+Bedroom      bed 위치 목록            SleepAction 목적지
+Kitchen      cooking_stove 인접 셀     CookAction 목적지
+DiningRoom   chair 위치 목록          EatAction 목적지
+Storeroom    chest 위치               VillageStorage 의 물리적 위치
+EmptyRoom    없음
+```
+
+`RoomDetectionResult` 는 이 지점 목록을 반드시 포함한다.
+
+`findNearestRoom(type)` 이 Version 0.2 의 `findNearestBuilding(type)` 을 대체한다.
+
+## 12.5 방이 없을 때의 대체 동작
+
+```text
+Bedroom 없음     광장(종 주변)에서 RestAction. 잠들지 않는다
+Kitchen 없음     요리를 하지 않는다. crop 이 쌓인다
+DiningRoom 없음  광장에서 식사한다. 감사 포인트가 발생하지 않는다
+Storeroom 없음   종의 위치가 기본 저장소다
+```
+
+**대체 동작이 존재하는 것이 중요하다.**
+아무 방도 없는 상태에서 게임이 멈추면 안 된다.
+그리고 대체 동작은 항상 감사 포인트를 주지 않는다. 그것이 방을 지을 동기가 된다.
 
 ---
 
-# 21. Resource
+# 13. 자원과 저장소
 
-## 21.1 플레이어 자원 (Player Inventory)
-
-플레이어가 직접 들고 다니는 자원은 3종이다.
+## 13.1 플레이어 인벤토리
 
 ```text
-wood
-stone
-seed
+핫바      9 칸
+가방      27 칸
+스택      64
 ```
 
-## 21.2 마을 자원 (Village Storage)
+블록과 아이템을 구분하지 않는다. 모든 것이 블록이거나 재료다.
 
-마을이 공유하는 자원은 3종이다.
+## 13.2 마을 저장소 (VillageStorage)
 
 ```text
 seed    밭에 심을 씨앗
@@ -904,3320 +682,1534 @@ crop    수확한 작물
 food    조리된 음식
 ```
 
-## 21.3 두 저장소는 분리한다
+NPC 는 **플레이어 인벤토리를 읽거나 쓰지 않는다.**
+
+플레이어 → 마을 저장소 이동 경로는 하나다.
 
 ```text
-Player Inventory   플레이어가 채집하고 건설에 사용한다
-Village Storage    NPC가 생산하고 소비한다
+chest 에 F 로 상호작용하여 seed / crop / food 를 기부한다
 ```
 
-NPC는 **플레이어 Inventory를 절대 직접 읽거나 쓰지 않는다.**
+`chest` 가 없으면 종에 F 로 상호작용해도 같은 UI 가 열린다.
 
-플레이어 Inventory에서 Village Storage로 자원이 이동하는 경로는 두 개뿐이다.
+## 13.3 초기값
 
 ```text
-1. 밭 건설        건설 비용의 seed 3개가 Village Storage.seed 로 이전된다
-2. 씨앗 보충       밭에 [E] 로 상호작용하여 seed 를 1개씩 기부한다
+VillageStorage.seed   3
+VillageStorage.crop   0
+VillageStorage.food   0
+플레이어 인벤토리        비어 있다
 ```
-
-이 규칙이 없으면 "농부가 심을 씨앗이 어디서 오는가"가 정의되지 않는다.
 
 ---
 
-# 22. 자원 채집
-
-## 22.1 자원 노드와 획득량
+# 14. 채집
 
 ```text
-노드          획득          1회 획득량   Respawn (게임분)
-tree         wood              3           240
-rock         stone             3           240
-plant        seed              1           180
+블록            drops              respawn
+log             log × 1            나무는 재생하지 않는다 (24 그루 고정)
+leaves          seed × 1 (25%)     -
+stone           stone × 1          채석장 노출면은 게임일마다 8 블록 복구
+dirt / grass    dirt × 1           -
+sand            sand × 1           -
 ```
 
-채집 소요 시간은 실시간 1.2초이며 진행 표시를 보여준다.
+`leaves` 에서 `seed` 가 25% 확률로 나오는 것이 씨앗의 유일한 신규 공급원이다.
 
-## 22.2 Respawn은 필수 구현이다
+나무 24 그루 × 잎 약 20 개 = 약 480 회 파괴 → 기대 seed 약 120 개.
+수직 슬라이스 분량에 충분하다.
 
-채집한 노드는 사라지고 `respawnMinutes` 후 같은 위치에 다시 나타난다.
+## 14.1 결정적이지 않은 유일한 값
 
-Respawn을 선택 기능으로 두지 않는다.
+`leaves` 의 25% 만 난수를 쓴다.
 
-이유는 `seed`가 야생 식물에서만 나오기 때문이다.
-
-Respawn이 없으면 씨앗이 고갈되어 게임이 진행 불가능한 상태에 빠질 수 있다.
-
-## 22.3 Respawn 구현 방식
-
-`ResourceSystem`이 다음을 관리한다.
-
-```text
-harvested = true
-respawnAtTotalGameMinutes = 현재 totalGameMinutes + respawnMinutes
-```
-
-매 update에서 `현재 totalGameMinutes >= respawnAtTotalGameMinutes`인 노드를 되살린다.
-
-`ResourceNode` 자신은 Respawn 여부를 판단하지 않는다.
-
-시간 기준은 실시간이 아니라 **게임 시간(`totalGameMinutes`)** 이다.
-
-이렇게 해야 저장·불러오기와 Time Scale 변경에서 일관성이 유지된다.
+다른 모든 판정은 결정적이다. 테스트 가능성을 위해서다.
 
 ---
 
-# 23. Inventory
+# 15. 농사
 
-플레이어 Inventory는 수량 기반으로 구현한다.
-
-```ts
-type InventoryItemId = 'wood' | 'stone' | 'seed';
-
-type InventoryState = Record<InventoryItemId, number>;
-```
-
-예:
-
-```ts
-{
-  wood: 12,
-  stone: 8,
-  seed: 4
-}
-```
-
-Village Storage는 Inventory와 **별개의 타입**이다.
-
-```ts
-interface VillageStorage {
-  seed: number;
-  crop: number;
-  food: number;
-}
-```
-
-MVP에서는 다음 기능을 구현하지 않는다.
-
-* 무게
-* Inventory slot
-* Item durability
-* Item rarity
-* 장비
-* 아이템 정렬
-
----
-
-# 24. MVP 건물
-
-건물은 정확히 네 종류만 구현한다.
+## 15.1 밭
 
 ```text
-Farm
-Kitchen
-House
-Barrier
+farmland 블록 위에 crop 블록이 있으면 재배 중이다
 ```
 
-## 24.1 모든 건물은 진입 타일을 가진다
+플레이어는 `farmland` 를 깐다. `crop` 은 농부가 심는다.
 
-NPC 는 건물 타일 위에 설 수 없다. 건물 타일은 두 통행 레이어 모두 Blocked 다.
-
-따라서 각 건물은 **NPC 가 서서 작업하는 타일**을 하나 정의한다.
-
-```ts
-/** origin 기준 상대 좌표. 점유 영역 바깥의 통행 가능한 타일이어야 한다. */
-entranceOffset: GridPosition;
-```
+## 15.2 성장
 
 ```text
-건물      크기    entranceOffset   실제 타일
-──────────────────────────────────────────────────────
-Farm     3 × 3   (1, 3)          밭 아래 가운데
-Kitchen  2 × 2   (0, 2)          주방 아래 왼쪽
-House    4 × 4   (1, 4)          집 아래. 이것이 "문" 이다
-Barrier  1 × 1   —               사용하지 않는다
+단계          0 (심은 직후) → 1 → 2 (수확 가능)
+단계당 시간    게임 시간 4 시간
 ```
 
-이 값이 없으면 다음을 결정할 수 없다.
+성장은 농부와 무관하게 진행된다. 게임 시계만 본다.
+
+`farmland` 가 파괴되면 위의 `crop` 도 사라진다.
+
+## 15.3 농부의 반복 행동
 
 ```text
-농부가 밭의 어느 칸 앞에 서서 심는가
-요리사가 주방의 어느 칸 앞에 서서 조리하는가
-NPC 가 집의 어디로 들어가 사라지는가   (WorldQuery.getAssignedBed().door)
-식사 장소는 어디인가                  (39.2)
-```
-
-`door`, `diningSpot`, 작업 위치는 전부 다음 한 식으로 계산한다.
-
-```text
-entranceTile = building.origin + config.entranceOffset
-```
-
-건물마다 다른 규칙을 두지 않는다.
-
-Ghost Preview 는 진입 타일이 통행 불가면 경고를 표시하되, 배치를 막지는 않는다.
-MVP 맵은 건물 배치 후보 주변이 열려 있으므로 Invalid 사유로 만들 만큼 흔하지 않다.
-
----
-
-# 25. Farm
-
-기본 크기:
-
-```text
-3 × 3 Tiles
-```
-
-건설 비용:
-
-```text
-wood 6
-stone 2
-seed 3
-```
-
-건설 시 `seed 3`은 소멸하지 않고 `VillageStorage.seed`로 이전된다.
-
-## 25.1 Farm 활성화 조건
-
-```text
-Farm이 건설되어 있다
-```
-
-조건은 이것 하나다.
-
-이전 판에는 `Farmer Alive` 조건이 있었으나 삭제했다.
-
-MVP에는 **NPC 사망이 존재하지 않는다.**
-
-전투 시스템이 없고 몬스터는 방벽만 공격하므로 이 조건은 항상 참이며,
-정의되지 않은 사망 규칙을 암시해 구현자를 혼란스럽게 만든다.
-
-Farm 완성 후 농부가 농사를 시작한다.
-
-## 25.2 밭 하나는 작물 한 단위를 기른다
-
-3 × 3 타일이지만 내부를 9칸으로 나누지 않는다.
-
-밭 전체가 하나의 상태를 가지고, 한 번 수확할 때 정해진 수량이 나온다.
-
-```text
-심기   seed 1 소비
-수확   crop 4 + seed 1 획득
-```
-
-수확 시 `seed 1`이 함께 나오므로 밭 하나는 **씨앗을 자급한다.**
-
-야생 식물 채집은 밭을 새로 짓거나 늘릴 때만 필요하다.
-
-이 규칙이 없으면 씨앗이 고갈되어 진행이 막힌다.
-
----
-
-# 26. Farm Life Cycle
-
-Farm은 다음 3개 상태를 가진다.
-
-```ts
-type FarmPhase = 'empty' | 'growing' | 'ready';
-```
-
-```text
-empty     ──plant()──▶  growing
-growing   ──성장 완료──▶  ready
-ready     ──harvest()─▶  empty
-```
-
-## 26.1 상태를 3개로 줄인 이유
-
-이전 판에는 `Empty → Planted → Growing → Ready → Harvested → Empty` 6개 상태가 있었다.
-
-두 가지 문제가 있었다.
-
-```text
-Planted 와 Growing 의 전이 기준이 정의되지 않았다
-  심은 직후가 planted 라면, 언제 growing 이 되는가?
-
-Harvested 는 상태가 아니라 사건이다
-  harvest() 직후 곧바로 empty 가 되므로 머무르는 시간이 0이다
-```
-
-따라서 `planted`를 `growing`에 흡수하고 `harvested`를 삭제했다.
-
-"수확했다"는 `CROP_HARVESTED` 이벤트로 표현한다.
-
-## 26.2 성장 판정
-
-`growing` 진입 시 심은 시각을 기록한다.
-
-```ts
-interface FarmState {
-  phase: FarmPhase;
-  plantedAtTotalGameMinutes: number;
-}
-```
-
-```text
-현재 totalGameMinutes - plantedAtTotalGameMinutes >= farm.growMinutes
+VillageStorage.seed >= 1 이고 빈 farmland 가 있다
+    ↓  PlantAction
+그 farmland 로 이동 → crop 을 심는다 → seed -1
     ↓
-phase = 'ready'
-```
-
-시간 기준은 **게임 시간(`totalGameMinutes`)** 이다.
-
-실시간 ms를 쓰면 저장·불러오기와 Time Scale 변경에서 성장 타이머가 깨진다.
-
-## 26.3 농부의 반복 행동
-
-```text
-밭으로 이동
-↓
-phase 확인
-↓
-empty   → 씨앗 심기 (seed 1 필요, 없으면 대기)
-growing → 다른 일 / Idle
-ready   → 수확 (crop 4 + seed 1)
-```
-
-작물 성장은 농부가 밭 앞에 서 있지 않아도 진행된다.
-
-`FarmSystem`이 시간만으로 판정한다.
-
----
-
-# 27. Kitchen
-
-기본 크기:
-
-```text
-2 × 2 Tiles
-```
-
-건설 비용:
-
-```text
-wood 8
-stone 4
-```
-
-Kitchen이 만들어지면 Cook NPC 행동이 활성화된다.
-
-```text
-VillageStorage.crop >= 2 확인
-↓
-Kitchen 이동
-↓
-Cooking (실시간 6초)
-↓
-crop 2 감소
-food 3 증가
-```
-
-## 27.1 주방은 작물을 늘려서 음식으로 바꾼다
-
-```text
-crop 2  →  food 3
-```
-
-변환비가 1:1보다 유리한 이유는 주방의 가치를 수치로 드러내기 위해서다.
-
-작물을 그대로 먹을 수는 없다.
-
-`food`만 식사에 소비할 수 있다.
-
-## 27.2 Crop 을 월드 아이템으로 만들지 않는다
-
-작물과 음식은 화면 위의 개별 Entity가 아니라 `VillageStorage`의 숫자다.
-
-요리사가 밭에서 작물을 들고 오는 연출은 스프라이트 연출로만 표현하고,
-실제 수량 이동은 `VillageStorage`에서 처리한다.
-
-조리 과정은 애니메이션 또는 Timer로 표현한다.
-
----
-
-# 28. House
-
-기본 크기:
-
-```text
-4 × 4 Tiles
-```
-
-건설 비용:
-
-```text
-wood 12
-stone 6
-```
-
-## 28.1 수용 인원
-
-```text
-residentCapacity = 3
-```
-
-집 한 채가 침대 3개를 제공한다.
-
-초기 주민이 3명이므로 집 한 채로 전원이 잠들 수 있다.
-
-엔딩에서 주민이 4명이 되면 한 명은 침대를 배정받지 못한다.
-
-```text
-주민 3명 + 집 1채  →  housingLevel 100
-주민 4명 + 집 1채  →  housingLevel 75
-```
-
-이 하락이 "집을 하나 더 지어주고 싶다"는 다음 동기를 만든다.
-
-## 28.2 침대 배정
-
-`WorldQuery`가 침대를 배정한다.
-
-```text
-집들의 residentCapacity 합계 = 전체 침대 수
-NPC 는 배정된 침대가 있을 때만 취침한다
-```
-
-배정 결과는 집의 id 와 **문 타일**을 함께 반환한다.
-
-```text
-door = house.origin + BUILDINGS.house.entranceOffset   (24.1)
-```
-
-침대마다 다른 좌표를 두지 않는다.
-
-MVP는 건물 내부를 Scene으로 만들지 않으므로,
-같은 집에 배정된 NPC 세 명은 모두 같은 문으로 들어가 숨겨진다.
-
-배정은 NPC id 순서로 결정적으로 수행한다.
-
-같은 상황에서 매번 다른 NPC가 노숙하면 디버깅이 어렵다.
-
-## 28.3 집이 없거나 침대가 부족한 NPC
-
-```text
-22:00
-↓
-배정된 침대 없음
-↓
-plaza 로 이동
-↓
-RestAction (앉아서 밤을 보냄)
-↓
-06:00 기상
-```
-
-`RestAction`은 `SleepAction`과 다르다.
-
-```text
-SleepAction   문으로 들어가 숨겨진다. 취침 상태.
-RestAction    광장에 앉아 있다. 화면에 계속 보인다.
-```
-
-집을 짓기 전 밤에 주민들이 광장에 앉아 있는 모습이 화면에 보여야
-플레이어가 집이 필요하다는 것을 인식할 수 있다.
-
-MVP에서는 건물 내부를 별도 Scene으로 만들지 않는다.
-
-밤이 되면 NPC가 House에 접근하고 취침 상태로 변경된다.
-
-시각적으로는 다음 중 하나를 사용한다.
-
-```text
-NPC가 문으로 들어간 뒤 숨김
-```
-
-또는
-
-```text
-건물 내부가 보이는 형태
-```
-
-첫 구현에서는 전자를 사용한다.
-
----
-
-# 29. Barrier
-
-크기:
-
-```text
-1 × 1 Tile
-```
-
-건설 비용:
-
-```text
-wood 2
-stone 1
-```
-
-Barrier는 여러 개를 설치할 수 있고 개수 제한은 없다.
-
-## 29.1 Barrier는 몬스터만 막는다
-
-```text
-Monster            통과 불가
-Player             통과 가능
-NPC                통과 가능
-New Resident       통과 가능
-```
-
-방벽 이외의 건물은 **두 통행 레이어 모두 Blocked**다.
-
-집과 밭은 사람도 통과할 수 없다. 방벽만 예외다.
-
-이전 판의 기본값은 "모든 Entity에게 Collision"이었다.
-
-그 값으로는 게임이 성립하지 않는다.
-
-```text
-입구를 막는다
+성장 단계 2 인 crop 이 있다
+    ↓  HarvestAction
+그 위치로 이동 → 수확 → crop 블록 제거
     ↓
-플레이어가 숲과 채석장으로 나갈 수 없다  →  자원 채집 불가
-NPC 의 도피 경로가 제한된다
-새 주민이 마을 입구로 들어올 수 없다     →  엔딩 발생 불가
+VillageStorage.crop +1, VillageStorage.seed +1
 ```
 
-문이나 게이트 개념을 추가하면 해결되지만,
-그것은 개폐 상태·NPC의 문 통과 로직·몬스터의 문 인식을 모두 추가해야 한다.
+수확에서 `seed` 가 1 개 돌아오므로 씨앗이 고갈되지 않는다.
 
-"몬스터에게만 Collision"은 한 줄로 같은 목적을 달성한다.
+---
 
-플레이어가 얻어야 하는 감정은 다음이다.
-
-> 내가 만든 구조물이 마을을 보호했다.
-
-이 감정에는 플레이어 자신이 갇히는 것이 필요하지 않다.
-
-## 29.2 NavigationGrid는 두 개의 통행 레이어를 가진다
-
-```ts
-isWalkable(p: GridPosition, actor: 'ground' | 'monster'): boolean;
-```
+# 16. 요리
 
 ```text
-actor = 'ground'    Player / NPC 용. Barrier 를 무시한다.
-actor = 'monster'   Monster 용. Barrier 를 Blocked 로 취급한다.
+장소        Kitchen 의 cooking_stove 인접 셀
+입력        VillageStorage.crop 2
+출력        VillageStorage.food 3
+소요        게임 시간 1 시간
+조건        요리사가 배고프지 않고, Kitchen 이 인식되어 있다
 ```
 
-Pathfinding 호출 시 어느 레이어를 쓸지 명시한다.
+**작물보다 음식이 많아지는 것** 이 주방을 짓는 이유다. DQB2 와 같은 구조다.
 
-## 29.3 Barrier는 파괴되지 않는다
+요리가 끝나면 감사 포인트 +3 이 발생한다.
 
-Barrier에는 HP가 없다.
+---
 
-몬스터가 Barrier를 파괴하는 기능은 MVP에서 구현하지 않는다.
-
-이유는 Acceptance Test 6이 "몬스터가 Barrier를 통과할 수 없음"을 요구하기 때문이다.
-
-파괴 가능하면 이 테스트가 시간에 따라 실패할 수 있고,
-플레이어가 얻어야 하는 "내 구조물이 마을을 지켰다"는 확신이 흔들린다.
-
-몬스터의 `AttackObstacle` 상태는 **연출 전용**이다.
+# 17. 식사
 
 ```text
-Barrier 를 때리는 애니메이션을 재생한다
-Barrier 는 아무 피해도 받지 않는다
-attackObstacleSeconds 경과 후 Leave 로 전이한다
+식사 시각    12:00 ~ 13:00 (점심)
+            18:00 ~ 19:00 (저녁)
+1 회 소비    VillageStorage.food 1
 ```
 
-## 29.4 경로가 완전히 막힌 몬스터
+허기 수치를 만들지 않는다. `hasEatenThisMeal` 플래그만 둔다.
 
 ```text
-Monster Pathfinding 실패 (목표까지 경로 없음)
+DiningRoom 이 있다   chair 로 이동 → 앉는다 → 먹는다 → 감사 포인트 +2
+DiningRoom 이 없다   광장으로 이동 → 먹는다 → 감사 포인트 없음
+food 가 0 이다       먹지 않고 넘어간다. happinessLevel 이 내려간다
+```
+
+식사 시간에 요리사는 식탁 위에 `food` 오브젝트를 시각적으로 올린다.
+블록을 설치하지 않는다. 연출 전용 오브젝트다.
+
+---
+
+# 18. 취침
+
+```text
+취침 시각    20:00 ~ 05:00
+```
+
+## 18.1 침대 배정
+
+```text
+1 침대 = 1 주민. 고정 배정이다
+새 주민이 오면 비어 있는 침대 중 가장 가까운 것을 배정한다
+배정된 침대가 사라지면 배정이 해제되고 재배정을 시도한다
+```
+
+## 18.2 침대가 있는 주민
+
+```text
+20:00
+  ↓  SleepAction
+배정된 침대로 이동 → 눕는다 → 감사 포인트 +5 (밤당 1 회)
+  ↓
+05:00 기상 → 방에서 나온다
+```
+
+## 18.3 침대가 없는 주민
+
+```text
+20:00
+  ↓  RestAction
+광장(종 주변)으로 이동 → 앉는다
+  ↓
+05:00 기상
+```
+
+`RestAction` 은 감사 포인트를 주지 않는다. `SleepAction` 과 별개의 Action 이다.
+
+---
+
+# 19. NPC
+
+## 19.1 역할
+
+```text
+Farmer      PlantAction / HarvestAction
+Cook        CookAction / ServeAction
+Carpenter   RepairAction / InspectAction
+Villager    (레벨업으로 도착하는 주민) 역할 없음. 생활만 한다
+```
+
+## 19.2 공통 제원
+
+```text
+높이         1.8
+이동 속도     3.2 / 초
+도피 속도     5.0 / 초
+체력         10
+```
+
+NPC 는 죽지 않는다. 체력이 0 이 되면 기절 상태로 30 게임분 동안 행동하지 않는다.
+
+## 19.3 상태는 현재 Action 이다
+
+별도의 `state` 필드를 두지 않는다. ADR 008 을 그대로 유지한다.
+
+```text
+IdleAction / MoveAction / PlantAction / HarvestAction / CookAction
+ServeAction / EatAction / SleepAction / RestAction / RepairAction
+InspectAction / FleeAction / TalkAction
+```
+
+표시용 라벨은 Action 이 제공한다.
+
+## 19.4 판단 우선순위
+
+위에서 아래로 한 번만 평가한다.
+
+```text
+1  위협      반경 12 안에 몬스터가 있다        → FleeAction
+2  대화      플레이어가 대화를 걸었다           → TalkAction
+3  생리      식사 시간 / 취침 시간             → EatAction / SleepAction / RestAction
+4  역할      역할별 작업 조건을 만족한다         → 역할 Action
+5  기본      아무것도 아니면                   → IdleAction
+```
+
+## 19.5 생활 시간표
+
+```text
+05:00 ~ 07:00   기상. 방에서 나온다
+07:00 ~ 12:00   역할 작업
+12:00 ~ 13:00   점심
+13:00 ~ 18:00   역할 작업
+18:00 ~ 19:00   저녁
+19:00 ~ 20:00   자유 행동 (광장 / 모닥불 주변)
+20:00 ~ 05:00   취침
+```
+
+---
+
+# 20. Game Clock
+
+```text
+secondsPerGameHour   25 실초
+1 게임일              600 실초 = 10 분
+시작 시각             07:00, Day 1
+```
+
+90~120 분 플레이 = 약 9 ~ 12 게임일.
+
+## 20.1 DayPhase
+
+```text
+05:00 ~ 07:00   dawn
+07:00 ~ 12:00   morning
+12:00 ~ 13:00   noon
+13:00 ~ 18:00   afternoon
+18:00 ~ 20:00   evening
+20:00 ~ 05:00   night
+```
+
+## 20.2 시간 배속
+
+디버그 모드에서만 1× / 4× / 16× 를 지원한다.
+
+---
+
+# 21. World State
+
+ADR 004 를 유지한다. **아무것도 저장하지 않는 순수 계산기다.**
+
+## 21.1 계산식
+
+```text
+population     = registry.npcs.size
+
+foodLevel      = clamp(round(100 * storage.food
+                             / (population * mealsPerDay * targetDays)), 0, 100)
+                 mealsPerDay = 2, targetDays = 2
+                 population == 0 이면 100
+
+housingLevel   = clamp(round(100 * 접근 가능한 침대 수 / population), 0, 100)
+                 population == 0 이면 100
+
+safetyLevel    = 습격이 한 번도 없었으면 100
+                 아니면 round(100 * (직전 습격에서 마을 중심에 도달하지 못한 몬스터 수)
+                                  / (직전 습격의 총 몬스터 수))
+
+happinessLevel = round(foodLevel * 0.4 + housingLevel * 0.3 + safetyLevel * 0.3)
+```
+
+## 21.2 반올림 규칙
+
+모든 지표는 `Math.round` 를 마지막에 한 번만 적용한다.
+중간 계산에서 반올림하지 않는다.
+
+## 21.3 변경 API 를 제공하지 않는다
+
+```text
+increaseFood()    없다
+setPopulation()   없다
+```
+
+지표를 바꾸려면 원인이 되는 실제 상태를 바꾼다.
+
+## 21.4 safetyLevel 이 Version 0.2 와 다른 이유
+
+Version 0.2 는 `막힌 입구 타일 수 / 5` 였다.
+
+자유 건축에는 정해진 입구가 없다. 벽을 사전에 채점하면
+플레이어가 미학이 아니라 점수를 위해 벽을 쌓는다.
+
+**결과로만 판정한다.** 근거는 ADR 015 다.
+
+## 21.5 계산 시점
+
+`GameWorld.update` 의 마지막에 1 회 계산하고 프레임 내내 그 값을 공유한다.
+저장하지 않는다.
+
+---
+
+# 22. 감사 포인트
+
+## 22.1 획득
+
+```text
+주민이 침대에서 잠들었다          +5   밤당 주민 1 명 1 회
+주민이 조리를 완료했다             +3   조리 1 회당
+주민이 식당에서 식사했다           +2   식사 1 회당
+새 방 타입이 처음 인식되었다        +20  타입당 최초 1 회
+진행 이벤트를 완료했다             +15  이벤트당 1 회
+```
+
+**건설하는 순간에는 주지 않는다.** 주민이 쓰는 순간에만 준다.
+`EmptyRoom` 은 최초 인식 보너스를 주지 않는다.
+
+## 22.2 표시
+
+포인트가 발생하면 해당 주민(또는 방) 위에 `+N` 이 떠올라 사라진다.
+
+**이 연출은 필수다.** 포인트가 어디서 나왔는지 모르면 인과가 끊어진다.
+
+## 22.3 회수하지 않는다
+
+방이 해제되어도, 몬스터가 벽을 부숴도 이미 얻은 포인트는 줄지 않는다.
+
+---
+
+# 23. 마을 레벨과 종
+
+## 23.1 레벨표
+
+```text
+레벨  누적 비용   게이트 조건                                     주민 정원
+ 1     -         시작 상태                                        3
+ 2     80        인식된 방 >= 2
+                 housingLevel >= 50                               4
+ 3     200       인식된 방 >= 4
+                 foodLevel >= 50
+                 housingLevel >= 100                              5
+```
+
+레벨 4 이상은 수직 슬라이스 범위 밖이다.
+
+## 23.2 해금표
+
+```text
+레벨 1   plank / door / torch / farmland / bed / table / chair
+레벨 2   window / chest / cooking_stove / water_pot
+레벨 3   stone_brick
+```
+
+해금되지 않은 블록은 제작 UI 에 회색으로 보이고, 필요 레벨이 표시된다.
+
+**보이지 않게 숨기지 않는다.** 다음에 무엇이 오는지 알아야 계속할 이유가 생긴다.
+
+## 23.3 종을 치는 절차
+
+```text
+종에 F 로 상호작용
     ↓
-입구 방향에서 가장 가까운 Barrier 앞 타일로 이동
+종 UI 가 열린다. 감사 포인트와 게이트 조건이 전부 표시된다
     ↓
-AttackObstacle (attackObstacleSeconds)
+모든 조건을 만족하면 [종을 친다] 버튼이 활성화된다
     ↓
-Leave → Despawn
+gratitude -= cost
+villageLevel += 1
+해금 적용
+주민 정원이 늘면 다음 아침에 새 주민이 도착한다
 ```
 
-경로를 찾지 못했을 때의 동작을 정의하지 않으면
-몬스터가 제자리에서 멈춘 채 사라지지 않는 상태가 발생한다.
-
-## 29.5 safetyLevel 과 "방벽 완료"
+## 23.4 미충족 조건을 반드시 표시한다
 
 ```text
-safetyLevel = round(100 * 방벽으로 막힌 입구 타일 수 / 5)
+감사 포인트    120 / 80     OK
+인식된 방       1 / 2        부족
+housingLevel  33 / 50      부족
 ```
 
-입구는 5 타일이므로(14.1 참조) 다음과 같다.
+"칠 수 없음" 만 표시하면 안 된다.
 
-```text
-방벽 0개  →  safetyLevel 0
-방벽 3개  →  safetyLevel 60
-방벽 5개  →  safetyLevel 100   ← "방벽 완료"
-```
+## 23.5 레벨은 내려가지 않는다
 
-입구 밖에 설치한 방벽은 `safetyLevel`에 반영되지 않는다.
+게이트 조건이 다시 거짓이 되어도 이미 올린 레벨과 해금은 유지된다.
 
-플레이어가 엉뚱한 곳에 방벽을 쌓아도 엔딩이 열려서는 안 되기 때문이다.
-
-목표 UI는 진행 상황을 숫자로 보여준다.
-
-```text
-마을 입구를 막으세요  (3 / 5)
-```
+근거는 ADR 013 이다.
 
 ---
 
-# 30. NPC
+# 24. 몬스터
 
-초기 NPC는 정확히 세 명이다.
-
-```text
-Farmer
-Cook
-Carpenter
-```
-
-NPC 추가는 MVP 완료 이전에 금지한다.
-
----
-
-# 31. Farmer
-
-역할:
+## 24.1 습격
 
 ```text
-농업
+1 차 습격    villageLevel >= 2 를 달성한 뒤 첫 21:00     몬스터 3
+2 차 습격    villageLevel >= 3 을 달성한 뒤 첫 21:00     몬스터 5
 ```
 
-주요 행동:
+그 외의 밤에는 몬스터가 나오지 않는다.
+
+**상시 스폰을 하지 않는다.** 습격은 사건이어야 하며, 배경 소음이 되면 안 된다.
+
+## 24.2 제원
 
 ```text
-Idle
-Move
-Plant
-Harvest
-Eat
-Sleep
-Rest
-Flee
-Talk
+체력          3
+이동 속도      2.6 / 초
+공격력         2 (NPC / 플레이어에게)
+공격 간격      1.5 초
+파괴 속도      blockDefinition.breakSeconds × 2.0
+강제 소멸      05:00
 ```
 
----
-
-# 32. Cook
-
-역할:
+## 24.3 AI
 
 ```text
-요리
+목표 = 마을의 종 위치
+
+1  종까지의 경로를 찾는다
+2  경로가 있으면 이동한다
+3  경로가 없으면
+     목표 방향으로 가장 가까운 "파괴 가능한 블록"(terrain = false)을 고른다
+     그 앞 통행 가능 셀로 이동한다
+     파괴 행동을 시작한다
+     블록이 사라지면 통행 그래프가 갱신되고 1 로 돌아간다
+4  파괴 가능한 블록도 없으면 (완전히 지형에 막힘)
+     가장 가까운 NPC 또는 플레이어를 향한다
+     그것도 불가능하면 제자리에서 배회하다 05:00 에 소멸한다
 ```
 
-주요 행동:
+## 24.4 마을 중심 도달 판정
 
 ```text
-Idle
-Move
-Cook
-Eat
-Sleep
-Rest
-Flee
-Talk
+몬스터가 종으로부터 반경 6 안에 들어오면 "도달" 로 기록한다
 ```
 
-작물을 밭에서 주방으로 옮기는 별도 행동(`CollectCrop`)은 두지 않는다.
+이 기록이 `safetyLevel` 계산의 분자를 만든다.
 
-작물은 `VillageStorage`의 숫자이므로 "가져오는" 단계에 상태 변화가 없다(27.2).
-
----
-
-# 33. Carpenter
-
-역할:
+## 24.5 습격 종료
 
 ```text
-마을 관리 / 방어 이벤트
-```
-
-주요 행동:
-
-```text
-Idle
-Move
-Inspect
-Eat
-Sleep
-Rest
-Flee
-Talk
-```
-
-향후 자동 건설이나 수리 기능으로 확장할 수 있으나 MVP에는 포함하지 않는다.
-
----
-
-# 34. NPC AI 목표
-
-NPC가 실제 인간처럼 생각하는 시스템을 만들지 않는다.
-
-목표는 다음 하나이다.
-
-> 플레이어가 보기에는 주민이 자신의 목적을 가지고 살아가는 것처럼 보여야 한다.
-
----
-
-# 35. NPC State
-
-## 35.1 Action이 NPC 상태의 유일한 원천이다
-
-NPC의 상태는 **현재 실행 중인 Action**이다.
-
-`npc.state`라는 별도의 필드를 따로 두고 관리하지 않는다.
-
-```ts
-type NPCActionKind =
-  | 'idle'
-  | 'moveTo'
-  | 'plant'
-  | 'harvest'
-  | 'cook'
-  | 'inspect'
-  | 'eat'
-  | 'sleep'
-  | 'rest'
-  | 'flee'
-  | 'talk';
-```
-
-## 35.2 표시용 상태 라벨
-
-애니메이션과 Debug Panel에 필요한 표시 상태는 Action이 제공한다.
-
-```ts
-type NPCStateLabel =
-  | 'idle'
-  | 'moving'
-  | 'working'
-  | 'eating'
-  | 'sleeping'
-  | 'resting'
-  | 'fleeing'
-  | 'talking';
-```
-
-```text
-Action              stateLabel
-────────────────────────────────
-idle                idle
-moveTo              moving
-plant / harvest     working
-cook                working
-inspect             working
-eat                 eating
-sleep               sleeping
-rest                resting
-flee                fleeing
-talk                talking
-```
-
-`npc.state`가 필요하면 `npc.currentAction.stateLabel`을 읽는다.
-
-## 35.3 왜 State 필드를 없애는가
-
-State 필드와 Action을 동시에 두면 진실의 원천이 두 개가 된다.
-
-```text
-npc.state = 'working'
-npc.currentAction = HarvestAction
-```
-
-둘을 일치시키는 코드가 모든 전이마다 필요해지고,
-한쪽만 갱신하는 버그가 반드시 발생한다.
-
-Action 구조를 도입한 목적이 거대한 switch문 제거였는데,
-State 필드를 남기면 `Action ↔ State` 동기화 switch문이 새로 생긴다.
-
----
-
-# 36. NPC AI 방식
-
-MVP에서는 다음 방식을 조합한다.
-
-```text
-Schedule
-+
-Finite State Machine
-+
-Priority Decision
-```
-
-LLM은 사용하지 않는다.
-
-복잡한 Behavior Tree도 MVP에서는 사용하지 않는다.
-
----
-
-# 37. NPC Priority
-
-NPC 행동은 우선순위에 의해 결정한다.
-
-```text
-1. 위험 회피      threatNearby 이면 Flee
-2. 필수 스케줄    식사 시간 / 취침 시간
-3. 직업 행동      농사 / 요리 / 점검
-4. 자유 행동      Idle / 광장 배회
-```
-
-## 37.1 우선순위는 4단계다
-
-이전 판에는 1번과 3번 사이에 "생존 행동"이 있었다.
-
-`생존 행동`은 Hunger 수치를 전제한다.
-
-그러나 MVP는 Hunger 수치를 구현하지 않고 **일정 기반 식사**를 사용한다
-(39장, `ARCHITECTURE.md` 40장).
-
-따라서 그 단계는 비어 있는 단계이며 삭제했다.
-
-배고픔에 해당하는 판단은 2번 "필수 스케줄"이 담당한다.
-
-## 37.2 판정은 위에서 아래로 한 번만
-
-```text
-Monster Nearby
-
-→ 현재 Action cancel
-
-→ Flee
-```
-
-위 단계가 성립하면 아래 단계는 평가하지 않는다.
-
-여러 단계를 점수로 합산하지 않는다. (Utility AI를 쓰지 않는다)
-
----
-
-# 38. NPC 이동
-
-NPC는 Tile 기반 Pathfinding을 사용한다.
-
-기본 알고리즘:
-
-```text
-A*
-```
-
-Pathfinding은 Grid 기반으로 작성한다.
-
-MVP에서는 별도 Pathfinding Dependency를 필수로 사용하지 않는다.
-
-가능하면 프로젝트 내부의 단순 A* 구현으로 시작한다.
-
-## 38.1 통행 레이어는 두 개다
-
-NavigationGrid는 다음 정보를 관리한다.
-
-```text
-Map Collision   Collision 레이어 타일
-Building        건물이 점유한 타일 (방벽 제외)
-Barrier         방벽 타일
-```
-
-그리고 두 개의 통행 레이어를 제공한다.
-
-```text
-actor = 'ground'    Player / NPC.  Barrier 를 통과 가능으로 취급
-actor = 'monster'   Monster.       Barrier 를 Blocked 로 취급
-```
-
-Pathfinding을 호출할 때 어느 레이어를 쓸지 반드시 명시한다.
-
-```text
-NPC 이동 / 도피   'ground'
-Monster 이동      'monster'
-```
-
-이유는 29.1에 있다.
-
-## 38.2 Temporary Obstacle 을 두지 않는다
-
-이전 판에는 `Temporary Obstacle`이 고려 대상에 있었으나 삭제했다.
-
-MVP에는 일시적으로 통행을 막는 오브젝트가 존재하지 않는다.
-
-자원 노드는 통행을 막지 않고, 건물과 방벽은 영구적이다.
-
-사용하지 않을 개념을 그리드에 미리 넣지 않는다.
-
----
-
-# 39. NPC 생활 시간표
-
-주민에게 기본 생활 패턴을 제공한다.
-
-`NPCSchedule`은 현재 시각을 다음 4종의 활동 중 하나로 변환한다.
-
-```ts
-type ScheduledActivity = 'eat' | 'work' | 'free' | 'sleep';
-```
-
-```text
-시각      ScheduledActivity   의미
-────────────────────────────────────────────────
-06:00    free                기상 후 자유 행동
-07:00    eat                 아침
-08:00    work                오전 업무
-12:00    eat                 점심
-13:00    work                오후 업무
-18:00    eat                 저녁
-20:00    free                자유 시간
-22:00    sleep               취침
-```
-
-`wake`라는 활동을 따로 두지 않는다.
-
-기상은 `sleep`이 끝나는 것으로 표현되며, 06:00 이후의 행동은 `free`와 같다.
-값을 하나 늘려도 그 값에 대응하는 판단 규칙이 없으면 비어 있는 분기가 된다.
-
-`ScheduledActivity`와 우선순위(37장)의 대응은 다음과 같다.
-
-```text
-eat / sleep   →  2단계 필수 스케줄
-work          →  3단계 직업 행동
-free          →  4단계 자유 행동 (Idle / 광장 배회)
-```
-
-정확한 시간은 향후 플레이 테스트로 조정한다.
-
-## 39.1 식사 시간대는 1시간이다
-
-```text
-eat 시간대   07:00 ~ 08:00 / 12:00 ~ 13:00 / 18:00 ~ 20:00
-```
-
-한 시간대에 NPC는 **한 번만** 먹는다.
-
-`hasEatenThisMeal` 플래그로 관리하며, 식사 시간대가 바뀌면 초기화한다.
-
-플래그가 없으면 같은 시간대에 음식을 계속 먹어 저장소가 순식간에 비워진다.
-
-## 39.2 식사 장소
-
-식사 장소는 다음 순서로 결정한다.
-
-```text
-1. 주방이 있으면   →  주방의 진입 타일 (24.1)
-2. 주방이 없으면   →  plaza
-```
-
-`WorldQuery.findDiningSpot()`이 이 규칙을 구현한다.
-
-주방을 우선하는 이유는 첫 번째 저녁(51장)의 연출 때문이다.
-
-주민들이 조명과 연기가 있는 주방 앞에 모여야
-"내가 만든 주방에서 저녁이 시작됐다"는 것이 보인다.
-
-주방이 없는 동안에는 음식 자체가 존재하지 않으므로 이 경로는 사실상 쓰이지 않지만,
-`null`을 반환하면 식사 판단에 분기가 하나 더 생기므로 항상 유효한 위치를 반환한다.
-
----
-
-# 40. Game Clock
-
-게임 내부 시간을 구현한다.
-
-기본 속도:
-
-```text
-1 Game Hour = 20 Real Seconds
-```
-
-따라서 한 게임 하루는 약:
-
-```text
-8 Real Minutes
-```
-
-게임 시작 시간:
-
-```text
-Day 1  08:00
-```
-
-내부적으로는 누적 게임분으로 관리한다.
-
-```text
-startTotalGameMinutes = 8 * 60 = 480
-```
-
-Time Scale은 설정값으로 분리한다.
-
-하드코딩하지 않는다.
-
-## 40.1 페이싱 주의사항
-
-하루가 실시간 8분이라는 것은 다음을 뜻한다.
-
-```text
-08:00 → 18:00 (첫 저녁까지)     10 게임시간  =  3분 20초
-22:00 → 06:00 (밤)              8 게임시간  =  2분 40초
-20~30분 세션                    2.5 ~ 3.75 게임일
-```
-
-첫 저녁까지 3분 20초 안에 다음을 전부 끝내야 한다.
-
-```text
-농부와 대화  →  나무·돌 채집  →  밭 건설  →  작물 성장(2게임시간)
-→  수확  →  주방 건설  →  조리
-```
-
-여유가 거의 없다.
-
-## 40.2 그래서 진행을 시간에 걸지 않는다
-
-페이즈 진행 조건을 게임 시간이 아니라 **플레이어 행동 완료**에 두었다(45장).
-
-작물이 자라기 전에 저녁이 되어도 페이즈가 유실되지 않는다.
-
-늦어지면 그 다음 저녁에 식사 장면이 발생한다.
-
-## 40.3 첫 플레이테스트 1순위 튜닝 항목
-
-```text
-balance.gameClock.realSecondsPerGameHour
-```
-
-이 값이 MVP에서 가장 먼저 조정될 수치다.
-
-20초가 너무 빠르면 30~40초로 올린다.
-
-밤이 지루하면 취침 시각을 늦추기 전에 이 값을 먼저 검토한다.
-
-밤에도 플레이어는 자원 채집과 건설을 계속할 수 있어야 한다.
-NPC가 전원 취침 중이라고 해서 플레이어의 조작을 막지 않는다.
-
-## 40.4 엔딩 직전의 대기 구간
-
-`EVENT_NEW_RESIDENT`는 `dayPhase == 'morning'`을 조건으로 가진다(45장).
-
-`morning`은 06:00 ~ 08:00, 즉 2 게임시간 = **실시간 40초**다.
-
-플레이어가 방벽을 낮에 완성하면 다음 아침까지 최대 21 게임시간,
-즉 **실시간 약 7분**을 기다린다.
-
-이것은 버그가 아니라 의도된 연출이다. 새 주민은 아침에 와야 한다.
-
-다만 아무 안내 없이 7분을 기다리게 하면 플레이어는 진행이 막혔다고 느낀다.
-
-따라서 조건이 충족되어 대기 중일 때 목표를 바꾼다(60.4).
-
-이 대기 시간이 실제로 지루한지는 첫 플레이테스트의 2순위 확인 항목이다.
-`realSecondsPerGameHour`를 올리면 대기도 함께 길어진다는 점에 주의한다.
-
----
-
-# 41. Day / Night
-
-시간에 따라 화면 환경이 변화한다.
-
-```text
-06:00 Morning
-
-08:00 Day
-
-18:00 Evening
-
-20:00 Night
-```
-
-최소한 다음 차이를 표현한다.
-
-* 밝기
-* 하늘/화면 Tint
-* 집 조명
-* NPC 행동
-* Monster Spawn
-
----
-
-# 42. World State
-
-World State는 마을 전체 상태를 0~100 지표로 표현한다.
-
-```ts
-interface WorldStateView {
-  foodLevel: number;       // 0 ~ 100
-  safetyLevel: number;     // 0 ~ 100
-  housingLevel: number;    // 0 ~ 100
-  happinessLevel: number;  // 0 ~ 100
-  population: number;      // 정수
-}
-```
-
-## 42.1 World State는 아무것도 저장하지 않는다
-
-모든 값은 **매 조회 시 계산되는 파생값**이다.
-
-`WorldState`는 변경 API를 제공하지 않는다.
-
-```text
-increaseFood()      없다
-increaseSafety()    없다
-increaseHousing()   없다
-```
-
-지표를 바꾸려면 **원인이 되는 실제 상태를 바꾼다.**
-
-```text
-foodLevel 을 올리고 싶다      →  음식을 만든다 (VillageStorage.food++)
-safetyLevel 을 올리고 싶다     →  입구에 방벽을 세운다
-housingLevel 을 올리고 싶다    →  집을 짓는다
-```
-
-## 42.2 계산식
-
-```text
-foodLevel =
-  clamp(0, 100, round(100 * storage.food / foodTarget))
-
-  foodTarget = population
-             * balance.meal.mealsPerDay
-             * balance.meal.foodPerMeal
-             * balance.worldState.foodLevelTargetDays
-```
-
-```text
-safetyLevel =
-  round(100 * 방벽으로 막힌 입구 타일 수 / balance.village.gateTiles)
-```
-
-```text
-housingLevel =
-  clamp(0, 100, round(100 * 전체 침대 수 / population))
-```
-
-```text
-happinessLevel =
-  round( foodLevel    * 0.4
-       + housingLevel * 0.3
-       + safetyLevel  * 0.3 )
-```
-
-```text
-population = EntityRegistry 의 NPC 수
-```
-
-## 42.2.1 반올림 규칙
-
-모든 지표는 **`Math.round` (0.5 는 올림)** 를 사용한다.
-
-```text
-72.4  →  72
-72.5  →  73
-72.6  →  73
-```
-
-언어와 라이브러리에 따라 0.5의 처리가 다르므로 반드시 명시한다.
-
-```text
-JavaScript Math.round(72.5)   →  73   (half-up)
-Python     round(72.5)        →  72   (banker's rounding)
-```
-
-`happinessLevel`은 가중 평균이므로 `.5`가 자주 발생한다.
-
-예: `foodLevel 50, housingLevel 75, safetyLevel 100`
-→ `50*0.4 + 75*0.3 + 100*0.3 = 72.5` → **73**
-
-이 규칙을 정하지 않으면 같은 입력에 대해 테스트가 환경에 따라 실패한다.
-
-`clamp`은 반올림 **후** 적용한다.
-
-## 42.3 계산 예시
-
-초기 상태 (주민 3명, 건물 없음, food 0):
-
-```text
-foodTarget    = 3 * 3 * 1 * 2 = 18
-foodLevel     = 0
-safetyLevel   = 0
-housingLevel  = 0
-happinessLevel= 0
-population    = 3
-```
-
-첫 사이클 완료 (주민 3명, food 12, 집 1채, 방벽 5개):
-
-```text
-foodLevel     = round(100 * 12 / 18) = 67
-safetyLevel   = 100
-housingLevel  = round(100 * 3 / 3)   = 100
-happinessLevel= round(67*0.4 + 100*0.3 + 100*0.3) = 87
-population    = 3
-```
-
-새 주민 도착 직후 (주민 4명):
-
-```text
-foodTarget    = 4 * 3 * 1 * 2 = 24
-foodLevel     = round(100 * 12 / 24) = 50
-housingLevel  = round(100 * 3 / 4)   = 75
-happinessLevel= round(50*0.4 + 75*0.3 + 100*0.3) = 73
-```
-
-주민이 한 명 늘어난 것만으로 세 지표가 동시에 내려간다.
-
-이것이 다음 건설 동기가 된다.
-
-## 42.4 왜 파생값으로 만드는가
-
-이전 판은 `WorldState`가 값을 저장하고 건물이 그 값을 직접 올리는 구조였다.
-
-세 가지 문제가 있었다.
-
-**1. 건물 효과의 키가 WorldState 필드와 일치하지 않았다**
-
-```text
-WorldState 필드   foodLevel, safetyLevel, housingLevel, happinessLevel
-건물 효과         foodProduction, foodEfficiency, happiness, housing, safety
-```
-
-`worldStateEffects: Partial<WorldStateData>`로는
-`foodProduction`과 `foodEfficiency`를 표현할 수 없었다.
-
-**2. 지표가 절대 내려가지 않았다**
-
-건물을 지어야 올라가고 내려가는 규칙이 없으므로 값은 단조 증가한다.
-
-`foodLevel < 20` 같은 조건은 **구조적으로 발생할 수 없었다.**
-
-**3. population 이 이중으로 존재했다**
-
-`WorldState.population`과 `EntityRegistry.npcs.size`가 별도로 존재하고
-동기화 주체가 정의되지 않았다.
-
-`ARCHITECTURE.md`의 `WorldState ≠ EntityRegistry` 경계를 스스로 위반했다.
-
-파생값으로 만들면 세 문제가 동시에 사라진다.
-
-지표와 실제 마을 모습이 어긋날 수 없고,
-소비가 있으므로 내려가고, 진실의 원천이 하나다.
-
-## 42.5 저장하지 않는다
-
-`WorldState`는 `SaveData`에 포함되지 않는다.
-
-저장하는 것은 원인이 되는 실제 상태다.
-
-```text
-VillageStorage
-Buildings
-NPC 목록
-```
-
-불러오기 후 이 셋으로부터 지표가 다시 계산된다.
-
----
-
-# 43. 건물과 World State
-
-건물은 World State 필드를 직접 올리지 않는다.
-
-건물은 마을이 무언가를 **할 수 있게** 만들고, 그 결과가 지표에 나타난다.
-
-```text
-건물     직접 효과                       지표에 나타나는 경로
-──────────────────────────────────────────────────────────────
-Farm     농부가 crop 을 생산할 수 있다      crop → food → foodLevel
-Kitchen  crop 2 를 food 3 으로 바꾼다       food → foodLevel
-House    침대 3 개가 생긴다                침대 수 → housingLevel
-Barrier  입구 타일 1 칸을 막는다            커버리지 → safetyLevel
-```
-
-## 43.1 BuildingConfig 에 worldStateEffects 를 두지 않는다
-
-```ts
-// 사용하지 않는다
-interface BuildingConfig {
-  worldStateEffects: Partial<WorldStateData>;
-}
-```
-
-대신 건물의 기능을 기술한다.
-
-```ts
-interface BuildingConfig {
-  type: BuildingType;
-  width: number;
-  height: number;
-  cost: Partial<Record<InventoryItemId, number>>;
-
-  /** NPC 가 서는 타일. origin 기준 상대 좌표. 점유 영역 바깥 (24.1) */
-  entranceOffset: GridPosition;
-
-  /** 이 건물이 제공하는 침대 수. 집만 > 0 */
-  residentCapacity: number;
-
-  /** 이 건물이 몬스터의 통행을 막는가. 방벽만 true (19.2 / 29.1) */
-  blocksMonsters: boolean;
-}
-```
-
-숫자를 두 곳에서 관리하지 않으므로 어긋날 수 없다.
-
----
-
-# 44. Event System
-
-Event는 특정 조건이 충족되면 발생한다.
-
-**인터페이스의 정본은 `ARCHITECTURE.md` 51장이다.**
-
-```ts
-interface GameEventDefinition {
-  id: GameEventId;
-  once: boolean;
-
-  canTrigger(context: EventContext): boolean;
-
-  /** 부작용을 직접 일으키지 않고 수행할 커맨드를 반환한다. */
-  execute(context: EventContext): GameEventCommand[];
-}
-```
-
-`execute`가 `void`가 아니라 커맨드 목록을 반환하는 이유는
-이벤트 정의를 순수 함수로 유지하여 조건과 결과를 그대로 테스트하기 위해서다.
-
-이벤트 정의가 `DialogueSystem`이나 `MonsterSystem`을 직접 호출하지 않는다.
-
-관련 ADR:
-
-```text
-docs/adr/007-game-event-commands.md
-```
-
----
-
-# 45. MVP 필수 이벤트
-
-MVP에서는 다음 6개 이벤트만 구현한다.
-
-**이 표가 이벤트 조건의 정본이다.**
-
-```text
-id                      canTrigger 조건                              once
-──────────────────────────────────────────────────────────────────────────
-EVENT_FARM_REQUEST      항상 참 (게임 시작 시 즉시)                     true
-EVENT_KITCHEN_REQUEST   storage.crop >= 1                            true
-EVENT_HOUSE_REQUEST     storage.food >= 1                            true
-EVENT_FIRST_MONSTER     EVENT_HOUSE_REQUEST 완료
-                        AND 집이 1채 이상 존재
-                        AND dayPhase == 'night'                      true
-EVENT_BARRIER_REQUEST   EVENT_FIRST_MONSTER 완료
-                        AND 살아있는 몬스터 수 == 0                     true
-EVENT_NEW_RESIDENT      EVENT_BARRIER_REQUEST 완료
-                        AND safetyLevel == 100
-                        AND dayPhase == 'morning'                    true
-```
-
-## 45.1 모든 조건은 결정적이다
-
-이전 판에는 "첫 번째 밤 **또는** 두 번째 밤"이라는 조건이 있었다.
-
-`canTrigger(context): boolean`은 `또는`을 표현할 수 없다.
-
-같은 게임 상태에서 항상 같은 결과가 나와야 한다.
-
-## 45.2 진행은 플레이어 행동이 이끈다
-
-6개 중 4개는 **플레이어 행동의 결과**를 조건으로 한다.
-
-```text
-EVENT_KITCHEN_REQUEST   플레이어가 밭을 지어줬으므로 작물이 나왔다
-EVENT_HOUSE_REQUEST     플레이어가 주방을 지어줬으므로 음식이 나왔다
-EVENT_BARRIER_REQUEST   몬스터가 왔고 플레이어가 그것을 목격했다
-EVENT_NEW_RESIDENT      플레이어가 입구를 다 막았다
-```
-
-시간 조건(`dayPhase`)은 **타이밍을 다듬는 용도로만** 붙는다.
-
-단독 조건으로는 사용하지 않는다.
-
-```text
-나쁜 조건    dayPhase == 'night'                      가만히 있어도 발생
-좋은 조건    집을 지었다 AND dayPhase == 'night'        플레이어 행동이 먼저
-```
-
-## 45.3 이벤트 완료 시점
-
-`EVENT_FIRST_MONSTER`의 조건에 있는 "`EVENT_HOUSE_REQUEST` 완료"는
-**대사 창이 닫힌 것이 아니라** 해당 이벤트가 `triggeredEvents`에 들어간 것을 뜻한다.
-
-이벤트 조건은 UI 상태에 의존하지 않는다.
-
----
-
-# 46. 첫 플레이 시나리오
-
-게임 시작 시 플레이어가 폐허 마을에 도착한다.
-
-마을에는 세 주민이 존재한다.
-
-```text
-Farmer
-Cook
-Carpenter
-```
-
-마을은 조용하고 일부 시설이 파괴되어 있다.
-
----
-
-# 47. Phase 1 — Farm
-
-## 47.1 이벤트는 자동 발생하지만 대사는 플레이어가 연다
-
-`EVENT_FARM_REQUEST`는 게임 시작 시 즉시 `canTrigger`가 참이 된다.
-
-그러나 대사 창이 플레이어를 붙잡고 먼저 뜨지는 않는다.
-
-```text
-게임 시작
-↓
-EVENT_FARM_REQUEST 발생
-↓
-Objective     "마을을 둘러보세요."
-Farmer 머리 위  대화 가능 표시 (!)
-Build Menu    Farm 해금            ← 대사와 무관하게 이 시점에 해금된다
-↓
-플레이어가 Farmer 에게 접근하여 [E]
-↓
-Dialogue      "밭이 망가져서 먹을 것을 만들 수 없어."
-↓
-Dialogue 종료
-↓
-Objective     "농부를 위해 밭을 복구하세요."
-```
-
-## 47.1.1 해금은 이벤트 시점에, 목표 문구만 대사 이후에 바뀐다
-
-이전 판의 흐름은 `Dialogue 종료 → Farm 해금`이었다.
-
-그 순서는 구현할 수단이 없었다.
-
-```text
-GameEventCommand 에 "대사가 끝나면 ~한다" 를 표현할 수단이 없다
-GameEventMap 에 대사 종료를 알리는 이벤트가 없다
-54장은 "이벤트 조건이 Dialogue 에 의존해선 안 된다" 고 금지한다
-```
-
-또한 47.2가 "대화하지 않고 바로 밭을 지어도 진행된다"고 명시하는데,
-해금이 대사에 걸려 있으면 애초에 지을 수가 없어 두 규칙이 충돌한다.
-
-따라서 다음과 같이 나눈다.
-
-```text
-건물 해금     이벤트 발생 즉시. unlockBuilding 커맨드.
-대화 가능 표시 이벤트 발생 즉시. markNpcHasDialogue 커맨드.
-목표 문구     대사가 끝난 뒤 바뀐다.
-```
-
-목표 문구만 대사 이후에 바뀌는 이유는 **정보의 순서** 때문이다.
-
-플레이어가 이유를 듣기 전에 "밭을 복구하세요"라고 지시하면
-Problem → Build 순서가 Build → Problem 으로 뒤집힌다.
-
-대사 종료를 목표에 연결하는 방법은 다음 하나다.
-
-```text
-DialogueSystem 이 대사 종료 시 DIALOGUE_ENDED { dialogueId } 를 emit 한다
+모든 몬스터가 처치되었거나 소멸했다
     ↓
-ObjectiveSystem 이 구독한다
-    ↓
-data/dialogues.ts 의 해당 대사에 objectiveOnEnd 가 있으면 적용한다
+RAID_ENDED 이벤트 발행
+safetyLevel 계산에 쓰일 (도달 수 / 총 수) 를 기록한다
 ```
 
+---
+
+# 25. 파괴와 수리
+
+## 25.1 DamageLog
+
+몬스터가 블록을 파괴하면 기록한다.
+
 ```ts
-interface DialogueDefinition {
-  id: string;
-  speaker: NPCRole;
-  lines: string[];
-  /** 대사가 끝났을 때 설정할 목표. 없으면 목표를 바꾸지 않는다. */
-  objectiveOnEnd?: Objective;
+interface DamageEntry {
+  pos: BlockPos;
+  blockId: number;      // 파괴되기 전의 블록
+  gameTime: number;
 }
 ```
 
-`DialogueSystem`은 자신이 무슨 목표를 세울지 알지 못하고,
-`ObjectiveSystem`은 대사 내용을 알지 못한다.
-
-둘을 잇는 것은 데이터이며, 진행 조건은 여전히 게임 상태만으로 판정된다.
-
-## 47.2 이벤트 조건과 대사는 분리한다
-
-위 흐름에서 **다음 이벤트의 조건은 대사와 무관하다.**
-
-`EVENT_KITCHEN_REQUEST`의 조건은 `storage.crop >= 1`이다.
-
-플레이어가 농부와 대화하지 않고 건설 메뉴에서 바로 밭을 지어도 진행된다.
-
-대사는 이벤트의 **결과로 실행되는 커맨드**이지, 다음 이벤트의 조건이 아니다.
-
-이것이 `ARCHITECTURE.md`의 "진행 조건은 게임 상태를 기준으로 한다"를 만족하는 방식이다.
-
-플레이어가 주변에서 자원을 수집한다.
-
-Farm을 건설한다.
-
----
-
-# 48. Farm 완료 연출
-
-Farm이 완성되는 즉시 Farmer가 반응해야 한다.
-
-Farmer가 Farm을 발견한다.
+## 25.2 목수의 수리
 
 ```text
-Farm 확인
-↓
-Farm으로 이동
-↓
-작업 시작
+낮 시간(07:00 ~ 18:00)에만 수행한다
+하루 최대 repairPerDay = 8 블록
+수리 1 블록당 게임 시간 15 분
+재료를 소비하지 않는다
 ```
 
-플레이어가 아무 행동을 하지 않아도 NPC가 직접 움직여야 한다.
+재료를 소비하지 않는 이유는 창고 관리가 새 밸런스 축이 되기 때문이다.
+대신 **하루 8 블록** 이라는 상한이 플레이어의 개입 여지를 남긴다.
 
-이 장면은 MVP의 가장 중요한 장면 중 하나이다.
+## 25.3 플레이어의 수리
 
----
+플레이어는 그냥 블록을 다시 놓으면 된다. 특별한 규칙이 없다.
 
-# 49. Phase 2 — Kitchen
-
-작물이 처음 수확되면 Kitchen Event가 시작된다.
-
-Cook:
+## 25.4 아침 피해 보고
 
 ```text
-"이걸 요리할 곳이 있으면 좋겠어."
+07:00 에 지난밤 DamageLog 가 비어 있지 않으면
+    피해 요약 패널을 띄운다
+    "지난밤 블록 12 개가 파괴되었습니다"
+    파괴 좌표를 월드에 반투명 붉은 표시로 나타낸다 (수리될 때까지)
 ```
-
-플레이어가 Kitchen을 건설한다.
 
 ---
 
-# 50. Kitchen 완료 연출
-
-Cook가 다음 행동을 수행한다.
+# 26. 플레이어 전투
 
 ```text
-Crop 확인
-↓
-Crop 획득
-↓
-Kitchen 이동
-↓
-Cooking
-↓
-Food 생성
+공격          좌클릭 (블록이 아닌 몬스터를 조준했을 때)
+공격력         1
+공격 간격      0.5 초
+사거리         2.5
+넉백          약하게
 ```
 
-저녁 시간이 되면 주민 세 명이 모여 식사를 한다.
+무기 / 장비 / 스킬을 구현하지 않는다.
+
+플레이어 체력이 0 이 되면 종 옆에서 부활하고, 인벤토리를 잃지 않는다.
+게임 오버를 두지 않는다.
 
 ---
 
-# 51. 첫 번째 저녁
+# 27. 진행 이벤트
 
-첫 저녁은 중요한 감정적 보상 장면이다.
-
-반드시 다음 연출 중 일부를 포함한다.
-
-* Kitchen 조명
-* 연기
-* 음식
-* 주민 이동
-* 주민 식사
-* 짧은 대화 또는 감정 표시
-
-플레이어는 이 장면을 보면서
+## 27.1 목록
 
 ```text
-마을이 살아나기 시작했다.
+id                      조건                                      보상 / 결과
+EVENT_ARRIVAL           게임 시작                                  목표: "섬을 둘러보세요"
+EVENT_FARM_REQUEST      Farmer 와의 첫 대화를 마쳤다                 목표: 밭을 만든다
+EVENT_KITCHEN_REQUEST   VillageStorage.crop >= 3                   목표: 주방을 만든다
+EVENT_BEDROOM_REQUEST   VillageStorage.food >= 3                   목표: 침실을 만든다
+EVENT_BELL_REQUEST      인식된 방 >= 2                             목표: 종을 친다
+EVENT_WALL_REQUEST      1 차 습격이 끝났다                          목표: 마을을 벽으로 막는다
+EVENT_NEW_RESIDENT      villageLevel >= 3                          새 주민 도착
+EVENT_SLICE_END         2 차 습격이 끝난 뒤 첫 07:00                엔딩 연출
 ```
 
-는 느낌을 받아야 한다.
+8 개다.
 
----
+## 27.2 모든 조건은 결정적이다
 
-# 52. Phase 3 — House
+게임 상태만으로 참 / 거짓을 판정할 수 있다.
+"첫 번째 밤 또는 두 번째 밤" 같은 모호한 조건을 쓰지 않는다.
 
-주민이 제대로 잠들 공간이 필요하다는 이벤트가 발생한다.
+## 27.3 완료된 이벤트는 롤백되지 않는다
 
-플레이어가 House를 건설한다.
+조건이 다시 거짓이 되어도 완료 상태를 유지한다.
 
-밤이 되면 주민이 House로 이동한다.
+몬스터가 벽을 부술 수 있게 되었으므로(ADR 015) 이 규칙이 필수다.
 
----
+## 27.4 이벤트와 대사를 분리한다
 
-# 53. House 완료 연출
-
-NPC:
+ADR 010 을 유지한다.
 
 ```text
-House 이동
-↓
-Door 접근
-↓
-Sleep 상태
+이벤트 발생          →  해금이 적용되고, NPC 머리 위에 대화 표시가 뜬다
+플레이어가 대화한다    →  목표 문구가 바뀐다
 ```
 
-집 내부에는 조명이 켜진다.
+해금을 대사에 걸지 않는다. 플레이어가 대화를 건너뛰어도 진행이 막히지 않는다.
 
 ---
 
-# 54. Phase 4 — Monster
+# 28. 플레이 시나리오
 
-`EVENT_FIRST_MONSTER`의 조건은 다음이다.
-
-```text
-EVENT_HOUSE_REQUEST 완료
-AND 집이 1채 이상 존재
-AND dayPhase == 'night'
-```
-
-즉 **집을 지은 그날 밤**에 발생한다.
-
-"첫 번째 밤 또는 두 번째 밤"이라는 비결정적 표현은 사용하지 않는다.
-
-외곽 위험 지역의 `monster_spawn` 위치에서 Monster가 나타난다.
-
-스폰 수:
+## Phase 0 — 도착 (0 ~ 10 분)
 
 ```text
-3
+EVENT_ARRIVAL
+목표          "섬을 둘러보세요"
 ```
 
-`balance.monster.spawnCount`로 조정한다.
+플레이어가 폐허 마을에 도착한다. 주민 3 명의 머리 위에 대화 표시가 있다.
 
-## 54.1 집을 지은 밤에 몬스터가 오는 이유
+대사가 먼저 시작되지 않는다. 플레이어가 다가가는 것이 첫 행동이다.
 
-주민들이 처음으로 집에 들어가 잠든 밤에 위협이 온다.
+이 구간에서 플레이어가 배워야 하는 것:
 
-지켜야 할 것이 생긴 직후에 그것을 잃을 수 있다는 상황을 만든다.
+```text
+움직인다 / 나무를 벤다 / 흙을 판다 / 블록을 놓는다
+```
 
-집이 없는 상태에서 몬스터가 오면 주민들은 광장에 앉아 있다가 도망치고,
-플레이어는 무엇을 지키는지 느끼기 어렵다.
+**방도 주민 행동도 아직 없다. 블록을 만지는 것 자체가 기분 좋아야 한다.**
+
+## Phase 1 — 밭 (10 ~ 25 분)
+
+```text
+EVENT_FARM_REQUEST   Farmer 와 첫 대화를 마쳤다
+```
+
+농부:
+
+> 밭이 망가져서 먹을 것을 만들 수 없어.
+
+```text
+목표          "밭흙을 4 칸 만들어 주세요"
+```
+
+플레이어가 `dirt` 를 캐서 `farmland` 로 제작하고 깐다.
+
+농부가 밭으로 걸어가 씨앗을 심는다. 작물이 자란다. 수확한다.
+
+## Phase 2 — 주방 (25 ~ 45 분)
+
+```text
+EVENT_KITCHEN_REQUEST   VillageStorage.crop >= 3
+```
+
+요리사:
+
+> 작물은 생겼는데, 요리할 곳이 없어.
+
+```text
+목표          "주방을 만들어 주세요"
+```
+
+**여기가 플레이어가 처음으로 방을 만드는 지점이다.**
+
+대사에서 조건을 명시한다.
+
+> 벽으로 둘러싸고, 문을 하나 달고, 화덕과 물통을 놓아 줘.
+> 벽은 두 칸 높이는 되어야 해.
+
+플레이어가 만든다. 십중팔구 처음에는 인식되지 않는다.
+
+`Tab` 으로 진단 모드를 열면 원인이 보인다.
+
+```text
+   벽이 뚫려 있습니다  (64, 31, 58)
+```
+
+막는다. 방 이름이 뜬다.
+
+```text
+   주방
+```
+
+감사 포인트 +20.
+
+요리사가 주방으로 걸어간다. 조리한다. 감사 포인트 +3.
+
+## Phase 3 — 침실 (45 ~ 60 분)
+
+```text
+EVENT_BEDROOM_REQUEST   VillageStorage.food >= 3
+```
+
+목수:
+
+> 밥은 먹었지만, 잘 곳이 없어.
+
+```text
+목표          "침실을 만들어 주세요"
+```
+
+밤이 온다. 주민이 걸어 들어가 침대에 눕는다.
+
+감사 포인트 +5 × 주민 수.
+
+**이 장면이 이 게임의 핵심 검증 지점이다.**
+
+## Phase 4 — 첫 번째 종 (60 ~ 75 분)
+
+```text
+EVENT_BELL_REQUEST   인식된 방 >= 2
+```
+
+목수:
+
+> 마을에 종이 있어. 마을이 커졌을 때 치는 거야.
+
+```text
+목표          "마을의 종을 쳐 주세요"
+```
+
+플레이어가 종을 친다.
+
+```text
+마을 레벨 2
+해금          window / chest / cooking_stove / water_pot
+주민 정원      4
+```
+
+다음 아침, 새 주민이 도착한다.
+
+## Phase 5 — 첫 번째 습격 (75 ~ 90 분)
+
+`villageLevel >= 2` 를 달성한 뒤 첫 21:00.
+
+몬스터 3 마리가 나타난다. 마을에 벽이 없으므로 그대로 들어온다.
+
+주민들이 도망친다. 플레이어가 싸운다.
+
+```text
+EVENT_WALL_REQUEST   1 차 습격이 끝났다
+```
+
+목수:
+
+> 이대로는 안 돼. 마을을 막아야 해.
+
+```text
+목표          "마을을 벽으로 둘러싸 주세요"
+```
+
+이 목표에는 진행 수치를 붙이지 않는다.
+어디를 어떻게 막을지는 플레이어가 정한다.
+
+## Phase 6 — 두 번째 습격과 엔딩 (90 ~ 120 분)
+
+플레이어가 방 4 개를 채우고 종을 다시 친다.
+
+```text
+마을 레벨 3
+해금          stone_brick
+주민 정원      5
+EVENT_NEW_RESIDENT
+```
+
+그날 밤 21:00, 몬스터 5 마리.
+
+몬스터가 벽 앞에서 멈추고 부수기 시작한다.
+플레이어가 막아선다. 판자벽 몇 칸이 부서지지만 마을은 지켜진다.
+
+```text
+EVENT_SLICE_END   2 차 습격이 끝난 뒤 첫 07:00
+```
+
+아침. 목수가 부서진 곳을 고치기 시작한다.
+
+주민 5 명이 각자의 일로 흩어진다.
+
+```text
+   이 마을을 조금 더 키워보고 싶다.
+```
 
 ---
 
-# 55. Monster
+# 29. UI
 
-MVP에서는 Monster 종류를 하나만 구현한다.
+```text
+핫바             화면 하단. 9 칸. 현재 선택 강조
+체력             좌측 하단
+감사 포인트        우측 상단. 누적값 + 다음 레벨까지의 게이지
+마을 레벨          우측 상단. 감사 포인트 옆
+목표 (Objective)  좌측 상단. 한 줄
+게임 시간          우측 상단. Day N / HH:MM
+상호작용 프롬프트    화면 중앙 하단. "[F] 대화하기"
+조준점            화면 중앙. 대상이 있으면 강조
+```
 
-기본 상태:
+모달 UI:
+
+```text
+인벤토리 / 제작   E
+종 UI            종에 F
+저장소 UI         chest 에 F
+대사              NPC 에 F
+방 진단           Tab (모달이 아니라 오버레이)
+피해 보고         아침에 자동. 아무 키로 닫는다
+디버그 패널        F3
+```
+
+## 29.1 UI 는 게임 상태를 소유하지 않는다
+
+ADR 003 을 유지한다. UI 는 `*_CHANGED` 이벤트를 구독해서 표시만 한다.
+
+DOM 오버레이로 구현한다. three 를 import 하지 않는다.
+
+## 29.2 방 이름 표시
+
+인식된 방의 중심 위에 월드 공간 라벨을 띄운다.
+
+```text
+평소            반투명. 거리에 따라 페이드
+진단 모드(Tab)   불투명 + 경계선
+```
+
+---
+
+# 30. Audio
+
+```text
+블록 파괴 / 설치    재질별 4 종
+발소리             재질별
+방 인식 성공        ★ 전용 효과음. 이 게임에서 가장 중요한 소리
+방 인식 해제        경고음
+감사 포인트 획득     짧은 벨
+종                 긴 종소리 + 리버브
+몬스터 등장         밤 습격 시작 스팅어
+블록이 부서지는 소리   몬스터가 벽을 칠 때
+낮 BGM / 밤 BGM
+```
+
+---
+
+# 31. Visual Feedback
+
+```text
+블록 파괴 진행      블록 표면에 균열 텍스처 8 단계
+블록 파괴 완료      파티클 + 드롭 아이템
+방 인식 성공        방 경계가 한 번 빛난다 + 이름이 떠오른다
+방 인식 해제        경계가 붉게 깜빡이고 이름이 사라진다
+감사 포인트         주민 머리 위에 +N 이 떠올라 사라진다
+종                 빛 확산 + 카메라 살짝 뒤로
+밤                 하늘색 / 광원 색 보간. torch 주변만 밝다
+몬스터 파괴 행동     대상 블록이 흔들리고 균열이 간다
+목수 수리          비계 오브젝트 + 망치 파티클
+피해 좌표          수리될 때까지 반투명 붉은 큐브
+```
+
+---
+
+# 32. 저장
+
+**저장은 이번 범위에서 필수다.** 90~120 분은 한 번에 플레이하기 어렵다.
+
+## 32.1 저장 대상
+
+```text
+버전
+게임 시간 (day, hour, minute)
+월드 블록 데이터    청크별로, 변경된 청크만
+플레이어           위치 / 체력 / 인벤토리 / 핫바 선택
+VillageStorage    seed / crop / food
+NPC 목록          id / role / 위치 / 배정된 침대 / hasEatenThisMeal
+gratitude
+villageLevel
+해금 목록
+완료된 이벤트 id 목록
+습격 기록          (마지막 습격의 도달 수 / 총 수)
+DamageLog
+crop 성장 상태     좌표 → 단계 / 심은 시각
+```
+
+## 32.2 저장하지 않는 것
+
+```text
+WorldState 지표     계산한다 (ADR 004)
+방 인식 결과         블록에서 다시 판정한다
+NPC 의 현재 Action  IdleAction 으로 시작한다
+통행 그래프 캐시
+청크 메시
+```
+
+## 32.3 로드 후 재구축 순서
+
+```text
+1  블록 데이터를 복원한다
+2  청크를 전부 메싱 큐에 넣는다
+3  통행 그래프 캐시를 비운다
+4  월드 전체 방 판정을 1 회 수행한다 (로드 시에만 허용되는 전역 스캔)
+5  NPC 를 복원하고 침대를 재배정한다
+6  WorldState 를 계산한다
+```
+
+4 번이 로딩 시간의 대부분을 차지한다.
+`door` 블록의 좌표 목록을 저장해 두어 door 후보 탐색을 건너뛴다.
+
+## 32.4 시간값은 전부 게임 시간 기준이다
+
+실시간 `Date.now()` 를 저장하지 않는다.
+
+## 32.5 Auto Save
+
+```text
+매일 07:00 에 자동 저장
+종을 친 직후 자동 저장
+```
+
+저장소는 `localStorage` 가 아니라 `IndexedDB` 를 쓴다.
+블록 데이터가 `localStorage` 의 용량 한도를 넘는다.
+
+---
+
+# 33. 프로젝트 폴더 구조
+
+```text
+src/
+  main.ts                    부트스트랩. 여기서만 game 과 render 를 함께 안다
+
+  game/                      ★ three 를 import 하지 않는다
+    GameWorld.ts             update 순서를 소유한다
+    EventBus.ts
+    EntityRegistry.ts
+
+    voxel/
+      Chunk.ts
+      VoxelWorld.ts          getBlock / setBlock / 변경 통지
+      raycast.ts             복셀 DDA
+      collision.ts           AABB 스윕
+
+    room/
+      detectRoom.ts          ★ 순수 함수. 방 판정
+      matchRecipe.ts         ★ 순수 함수. 방 타입 결정
+      RoomRegistry.ts        인식된 방 목록 + 재판정 큐
+
+    nav/
+      NavigationGraph.ts     통행 판정 + 국소 캐시
+      pathfind.ts            A*
+
+    entities/
+      Player.ts  NPC.ts  Monster.ts  Room.ts
+
+    actions/
+      Action.ts  MoveAction.ts  PlantAction.ts  HarvestAction.ts
+      CookAction.ts  EatAction.ts  SleepAction.ts  RestAction.ts
+      RepairAction.ts  FleeAction.ts  TalkAction.ts  IdleAction.ts
+
+    systems/
+      GameClockSystem.ts     InventorySystem.ts    CraftingSystem.ts
+      BlockEditSystem.ts     RoomSystem.ts         NPCSystem.ts
+      NPCDecisionSystem.ts   FarmSystem.ts         CookingSystem.ts
+      MealSystem.ts          SleepSystem.ts        GratitudeSystem.ts
+      VillageLevelSystem.ts  RaidSystem.ts         MonsterSystem.ts
+      RepairSystem.ts        CombatSystem.ts       GameEventSystem.ts
+      DialogueSystem.ts      ObjectiveSystem.ts    WorldStateSystem.ts
+
+    data/                    ★ 모든 밸런스 수치가 여기에만 있다
+      balance.ts  blocks.ts  recipes.ts  roomRecipes.ts
+      unlocks.ts  dialogues.ts  gameEvents.ts  island.ts
+
+    types/
+      index.ts               공통 타입. BlockPos / Vec3 / RoomType ...
+
+  render/                    ★ three 를 import 한다
+    Renderer.ts
+    ChunkMeshManager.ts      메싱 큐 / GPU 업로드 예산
+    materials.ts             ★ 재질 생성은 여기 한 곳에만 (WebGPU 전환 대비)
+    EntityView.ts
+    RoomLabelView.ts
+    DayNightVisual.ts
+    CameraController.ts
+    Highlight.ts             조준 블록 / 진단 표시
+
+  workers/
+    mesher.worker.ts         ★ three 를 import 하지 않는다
+    greedyMesh.ts            순수 함수. 테스트 대상
+
+  ui/                        ★ DOM 만. three 를 import 하지 않는다
+    Hotbar.ts  InventoryPanel.ts  BellPanel.ts  StoragePanel.ts
+    DialogueBox.ts  ObjectivePanel.ts  GratitudeHud.ts
+    RoomDiagnosticPanel.ts  DamageReportPanel.ts  DebugPanel.ts
+
+  save/
+    SaveSystem.ts  SaveData.ts  migrate.ts
+
+tests/
+```
+
+## 33.1 타입은 한 곳에만 둔다
+
+`src/game/types/index.ts` 가 공통 타입의 유일한 위치다.
+같은 개념을 두 파일에서 각각 정의하지 않는다.
+
+## 33.2 greedyMesh 가 workers/ 아래에 있는 이유
+
+Worker 에서만 쓰이지만 **순수 함수이며 테스트 대상** 이다.
+
+`mesher.worker.ts` 는 메시지 배선만 하고, 실제 알고리즘은 `greedyMesh.ts` 에 둔다.
+테스트는 Worker 없이 `greedyMesh.ts` 를 직접 호출한다.
+
+---
+
+# 34. balance.ts — 전체 초기값
 
 ```ts
-type MonsterState =
-  | 'spawn'
-  | 'moveToVillage'
-  | 'attackObstacle'
-  | 'leave';
-```
-
-```text
-spawn           ──▶  moveToVillage
-moveToVillage   ──경로 없음──▶  attackObstacle
-moveToVillage   ──마을 도달──▶  (VILLAGE_BREACHED) leave
-attackObstacle  ──attackObstacleSeconds 경과──▶  leave
-leave           ──맵 밖 도달 또는 despawnHour──▶  Despawn
-```
-
-## 55.1 AttackObstacle 은 연출 전용이다
-
-```text
-Barrier 에 HP 가 없다
-Barrier 는 파괴되지 않는다
-attackObstacle 은 때리는 애니메이션만 재생한다
-```
-
-자세한 이유는 29.3에 있다.
-
-## 55.2 마을 진입에 성공한 경우
-
-방벽이 없거나 불완전하면 몬스터가 마을에 들어온다.
-
-```text
-마을 중심 타일 도달
-↓
-VILLAGE_BREACHED emit
-↓
-leave
-```
-
-**마을 중심 타일은 `plaza` 오브젝트의 타일이다**(8.3).
-
-몬스터의 목표 지점을 위해 오브젝트를 따로 두지 않는다.
-
-광장은 주민이 밤을 보내고 식사하는 곳이므로,
-몬스터가 거기까지 들어왔다는 것이 곧 "마을이 뚫렸다"는 뜻이 된다.
-
-도달 판정은 `plaza` 타일에 인접(맨해튼 거리 1 이하)하면 성립한 것으로 본다.
-
-광장 타일 자체가 다른 Entity로 점유되어 경로가 닿지 않는 경우를 피하기 위해서다.
-
-`VILLAGE_BREACHED`는 MVP에서 다음 용도로만 쓴다.
-
-```text
-화면 흔들림 / 경고음 연출
-Debug Panel 표시
-```
-
-주민이나 건물에 실제 피해를 주지 않는다.
-
-피해 시스템을 넣으면 전투·수리·사망 규칙이 따라와야 하고, 이는 MVP 범위 밖이다.
-
-플레이어가 얻어야 하는 것은 **방벽이 있을 때와 없을 때의 차이**이며,
-그 차이는 "몬스터가 마을 안까지 들어왔다 / 입구에서 막혔다"로 충분히 전달된다.
-
-복잡한 전투 AI는 구현하지 않는다.
-
----
-
-# 56. Player Combat
-
-MVP에서는 본격적인 전투 시스템을 구현하지 않는다.
-
-다음은 제외한다.
-
-* Weapon
-* Skill
-* Level
-* Damage Build
-* Equipment
-* Combat Combo
-
-Monster의 목적은 전투 재미가 아니라
-
-```text
-방벽을 만들어야 하는 이유
-```
-
-를 제공하는 것이다.
-
----
-
-# 57. Monster 공격 시 NPC 행동
-
-Monster가 일정 거리 안으로 접근하면 NPC는 작업을 중단한다.
-
-```text
-Current Task Cancel
-↓
-Flee
-↓
-Safe Position 이동
-```
-
-위험이 사라지면 원래 행동으로 복귀한다.
-
----
-
-# 58. Phase 5 — Barrier
-
-Monster Event 이후 Carpenter가 말한다.
-
-```text
-"다음에는 마을 입구를 막아야 해."
-```
-
-Barrier 건설이 해금된다.
-
-플레이어가 마을 입구에 Barrier를 설치한다.
-
----
-
-# 59. Barrier 효과
-
-다음 Monster Event에서 Monster 이동이 Barrier에 의해 차단되어야 한다.
-
-Player가 직접 싸우지 않아도
-
-```text
-내가 만든 구조물이 마을을 보호했다.
-```
-
-는 것을 확인할 수 있어야 한다.
-
----
-
-# 60. MVP Ending Event
-
-방벽을 완성한 다음 아침(`dayPhase == 'morning'`), 새로운 NPC 하나가 마을 입구에 등장한다.
-
-## 60.1 새 주민은 진짜로 살아간다
-
-새 주민은 **기존 `farmer` 역할을 재사용한다.**
-
-```ts
-npcFactory.createNPC('farmer', villageGateTile);
-```
-
-새 직업을 추가하지 않으므로 "새로운 NPC 추가 금지" 원칙과 충돌하지 않는다.
-
-새 주민은 등장 즉시 기존 농부와 **동일한 AI로 생활을 시작한다.**
-
-```text
-아침    밭으로 이동 (기존 밭이 growing 이면 대기 / Idle)
-식사    광장으로 이동하여 food 소비
-밤      침대가 없으므로 광장에서 RestAction
-```
-
-## 60.2 생활 AI를 구현하지 않으면 안 되는 이유
-
-이전 판에는 "새 NPC는 실제 생활 AI를 구현할 필요가 없다"고 되어 있었다.
-
-그러면 4번째 주민이 마을 입구에 영구히 멈춰 서 있게 된다.
-
-이것은 이 게임의 최우선 원칙과 정면으로 충돌한다.
-
-```text
-69장   "숫자만 변경되는 시스템을 만들지 않는다"
-GAME_DESIGN   "주민이 살아 있는 것처럼 느껴져야 한다"
-```
-
-엔딩 장면의 핵심 감정은 "반가움"이다.
-
-인구 카운터가 3에서 4로 바뀌는 것으로는 반가움이 생기지 않는다.
-
-역할을 재사용하면 추가 구현 비용은 거의 0이면서 새 주민이 실제로 살아간다.
-
-## 60.3 엔딩 직후 지표가 내려간다
-
-주민이 4명이 되면 다음이 발생한다.
-
-```text
-housingLevel   100 → 75   (침대 3개 / 주민 4명)
-foodLevel       67 → 50   (foodTarget 18 → 24)
-happinessLevel  87 → 73
-```
-
-새 주민은 밤에 광장에서 자게 된다.
-
-플레이어는 이것을 보고 다음을 생각한다.
-
-> 집을 하나 더 지어줘야겠다.
-
-이것이 MVP 종료 지점에서 만들어야 하는 마지막 감정이다.
-
-대사:
-
-```text
-"멀리서 불빛이 보여서 와봤어."
-
-"여기 다시 사람들이 살기 시작한 거야?"
-```
-
-카메라가 마을을 잠시 보여준다.
-
-다음 메시지를 표시한다.
-
-```text
-Village Population
-
-3 → 4
-```
-
-이 지점이 MVP 플레이의 종료 지점이다.
-
-## 60.4 아침을 기다리는 동안의 목표
-
-`EVENT_BARRIER_REQUEST`가 완료되고 `safetyLevel == 100`이 되었지만
-아직 `morning`이 아닌 동안, 플레이어는 최대 실시간 7분을 기다린다(40.4).
-
-이때 목표를 바꾼다.
-
-```text
-방벽 미완성   "마을 입구를 막으세요  (3 / 5)"
-방벽 완성     "마을을 지켰다. 아침을 기다리세요."
-아침 도달     (EVENT_NEW_RESIDENT 발생)
-```
-
-이 문구가 없으면 플레이어는 목표가 "(5 / 5)"로 완료된 채
-아무 일도 일어나지 않는 화면을 보게 되고, 진행이 막혔다고 판단한다.
-
-목표 전환은 `EVENT_NEW_RESIDENT`의 조건과 무관하다.
-
-`ObjectiveSystem`이 `safetyLevel`을 보고 전환하며, 이벤트 조건은 45장 그대로다.
-
-기다리는 동안 플레이어는 채집과 건설을 계속할 수 있다.
-
----
-
-# 61. MVP 완료 후 플레이 유지
-
-Ending 이후 게임을 종료시키지 않는다.
-
-플레이어가 계속 다음 행동을 할 수 있도록 유지한다.
-
-* 이동
-* 자원 채집
-* 건설
-* NPC 관찰
-
-새로운 콘텐츠는 발생하지 않아도 된다.
-
----
-
-# 62. UI
-
-MVP에서 필요한 UI만 구현한다.
-
-필수:
-
-```text
-Resource HUD
-
-Current Objective
-
-Interaction Prompt
-
-Build Menu
-
-Game Time
-
-Dialogue
-
-World State Debug Panel
-```
-
----
-
-# 63. Resource HUD
-
-화면 예:
-
-```text
-Wood   12
-Stone   8
-Seed    3
-```
-
----
-
-# 64. Objective UI
-
-현재 주요 목표 하나만 표시한다.
-
-예:
-
-```text
-현재 목표
-
-농부를 위해 밭을 복구하세요.
-```
-
-Quest Log 시스템은 만들지 않는다.
-
-## 64.1 진행 수치가 필요한 목표가 하나 있다
-
-방벽 목표는 진행 상황을 숫자로 보여준다(29.5).
-
-```text
-마을 입구를 막으세요  (3 / 5)
-```
-
-`Objective`가 고정 문자열만 가지면 이 숫자는 갱신되지 않는다.
-
-따라서 진행 수치의 **출처**를 목표에 선언한다.
-
-```ts
-type ObjectiveProgressKind = 'blockedGateTiles';
-
-interface Objective {
-  id: string;
-  text: string;
-  /** 있으면 text 뒤에 " (current / total)" 를 붙여 표시한다 */
-  progress?: ObjectiveProgressKind;
-}
-```
-
-```text
-progress            current                              total
-──────────────────────────────────────────────────────────────────────
-blockedGateTiles    worldQuery.countBlockedGateTiles()   balance.village.gateTiles
-```
-
-`ObjectiveSystem`이 `BUILDING_PLACED`를 구독하여 값을 다시 계산하고,
-바뀌었으면 `OBJECTIVE_CHANGED`를 발행한다.
-
-매 프레임 계산하지 않는다. 입구 타일이 막히는 사건은 건설뿐이다.
-
-MVP에서 진행 수치를 쓰는 목표는 이 하나뿐이므로
-범용 진행도 시스템을 만들지 않고 종류를 열거형 하나로 둔다.
-
----
-
-# 65. Dialogue UI
-
-NPC 이름과 대사를 표시한다.
-
-예:
-
-```text
-[Farmer]
-
-밭이 망가져서
-먹을 것을 만들 수 없어.
-
-              [계속]
-```
-
-복잡한 대화 선택지는 MVP에서 구현하지 않는다.
-
----
-
-# 66. Build Menu
-
-Build Menu:
-
-```text
-Farm
-Kitchen
-House
-Barrier
-```
-
-아직 해금되지 않은 건물은 Locked 상태로 표시할 수 있다.
-
----
-
-# 67. Debug UI
-
-개발 중에는 다음 정보를 표시할 수 있어야 한다.
-
-```text
-FPS
-
-Player Tile
-
-Game Time
-
-NPC State
-
-Current NPC Target
-
-World State
-
-Current Event
-
-Pathfinding Grid
-```
-
-Production Build에서는 Debug Panel을 끌 수 있도록 한다.
-
----
-
-# 68. Audio
-
-MVP 최소 오디오:
-
-* Footstep
-* Resource Gather
-* Building Complete
-* Cooking
-* Night Ambience
-* Monster Alert
-
-BGM은 선택 사항이다.
-
-사운드 에셋이 준비되지 않은 경우 Placeholder를 사용할 수 있다.
-
----
-
-# 69. Visual Feedback
-
-다음 행동에는 반드시 시각적 Feedback이 있어야 한다.
-
-```text
-Resource 획득
-
-Building 완료
-
-Crop 성장
-
-Cooking
-
-Eating
-
-Sleeping
-
-Monster 등장
-
-New Resident 등장
-```
-
-숫자만 변경되는 시스템을 만들지 않는다.
-
----
-
-# 70. Asset 원칙
-
-첫 개발 단계에서는 Placeholder Asset 사용을 허용한다.
-
-Placeholder라도 다음은 서로 시각적으로 구분되어야 한다.
-
-```text
-Player
-Farmer
-Cook
-Carpenter
-Monster
-
-Tree
-Rock
-Plant
-
-Farm
-Kitchen
-House
-Barrier
-```
-
----
-
-# 71. 저장
-
-MVP 저장 방식:
-
-```text
-localStorage
-```
-
-## 71.1 저장 대상
-
-**원인이 되는 실제 상태만 저장한다.**
-
-```text
-gameClock.totalGameMinutes      게임 시간의 유일한 원천
-player.tile                     플레이어 위치
-inventory                       wood / stone / seed
-villageStorage                  seed / crop / food
-buildings[]                     type, origin, 그리고 밭이면 farm 상태
-resourceNodes[]                 채집 여부와 Respawn 예정 시각
-npcs[]                          id, role, tile
-triggeredEvents[]
-unlockedBuildings[]
-objectiveId
-```
-
-## 71.2 저장하지 않는 것
-
-```text
-WorldState 지표      파생값이므로 불러오기 후 재계산한다
-NPC 의 현재 Action   불러오기 후 Decision 을 다시 실행한다
-NPC 의 현재 경로
-Animation frame
-Monster             밤 이벤트는 다시 발생하므로 저장하지 않는다
-```
-
-## 71.3 반드시 저장해야 하는 세 가지
-
-이전 판의 저장 목록에는 다음이 빠져 있었고, 각각 실제 버그를 만든다.
-
-```text
-VillageStorage
-  빠지면 불러오기 후 작물과 음식이 사라진다
-
-Farm 의 phase 와 심은 시각
-  빠지면 자라던 작물이 사라진다
-
-NPC 목록
-  빠지면 엔딩 후 저장했을 때 4번째 주민이 사라진다
-  (population 은 파생값이므로 NPC 를 복원하지 않으면 3으로 되돌아간다)
-```
-
-## 71.4 모든 시간값은 게임 시간 기준이다
-
-저장되는 시간값은 전부 `totalGameMinutes` 단위다.
-
-```text
-farm.plantedAtTotalGameMinutes
-resourceNode.respawnAtTotalGameMinutes
-```
-
-실시간 ms(`Date.now()`)를 저장하지 않는다.
-
-실시간을 쓰면 다음이 깨진다.
-
-```text
-저장 후 하루 뒤에 불러오면 모든 타이머가 만료된 상태가 된다
-Time Scale 을 바꾸면 성장 시간이 의도와 달라진다
-```
-
-## 71.5 Auto Save
-
-```text
-Building 완료
-Major Event 완료 (triggeredEvents 변경)
-```
-
-## 71.6 구현 시점
-
-저장은 개발 우선순위의 **마지막 단계**다.
-
-다른 시스템의 상태 구조가 확정된 뒤에 구현한다.
-
-중간에 만들면 시스템이 바뀔 때마다 저장 형식을 계속 고쳐야 한다.
-
-MVP는 한 번에 20~30분 플레이하는 것이 목표이므로 저장 없이도 검증할 수 있다.
-
----
-
-# 72. Backend
-
-Backend는 구현하지 않는다.
-
-MVP에서는 다음을 사용하지 않는다.
-
-```text
-Database
-REST API
-WebSocket
-Authentication
-Cloud Save
-Multiplayer Server
-```
-
----
-
-# 73. 프로젝트 폴더 구조
-
-**폴더 구조의 정본은 `ARCHITECTURE.md` 91장이다.**
-
-이 장은 요약이며, 두 문서가 다르면 `ARCHITECTURE.md`를 따른다.
-
-```text
-project-root/
-│
-├─ docs/
-│  ├─ project/
-│  │  ├─ GAME_DESIGN.md
-│  │  ├─ MVP_SPEC.md
-│  │  ├─ ARCHITECTURE.md
-│  │  └─ TASKS.md
-│  ├─ adr/                       구조적 결정 기록
-│  └─ state/                     작업 완료 기록 (날짜_시간.md)
-│
-├─ public/
-│  └─ assets/
-│     ├─ maps/
-│     ├─ tiles/
-│     ├─ sprites/
-│     │  ├─ player/
-│     │  ├─ npc/
-│     │  ├─ monster/
-│     │  └─ objects/
-│     ├─ buildings/
-│     ├─ effects/
-│     ├─ audio/
-│     └─ ui/
-│
-├─ src/
-│  ├─ main.ts
-│  │
-│  ├─ game/
-│  │  ├─ createGame.ts
-│  │  ├─ config.ts
-│  │  │
-│  │  ├─ core/                   EventBus, Logger
-│  │  │
-│  │  ├─ scenes/                 Boot / Preload / World
-│  │  │
-│  │  ├─ world/                  GameWorld, WorldState, WorldQuery,
-│  │  │                          EntityRegistry, NavigationGrid, VillageStorage
-│  │  │
-│  │  ├─ entities/               player / npc / monster / building / resource
-│  │  │                          (순수 데이터. Phaser 의존 없음)
-│  │  │
-│  │  ├─ views/                  EntityView, PhaserSpriteView
-│  │  │
-│  │  ├─ systems/                input, interaction, inventory, resource,
-│  │  │                          building, pathfinding, movement, npc, farm,
-│  │  │                          clock, daynight, monster, events, dialogue,
-│  │  │                          objective, save, debug
-│  │  │
-│  │  ├─ factories/              Player / NPC / Monster / Building
-│  │  │
-│  │  ├─ data/                   balance, buildings, npcs, resources,
-│  │  │                          events, dialogues
-│  │  │
-│  │  ├─ types/                  게임 전용 타입 (정본)
-│  │  │
-│  │  └─ ui/                     Hud, DialogueBox, BuildMenu,
-│  │                             ObjectivePanel, DebugPanel
-│  │
-│  ├─ shared/
-│  │  └─ utils/                  게임과 무관한 범용 유틸만
-│  │
-│  └─ styles/
-│
-├─ tests/
-│  ├─ world/
-│  ├─ inventory/
-│  ├─ building/
-│  ├─ events/
-│  ├─ farm/
-│  ├─ pathfinding/
-│  └─ npc/
-│
-├─ index.html
-├─ package.json
-├─ pnpm-lock.yaml
-├─ tsconfig.json
-└─ vite.config.ts
-```
-
-## 73.1 타입은 한 곳에만 둔다
-
-```text
-src/game/types/    게임 도메인 타입 (GridPosition, NPCRole, BuildingType ...)
-src/shared/utils/  게임과 무관한 범용 유틸 (clamp, 배열 헬퍼 ...)
-```
-
-`src/shared/types/`는 두지 않는다.
-
-같은 타입이 두 위치에 생기는 것을 막기 위해 게임 타입은 `src/game/types/`에만 둔다.
-
-## 73.2 entities 와 views 를 분리한다
-
-`entities/`의 클래스는 **Phaser를 import하지 않는다.**
-
-렌더링은 `views/`의 `EntityView`가 담당한다.
-
-자세한 이유는 `ARCHITECTURE.md`의 Entity 구조 장에 있다.
-
----
-
-# 74. Folder 책임
-
-## entities
-
-화면에 존재하는 개별 Entity.
-
-예:
-
-```text
-Player
-NPC
-Monster
-Tree
-```
-
----
-
-## systems
-
-게임 규칙을 처리한다.
-
-예:
-
-```text
-NPC가 무엇을 할 것인가
-건물을 어디에 놓을 수 있는가
-Event가 발생해야 하는가
-```
-
-Entity 자체에 복잡한 게임 규칙을 넣지 않는다.
-
----
-
-## world
-
-현재 월드의 상태와 조회 기능을 제공한다.
-
-예:
-
-```text
-현재 식량은 얼마인가?
-가장 가까운 Farm은 어디인가?
-이 Tile을 지나갈 수 있는가?
-```
-
----
-
-## data
-
-밸런스 값과 콘텐츠 데이터를 보관한다.
-
-예:
-
-```ts
-export const FARM_CONFIG = {
-  width: 3,
-  height: 3,
-  woodCost: 6,
-  stoneCost: 2
-};
-```
-
-밸런스 수치를 Game Logic 내부에 직접 작성하지 않는다.
-
----
-
-# 75. Scene 구조
-
-MVP에서 Scene 수를 최소화한다.
-
-```text
-BootScene
-
-↓
-
-PreloadScene
-
-↓
-
-WorldScene
-```
-
-게임 플레이 전체는 하나의 `WorldScene`에서 진행한다.
-
-마을, 숲, 채석장 등을 각각 Scene으로 분리하지 않는다.
-
----
-
-# 76. Scene에 모든 코드를 넣지 않는다
-
-다음 형태를 금지한다.
-
-```ts
-class WorldScene extends Phaser.Scene {
-
-  update() {
-
-    // 플레이어
-    // NPC AI
-    // Farm
-    // Event
-    // Monster
-    // DayNight
-    // Building
-    // Save
-
-  }
-
-}
-```
-
-`WorldScene`은 각 System을 연결하는 역할만 담당한다.
-
-구체적인 구조는 `ARCHITECTURE.md`에서 정의한다.
-
----
-
-# 77. 데이터 기반 구현
-
-게임 밸런스 값은 전부 `src/game/data/`에서 관리한다.
-
-코드 변경 없이 숫자를 조절할 수 있는 구조를 우선한다.
-
-## 77.1 balance.ts — 전체 초기값
-
-**이 표가 초기 밸런스 수치의 정본이다.**
-
-```ts
-export const GAME_BALANCE = {
-  gameClock: {
-    realSecondsPerGameHour: 20,
-    startTotalGameMinutes: 480,      // Day 1 08:00
+export const balance = {
+  world: {
+    sizeX: 128, sizeY: 64, sizeZ: 128,
+    chunkSize: 16,
+    seaLevel: 24,
+    bellPos: { x: 64, y: 0, z: 64 },   // y 는 생성 시 지표면으로 결정
+    plazaRadius: 6,
   },
 
   player: {
-    moveSpeed: 160,                  // px/s
-    gatherSeconds: 1.2,
-    interactRadiusTiles: 1.5,
+    height: 1.8, width: 0.6,
+    walkSpeed: 4.5, runSpeed: 7.0,
+    jumpHeight: 1.25, gravity: -22, maxFallSpeed: -30,
+    maxHealth: 20,
+    reachDistance: 5.0,
+    attackDamage: 1, attackIntervalSeconds: 0.5, attackRange: 2.5,
+    cameraDistance: 5.0,
   },
 
-  npc: {
-    moveSpeed: 90,                   // px/s
-    repathIntervalSeconds: 0.5,
-    arriveThresholdPx: 4,
+  inventory: { hotbarSlots: 9, bagSlots: 27, stackSize: 64 },
+
+  room: {
+    minFloorArea: 4,
+    maxFloorArea: 100,
+    minWallHeight: 2,
+    detectBudgetMs: 3,
   },
 
-  monster: {
-    moveSpeed: 70,                   // px/s
-    threatRadiusTiles: 6,
-    spawnCount: 3,
-    attackObstacleSeconds: 8,
-    despawnHour: 5,                  // 05:00 이후 남아 있으면 강제 despawn
-  },
-
-  resource: {
-    yield:          { tree: 3,   rock: 3,   plant: 1   },
-    respawnMinutes: { tree: 240, rock: 240, plant: 180 },  // 게임분
+  clock: {
+    secondsPerGameHour: 25,
+    startDay: 1, startHour: 7,
+    lunchStartHour: 12, lunchEndHour: 13,
+    dinnerStartHour: 18, dinnerEndHour: 19,
+    sleepStartHour: 20, wakeHour: 5,
   },
 
   farm: {
-    growMinutes: 120,                // 게임분 = 2 게임시간
-    seedPerPlant: 1,
-    cropPerHarvest: 4,
-    seedPerHarvest: 1,
-    plantSeconds: 2,
-    harvestSeconds: 2,
+    growthStages: 3,
+    hoursPerStage: 4,
+    seedReturnedPerHarvest: 1,
   },
 
-  kitchen: {
-    cropPerBatch: 2,
-    foodPerBatch: 3,
-    cookSeconds: 6,
+  cooking: {
+    cropPerCook: 2,
+    foodPerCook: 3,
+    cookHours: 1,
   },
 
   meal: {
+    mealsPerDay: 2,
     foodPerMeal: 1,
-    mealsPerDay: 3,                  // 07:00 / 12:00 / 18:00
-    eatSeconds: 4,
   },
 
   worldState: {
-    foodLevelTargetDays: 2,
+    foodTargetDays: 2,
     happinessWeights: { food: 0.4, housing: 0.3, safety: 0.3 },
   },
 
+  gratitude: {
+    onSleep: 5,
+    onCook: 3,
+    onEatInDiningRoom: 2,
+    onFirstRoomOfType: 20,
+    onGameEvent: 15,
+  },
+
   village: {
-    gateTiles: 5,
+    levels: [
+      { level: 1, cost: 0,   residentCap: 3, gate: {} },
+      { level: 2, cost: 80,  residentCap: 4,
+        gate: { minRooms: 2, minHousingLevel: 50 } },
+      { level: 3, cost: 200, residentCap: 5,
+        gate: { minRooms: 4, minFoodLevel: 50, minHousingLevel: 100 } },
+    ],
+  },
+
+  npc: {
+    height: 1.8,
+    moveSpeed: 3.2,
+    fleeSpeed: 5.0,
+    maxHealth: 10,
+    stunMinutes: 30,
+    threatRadius: 12,
+    repathMinIntervalSeconds: 0.5,
+  },
+
+  carpenter: {
+    repairPerDay: 8,
+    repairMinutesPerBlock: 15,
+    repairStartHour: 7, repairEndHour: 18,
+  },
+
+  monster: {
+    maxHealth: 3,
+    moveSpeed: 2.6,
+    attackDamage: 2,
+    attackIntervalSeconds: 1.5,
+    breakSpeedMultiplier: 2.0,
+    spawnHour: 21,
+    despawnHour: 5,
+    reachedRadius: 6,
+  },
+
+  raids: [
+    { afterVillageLevel: 2, monsterCount: 3 },
+    { afterVillageLevel: 3, monsterCount: 5 },
+  ],
+
+  resource: {
+    seedDropChanceFromLeaves: 0.25,
+    stoneRespawnPerDay: 8,
+    treeCount: 24,
+  },
+
+  storage: { initialSeed: 3, initialCrop: 0, initialFood: 0 },
+
+  performance: {
+    chunkUploadsPerFrame: 2,
+    pathfindMaxNodes: 4000,
+    maxPointLights: 16,
   },
 } as const;
 ```
 
-## 77.2 buildings.ts — 건물 4종
+---
 
-```ts
-export const BUILDINGS = {
-  farm: {
-    type: 'farm',
-    width: 3, height: 3,
-    cost: { wood: 6, stone: 2, seed: 3 },
-    entranceOffset: { x: 1, y: 3 },
-    residentCapacity: 0,
-    blocksMonsters: false,
-  },
-  kitchen: {
-    type: 'kitchen',
-    width: 2, height: 2,
-    cost: { wood: 8, stone: 4 },
-    entranceOffset: { x: 0, y: 2 },
-    residentCapacity: 0,
-    blocksMonsters: false,
-  },
-  house: {
-    type: 'house',
-    width: 4, height: 4,
-    cost: { wood: 12, stone: 6 },
-    entranceOffset: { x: 1, y: 4 },   // 이 타일이 "문" 이다
-    residentCapacity: 3,
-    blocksMonsters: false,
-  },
-  barrier: {
-    type: 'barrier',
-    width: 1, height: 1,
-    cost: { wood: 2, stone: 1 },
-    entranceOffset: { x: 0, y: 1 },   // 사용하지 않는다
-    residentCapacity: 0,
-    blocksMonsters: true,
-  },
-} as const;
-```
+# 35. 검산
 
-## 77.3 첫 사이클 총 비용 검산
+## 35.1 식량 수급
 
 ```text
-건물              wood   stone   seed
-─────────────────────────────────────
-Farm      × 1        6       2      3
-Kitchen   × 1        8       4      -
-House     × 1       12       6      -
-Barrier   × 5       10       5      -
-─────────────────────────────────────
-합계                36      17      3
+주민 3 명   필요 food = 3 × 2 = 6 / 일
+주민 5 명   필요 food = 5 × 2 = 10 / 일
+
+요리 1 회    crop 2 → food 3
+주민 5 명에 필요한 요리 횟수 = 10 / 3 = 3.33 회 / 일
+필요 crop = 3.33 × 2 = 6.67 / 일
+
+작물 성장 = 3 단계 × 4 시간 = 12 게임시간
+밭 1 칸당 수확 = 24 / 12 = 2 회 / 일
+
+필요 밭 = 6.67 / 2 = 3.33  →  4 칸
 ```
 
-필요한 채집 횟수:
+**Phase 1 의 목표 "밭흙을 4 칸" 은 주민 5 명까지 감당한다.**
+
+## 35.2 씨앗 수급
 
 ```text
-wood  36 / 3 = 나무 12 회
-stone 17 / 3 = 돌   6 회
-seed   3 / 1 = 야생 식물 3 회
+심을 때   seed -1
+수확할 때 seed +1
 ```
 
-총 21회 채집 × 1.2초 = 약 25초의 채집 시간.
+순환한다. 밭 4 칸이면 초기 `seed 3` 으로 시작해 부족분 1 만 채우면 된다.
 
-이동 시간을 포함하면 20~30분 세션에서 합리적인 분량이다.
+`leaves` 에서 25% 로 나오므로 나무 한 그루만 베어도 해결된다.
 
-## 77.4 식량 수급 검산
-
-주민 3명이 하루에 필요한 음식:
+## 35.3 감사 포인트 수급 — 레벨 2 (누적 80)
 
 ```text
-3명 × 3식 × 1 = food 9 / 일
+EVENT_ARRIVAL / FARM / KITCHEN / BEDROOM   4 × 15 = 60
+Kitchen 최초 인식                                  20
+Bedroom 최초 인식                                  20
+                                            합계   100
 ```
 
-밭 1개의 하루 생산:
+**진행 이벤트만 따라가도 레벨 2 에 도달한다.** 막히지 않는다.
+
+## 35.4 감사 포인트 수급 — 레벨 3 (누적 200)
+
+레벨 2 직후 잔액 = 100 - 80 = 20. 추가로 180 이 필요하다.
 
 ```text
-작업 시간(08:00~18:00, 식사 제외) 약 8 게임시간
-성장 2 게임시간 → 하루 최대 4회, 현실적으로 2~3회 수확
-
-수확 2회  →  crop 8  →  4 batch  →  food 12
-수확 3회  →  crop 12 →  6 batch  →  food 18
+DiningRoom / Storeroom 최초 인식        2 × 20 =  40
+EVENT_BELL_REQUEST / WALL_REQUEST       2 × 15 =  30
+취침 (주민 4 명 × 5)                     20 / 밤
+요리 (하루 3 회 × 3)                      9 / 일
+식당 식사 (4 명 × 2 끼 × 2)               16 / 일
+                                        일당 약 45
 ```
-
-필요 9에 대해 12~18이므로 밭 1개로 자급된다.
-
-주민이 4명이 되면 필요량이 12로 올라가 여유가 사라진다.
-
-밭을 하나 더 짓고 싶어지는 지점이 여기다.
-
-## 77.5 씨앗 수급 검산
 
 ```text
-심기   seed -1
-수확   seed +1
+40 + 30 + 45 × 3 일 = 205
 ```
 
-수지가 0이므로 밭 1개는 영구히 돌아간다.
+**약 3 게임일(30 분) 이면 레벨 3 에 도달한다.**
 
-밭을 새로 지을 때만 seed 3이 필요하고, 이는 야생 식물 3회 채집으로 얻는다.
+Phase 5 ~ 6 의 분량과 일치한다.
+
+## 35.5 초기 자원 채집량
+
+```text
+Phase 1 (밭 4 칸)         dirt 4
+Phase 2 (주방 5×5)        plank 약 40 → log 10
+                         cooking_stove stone 6 / water_pot stone 3
+                         door plank 4
+Phase 3 (침실 5×5)        plank 약 40 → log 10
+                         bed plank 4 + leaves 4
+                         door plank 4
+```
+
+나무 24 그루로 충분하다.
 
 ---
 
-# 78. Event Coupling 방지
-
-다음처럼 시스템끼리 직접 깊게 호출하지 않는다.
-
-잘못된 예:
+# 36. 성능 목표
 
 ```text
-Farm
-→ Farmer
-→ Cook
-→ Kitchen
-→ WorldState
-→ UI
+프레임            60 FPS 목표 / 30 FPS 최소
+드로우콜           600 미만
+청크 GPU 업로드    프레임당 2 개 이하
+방 재판정          프레임당 3 ms 이하
+A* 노드            탐색 1 회당 4000 개 이하
+NPC 경로 재계산     NPC 당 0.5 초 이상 간격
+동적 광원          16 개 이하
+로드 시간          5 초 이하 (전역 방 판정 포함)
 ```
 
-가능한 경우 Event를 사용한다.
-
-예:
-
-```text
-BUILDING_PLACED { buildingId, type }
-```
-
-다른 시스템이 해당 Event에 반응한다.
-
-건물별로 `FARM_BUILT` / `KITCHEN_BUILT` 같은 이벤트를 따로 만들지 않는다.
-
-페이로드가 동일하므로 `type`으로 구분한다.
-
-상세 Event 구조는 `ARCHITECTURE.md`에서 정의한다.
+측정은 `F3` 디버그 패널에 상시 표시한다.
 
 ---
 
-# 79. 성능 목표
-
-일반적인 Desktop Browser에서:
+# 37. 코드 품질 원칙
 
 ```text
-Target FPS: 60
-```
-
-MVP NPC 수:
-
-```text
-3 ~ 4
-```
-
-따라서 초기에는 복잡한 최적화를 하지 않는다.
-
-다음 작업을 미리 구현하지 않는다.
-
-* Object Pool 남용
-* ECS
-* Worker 기반 AI
-* WASM
-* Spatial Database
-
-실제 성능 문제가 발견된 이후 도입한다.
-
----
-
-# 80. 코드 품질 원칙
-
-AI 코딩 에이전트는 다음 원칙을 따른다.
-
-### 한 파일에 너무 많은 책임을 넣지 않는다.
-
-### TypeScript 타입을 명확히 작성한다.
-
-### 시스템 간 순환 의존성을 만들지 않는다.
-
-### 사용하지 않는 추상화를 미리 만들지 않는다.
-
-### 미래 기능을 예상해 복잡한 Generic 시스템을 만들지 않는다.
-
-### 현재 MVP에 필요한 가장 단순한 구현을 선택한다.
-
----
-
-# 81. AI 코딩 에이전트 금지 사항
-
-AI Agent는 명시적인 요청 없이 다음 작업을 수행하지 않는다.
-
-```text
-Phaser 버전 변경
-
-React 추가
-
-Redux 추가
-
-Zustand 추가
-
-Backend 추가
-
-Database 추가
-
-Multiplayer 추가
-
-LLM 추가
-
-ECS 도입
-
-3D Engine 도입
-
-새로운 NPC 추가
-
-새로운 Building 추가
-
-새로운 Resource 추가
-
-새로운 Game Mechanic 추가
-```
-
-좋아 보이는 아이디어라도 임의로 Scope를 확대하지 않는다.
-
----
-
-# 82. 구현 중 의사결정 기준
-
-두 가지 구현 방법 중 선택해야 할 경우 다음 순서대로 판단한다.
-
-```text
-1. 플레이 경험을 더 빨리 확인할 수 있는가?
-
-2. 코드가 단순한가?
-
-3. AI Agent가 유지보수하기 쉬운가?
-
-4. 테스트하기 쉬운가?
-
-5. 나중에 교체할 수 있는가?
-```
-
-MVP에서는 미래 확장성보다 검증 속도를 조금 더 중요하게 본다.
-
----
-
-# 83. 핵심 Acceptance Test 1
-
-## Farm
-
-Given:
-
-```text
-Farm이 없는 상태
-```
-
-When:
-
-```text
-Player가 Farm을 건설
-```
-
-Then:
-
-```text
-Farmer가 Farm을 인식
-
-Farmer가 Farm으로 이동
-
-Farmer가 농사를 시작
-
-Crop이 생성
-```
-
-이 과정에 Player의 추가 명령이 필요해서는 안 된다.
-
----
-
-# 84. 핵심 Acceptance Test 2
-
-## Kitchen
-
-Given:
-
-```text
-Crop이 존재
-Kitchen이 존재
-```
-
-When:
-
-```text
-Cook의 작업 시간이 됨
-```
-
-Then:
-
-```text
-Cook가 Crop을 가져감
-
-Kitchen으로 이동
-
-Cooking 실행
-
-Food 생성
+한 파일에 너무 많은 책임을 넣지 않는다
+any / @ts-ignore / @ts-nocheck 를 쓰지 않는다. 불가피하면 이유를 주석으로 남긴다
+모든 함수에 주석을 작성한다
+밸런스 수치를 로직에 직접 쓰지 않는다. src/game/data/ 에 둔다
+시스템 간 순환 의존성을 만들지 않는다
+사용하지 않는 추상화를 미리 만들지 않는다
+현재 범위에 필요한 가장 단순한 구현을 선택한다
 ```
 
 ---
 
-# 85. 핵심 Acceptance Test 3
+# 38. AI 코딩 에이전트 금지 사항
 
-## Dinner
-
-Given:
+임의로 하지 않는다.
 
 ```text
-Food가 존재
-저녁 시간
+새 블록 / 새 가구 / 새 방 레시피 추가
+새 NPC 역할 추가
+새 자원 종류 추가
+새 게임 메커닉 추가
+새 프레임워크 / 라이브러리 추가
+물리 엔진 도입
+WebGPURenderer 로 전환
+React 도입
+절차적 지형 생성
+방 판정 조건 완화 / 강화
+밸런스 수치 변경 (balance.ts 를 고치는 것은 허용. 로직에 상수를 박는 것은 금지)
 ```
 
-Then:
+좋아 보이는 아이디어라도 39 장의 Acceptance Test 2 와 6 을 통과하기 전에는
+범위를 넓히지 않는다.
+
+---
+
+# 39. 핵심 Acceptance Test
+
+## Test 1 — 블록
 
 ```text
-NPC들이 식사 장소로 이동
+1  나무를 좌클릭으로 계속 눌러 파괴한다
+2  log 가 인벤토리에 들어간다
+3  E 로 제작 UI 를 열고 plank 를 만든다
+4  우클릭으로 plank 를 놓는다
+5  놓은 블록을 다시 부순다
+6  플레이어 위치에는 블록이 놓이지 않는다
+```
 
-Food 소비
+## Test 2 — 방 인식 ★
 
-Eating 행동 실행
+```text
+1  5 × 5 바닥을 깔고 둘레에 plank 를 2 칸 높이로 쌓는다
+2  아직 방이 아니다. 문이 없다
+3  Tab 을 누르면 "문이 없습니다" 가 표시된다
+4  door 를 하나 놓는다
+5  "빈 방" 이 인식된다. 효과음과 라벨이 뜬다
+6  bed 를 놓는다
+7  "침실" 로 바뀐다. 감사 포인트 +20
+8  벽을 한 칸 부순다
+9  방 인식이 해제된다. 경고음. 라벨이 사라진다
+10 감사 포인트는 20 그대로다
+11 부순 곳을 다시 막으면 "침실" 로 복귀한다
+12 이때 감사 포인트는 추가되지 않는다 (타입당 최초 1 회)
+```
 
-이후 기존 일정으로 복귀
+## Test 3 — 진단
+
+```text
+1  벽을 한 칸 뚫린 채로 방을 만든다
+2  그 공간 안에 서서 Tab 을 누른다
+3  "벽이 뚫려 있습니다" 와 함께 정확한 좌표가 붉게 표시된다
+4  그 좌표를 막으면 즉시 인식된다
+```
+
+```text
+5  dirt 로만 둘러싼 공간 안에서 Tab 을 누른다
+6  "벽이 뚫려 있습니다" 가 표시된다 (지형 블록은 벽이 아니다)
+```
+
+## Test 4 — 농사
+
+```text
+1  farmland 를 4 칸 깐다
+2  농부가 밭으로 이동한다
+3  씨앗을 심는다. VillageStorage.seed 가 1 줄어든다
+4  게임 시간 12 시간 뒤 작물이 수확 가능해진다
+5  농부가 수확한다. crop +1, seed +1
+```
+
+## Test 5 — 요리와 식사
+
+```text
+1  Kitchen 이 인식되어 있고 crop >= 2 다
+2  요리사가 cooking_stove 앞으로 이동한다
+3  게임 시간 1 시간 뒤 crop -2, food +3. 감사 포인트 +3
+4  12:00 이 되면 주민들이 DiningRoom 의 chair 로 이동한다
+5  각자 food 1 을 소비하고 감사 포인트 +2 를 받는다
+6  DiningRoom 이 없으면 광장에서 먹고 포인트는 없다
+7  food 가 0 이면 먹지 않고 넘어간다. 게임이 멈추지 않는다
+```
+
+## Test 6 — 취침 ★
+
+```text
+1  Bedroom 이 인식되어 있고 bed 가 3 개다
+2  20:00 이 되면 주민 3 명이 각자의 침대로 걸어간다
+3  눕는다. 각각 감사 포인트 +5
+4  05:00 에 일어나 방에서 나온다
+5  bed 가 2 개뿐이면 남는 1 명은 광장에서 RestAction 을 한다
+6  RestAction 은 감사 포인트를 주지 않는다
+7  자고 있는 주민의 침대를 부수면 깨어나고 배정이 해제된다
+```
+
+## Test 7 — 종
+
+```text
+1  감사 포인트 80 미만이면 종 UI 의 버튼이 비활성이다
+2  UI 에 부족한 항목이 전부 표시된다
+3  조건을 전부 만족하면 버튼이 활성화된다
+4  종을 치면 포인트가 80 줄고 레벨이 2 가 된다
+5  window / chest / cooking_stove / water_pot 이 제작 UI 에서 활성화된다
+6  다음 07:00 에 새 주민이 섬에 도착한다
+7  이후 벽을 부숴 방 수가 줄어도 레벨은 2 를 유지한다
+```
+
+## Test 8 — 습격 ★
+
+```text
+1  villageLevel 2 달성 후 첫 21:00 에 몬스터 3 마리가 스폰된다
+2  마을이 열려 있으면 그대로 들어와 종 반경 6 안에 도달한다
+3  주민들이 FleeAction 으로 도망친다
+4  플레이어가 좌클릭 3 회로 몬스터를 처치한다
+5  05:00 에 남은 몬스터가 소멸한다
+6  safetyLevel 이 (막은 수 / 총 수) 로 계산된다
+```
+
+```text
+7  마을을 plank 로 완전히 둘러싼 뒤 2 차 습격을 맞는다
+8  몬스터가 벽 앞에서 멈추고 파괴 행동을 시작한다
+9  plank 가 breakSeconds 0.8 × 2.0 = 1.6 초 뒤 파괴된다
+10 DamageLog 에 좌표가 기록된다
+11 통행 그래프가 갱신되어 몬스터가 뚫린 곳으로 들어온다
+```
+
+```text
+12 마을을 dirt 로만 둘러싼다
+13 몬스터가 dirt 를 부수지 않는다. 우회로를 찾는다
+14 우회로가 전혀 없으면 배회하다 05:00 에 소멸한다
+15 이 경우 safetyLevel 은 100 이 된다
+```
+
+13 ~ 15 는 의도된 동작이다. 흙벽은 파괴되지 않지만
+플레이어가 흙만으로 마을 전체를 두르는 것은 노동량이 크고,
+`plank` / `stone_brick` 이 더 빠르고 아름답다는 것으로 균형을 맞춘다.
+이 균형이 무너지면 8.2 를 재검토한다.
+
+## Test 9 — 수리
+
+```text
+1  습격 다음 07:00 에 피해 보고 패널이 뜬다
+2  파괴 좌표가 붉은 반투명 큐브로 표시된다
+3  목수가 파괴 좌표로 이동해 원래 블록을 복구한다
+4  하루 8 블록까지만 복구한다
+5  9 번째부터는 다음 날로 넘어간다
+6  플레이어가 직접 놓아도 붉은 표시가 사라진다
+```
+
+## Test 10 — 엔딩
+
+```text
+1  villageLevel 3, 주민 5 명 상태다
+2  2 차 습격이 끝난다
+3  다음 07:00 에 EVENT_SLICE_END 가 발생한다
+4  엔딩 연출이 재생된다
+5  연출이 끝나도 게임은 계속 플레이 가능하다
 ```
 
 ---
 
-# 86. 핵심 Acceptance Test 4
+# 40. 실패 판단
 
-## Sleep
-
-Given:
+다음이면 이 설계가 실패한 것이다.
 
 ```text
-House 1채 존재 (침대 3개)
-주민 3명
-22:00
+Test 2 는 통과하는데 방을 만드는 것이 즐겁지 않다
+    → 방 조건이 너무 까다롭다. 11.2 를 완화한다
+
+플레이어가 왜 인식되지 않는지 알 수 없다
+    → 11.5 진단이 부족하다. 다른 기능보다 먼저 고친다
+
+주민이 방을 쓰는 모습이 지루하다
+    → 31 장 연출이 부족하다. 콘텐츠를 늘리지 말고 연출을 고친다
+
+감사 포인트가 어디서 나왔는지 모른다
+    → 22.2 표시가 없거나 약하다
+
+종을 치는 것이 그냥 버튼 같다
+    → 23 장의 연출과 31 장의 종 연출을 강화한다
+
+몬스터가 귀찮기만 하다
+    → 24.1 의 "습격은 사건이다" 가 지켜지지 않았다. 빈도를 줄인다
 ```
 
-Then:
+**콘텐츠를 추가해서 해결하려 하지 않는다.**
+
+---
+
+# 41. Definition of Done
+
+## Voxel
 
 ```text
-NPC 3명 전원이 House 로 이동한다
-Door 위치에 도착하면 Sprite 가 숨겨진다
-stateLabel = 'sleeping'
-집에 조명이 켜진다
-housingLevel == 100
-06:00 에 Sprite 가 다시 표시되고 활동을 시작한다
+128 × 64 × 128 섬이 생성되고 렌더링된다
+블록을 부수고 놓을 수 있다
+변경이 즉시 메시에 반영된다
+60 FPS 를 유지한다
 ```
 
-## 86.1 집이 없는 경우
-
-Given:
+## Player
 
 ```text
-House 없음
-22:00
+WASD 이동 / 점프 / 한 칸 자동 오르기
+3 인칭 카메라. 블록 관통 시 거리 조정
+복셀 AABB 충돌. 블록에 끼지 않는다
+레이캐스트로 대상 블록이 하이라이트된다
 ```
 
-Then:
+## Building
 
 ```text
-NPC 3명이 plaza 로 이동한다
-stateLabel = 'resting'
-Sprite 가 화면에 계속 보인다
-housingLevel == 0
+제작 UI 에서 블록을 만들 수 있다
+해금되지 않은 블록은 회색으로 보이고 필요 레벨이 표시된다
+핫바에서 블록을 선택해 설치한다
 ```
 
-주민들이 밤에 광장에 앉아 있는 모습이 **화면에 보여야** 한다.
-
-이것이 플레이어가 집이 필요하다는 것을 인식하는 유일한 단서다.
-
-## 86.2 침대가 부족한 경우
-
-Given:
+## Room
 
 ```text
-House 1채 (침대 3개)
-주민 4명
-22:00
+빈 방이 인식된다
+5 종의 방 레시피가 동작한다
+인식 / 해제 시 시각과 청각 피드백이 있다
+Tab 진단 모드가 실패 사유와 좌표를 보여준다
+방 재판정이 프레임 예산을 넘지 않는다
 ```
 
-Then:
+## NPC
 
 ```text
-3명은 House 에서 취침한다
-1명은 plaza 에서 RestAction 을 수행한다
-housingLevel == 75
-침대 배정은 NPC id 순서로 매번 동일하게 결정된다
+3 명이 통행 그래프 위를 걷는다. 벽에 끼지 않는다
+시간표에 따라 행동이 바뀐다
+농사 / 요리 / 식사 / 취침 / 수리를 수행한다
+방이 없을 때의 대체 행동이 전부 동작한다
+몬스터가 나타나면 도망친다
+```
+
+## Growth
+
+```text
+감사 포인트가 주민의 사용에서 발생한다
+획득이 시각적으로 표시된다
+종 UI 가 미충족 조건을 전부 보여준다
+레벨업으로 해금과 새 주민이 발생한다
+레벨이 내려가지 않는다
+```
+
+## Defense
+
+```text
+습격이 2 회 발생한다
+몬스터가 종을 향해 이동한다
+막히면 플레이어 블록을 부순다
+지형 블록은 부수지 않는다
+플레이어가 몬스터를 처치할 수 있다
+safetyLevel 이 습격 결과로 계산된다
+목수가 하루 8 블록까지 수리한다
+아침에 피해 보고가 뜬다
+```
+
+## Progress
+
+```text
+진행 이벤트 8 개가 순서대로 발생한다
+조건이 전부 결정적이다
+완료된 이벤트가 롤백되지 않는다
+대사와 목표가 동작한다
+엔딩이 재생된다
+```
+
+## Save
+
+```text
+IndexedDB 에 저장된다
+로드하면 블록 / 방 / 주민 / 진행이 복원된다
+로드 시간이 5 초 이하다
 ```
 
 ---
 
-# 87. 핵심 Acceptance Test 5
-
-## Monster
-
-Given:
+# 42. 이번 범위에서 구현하지 않는 기능
 
 ```text
-Night
-```
-
-When:
-
-```text
-Monster Event 발생
-```
-
-Then:
-
-```text
-Monster Spawn
-
-Village 방향 이동
-
-NPC 위험 감지
-
-NPC Flee
-```
-
----
-
-# 88. 핵심 Acceptance Test 6
-
-## Barrier
-
-Given:
-
-```text
-마을 입구 5 타일이 모두 Barrier 로 막혀 있음
-safetyLevel == 100
-```
-
-When:
-
-```text
-Monster Event 가 발생하고 Monster 가 Village 로 이동
-```
-
-Then:
-
-```text
-Monster 가 Barrier 타일을 통과하지 못한다
-Monster 가 마을 안으로 들어오지 못한다
-VILLAGE_BREACHED 가 발생하지 않는다
-Monster 가 AttackObstacle 을 거쳐 Despawn 한다
-Barrier 는 파괴되지 않는다
-```
-
-대조 조건 (방벽이 없을 때):
-
-```text
-Monster 가 마을 중심까지 도달한다
-VILLAGE_BREACHED 가 발생한다
-```
-
-두 결과가 달라야 Player가 만든 구조물이 Gameplay를 바꾼 것이다.
-
-한쪽만 확인하면 방벽이 실제로 작동했는지 알 수 없다.
-
-## 88.1 통행 레이어 검증
-
-같은 상황에서 다음도 함께 확인한다.
-
-```text
-Player 는 Barrier 타일을 통과할 수 있다
-NPC 는 Barrier 타일을 통과할 수 있다
-```
-
-방벽이 플레이어를 가두면 자원 채집이 불가능해진다. (29.1 참조)
-
----
-
-# 89. 핵심 Acceptance Test 7
-
-## New Resident
-
-Given:
-
-```text
-EVENT_BARRIER_REQUEST 완료
-safetyLevel == 100         (입구 5 타일이 모두 막혀 있음)
-```
-
-When:
-
-```text
-dayPhase 가 'morning' 이 된다
-```
-
-Then:
-
-```text
-EVENT_NEW_RESIDENT 가 1회만 발생한다
-새 주민이 village_gate 타일에 등장한다
-population 이 3 → 4 로 변한다
-housingLevel 이 100 → 75 로 내려간다
-foodLevel 이 내려간다   (foodTarget 18 → 24)
-```
-
-그리고 **새 주민이 실제로 생활을 시작한다.**
-
-```text
-낮     밭 또는 광장으로 이동한다
-식사   광장에서 food 를 소비한다
-밤     침대가 없으므로 광장에서 RestAction 을 수행한다
-```
-
-새 주민이 입구에 멈춰 서 있으면 이 테스트는 실패다. (60.2 참조)
-
-## 89.1 음성 케이스
-
-```text
-입구 3 타일만 막힌 상태  →  safetyLevel 60  →  이벤트 발생하지 않음
-입구 밖에 방벽 5개 설치   →  safetyLevel 0   →  이벤트 발생하지 않음
-```
-
----
-
-# 90. MVP 핵심 검증 질문
-
-개발 완료 후 기능 개수가 아니라 다음 질문으로 MVP를 평가한다.
-
-## Q1
-
-밭을 만든 뒤 농부가 스스로 움직이기 시작하는 장면이 만족스러운가?
-
-## Q2
-
-주민이 내가 만든 시설을 사용하는 모습을 관찰하는 것이 재미있는가?
-
-## Q3
-
-저녁에 주민이 모여 식사하는 장면에서 마을이 살아 있다는 느낌이 드는가?
-
-## Q4
-
-밤에 주민들이 집으로 돌아가는 모습에서 집을 만들어준 의미가 느껴지는가?
-
-## Q5
-
-방벽이 Monster를 막았을 때 건설이 실제 세계를 변화시켰다고 느껴지는가?
-
-## Q6
-
-새 주민이 찾아왔을 때 반가운가?
-
-## Q7
-
-MVP 종료 이후에도 다른 건물을 만들어주고 싶다는 생각이 드는가?
-
----
-
-# 91. 실패 판단
-
-다음 상황이면 MVP는 성공한 것으로 판단하지 않는다.
-
-```text
-건설은 가능하지만 NPC 반응이 재미없음
-
-NPC가 움직이지만 목적이 보이지 않음
-
-World State 숫자만 바뀜
-
-시설을 만들어도 생활 모습이 달라지지 않음
-
-새로운 콘텐츠가 없으면 할 것이 없다고 느껴짐
-
-NPC보다 자원 채집 시간이 더 기억에 남음
-```
-
-이 경우 콘텐츠를 추가하지 않는다.
-
-핵심 Loop를 다시 조정한다.
-
----
-
-# 92. MVP에서 구현하지 않는 기능
-
-명시적으로 제외한다.
-
-```text
-Gamepad Input
-
-Building Demolish / 이동 / 환불
-
-Barrier Durability / Destruction
-
-NPC Death
-
-Free Block Building
-
-Procedural Map
-
-Open World
-
-Multiple Maps
-
-Character Creation
-
-Skill Tree
-
-Player Level
-
-Equipment
-
-Weapon System
-
-Complex Combat
-
-Boss
-
-Quest Log
-
-Crafting Tree
-
-Trading
-
-Economy
-
-Fishing
-
-Weather
-
-Relationship
-
-NPC Friendship
-
-NPC Marriage
-
-Dynamic Dialogue Generation
-
-LLM NPC
-
-Online Features
-
-Multiplayer
-
-Backend
-
-Cloud Save
-```
-
----
-
-# 93. 이후 확장 후보
-
-MVP가 성공한 경우에만 다음을 검토한다.
-
-```text
-자유 건축
-
-주민 증가
-
-직업 증가
-
-주민 Personality
-
-욕구 시스템
-
-관계 시스템
-
-상점
-
-생산 Chain
-
-농업 확장
-
-동물
-
+Gamepad / 모바일
+여러 챕터 / 여러 섬
+보스
+장비 / 무기 / 방어구 / 스킬 트리 / 플레이어 레벨
+주민 자동 건설 (청사진)
+주민 직업 확장 (광부 / 상인 / 가수 / 병사)
+탈것 / 비행
+절차적 지형 생성
+복셀 광원 전파
+물 흐름 시뮬레이션
 날씨
+NPC 사망
+주민 관계 / 호감도 / 결혼
+동적 대사 생성 / LLM NPC
+감사 포인트의 화폐화 (상점)
+멀티플레이 / 백엔드 / 클라우드 저장
+WebGPU
+```
 
-탐험 지역 확장
+---
 
-던전
+# 43. 이후 확장 후보
 
-전투
+수직 슬라이스가 성공한 경우에만 검토한다.
 
-마을 규모 확장
-
-자동 건설
-
-주민 Memory
+```text
+1  방 레시피 확장 (여관 / 대장간 / 목욕탕 / 정원 / 작업실)
+   가구 확장. 새 방 = 새 주민 행동
+2  주민 직업 확장. 주민 10 명 규모
+3  주민 자동 건설 (청사진)
+4  두 번째 섬 → 챕터 구조 → 영구 거점
+5  보스 습격 / 장비
+6  주민 Personality / Relationship / Memory
+7  복셀 광원 전파 / WebGPU
 ```
 
 이 목록은 개발 예정 목록이 아니다.
 
-MVP 성공 이후 검토할 후보 목록이다.
-
 ---
 
-# 94. Definition of Done
+# 44. 최종 장면
 
-MVP는 다음 조건을 모두 만족해야 완료된 것으로 판단한다.
+밤이다.
 
-### Player
+플레이어가 직접 벤 나무로 만든 판자벽이 마을을 두르고 있다.
+군데군데 몬스터가 부순 자국을 목수가 낮에 고쳐 놓았다.
 
-* 이동 가능
-* 상호작용 가능
-* 자원 채집 가능
-* 건설 가능
+플레이어가 직접 쌓은 방 안에서, 플레이어가 직접 놓은 침대에
 
-### World
+주민 다섯 명이 누워 자고 있다.
 
-* 하나의 완성된 작은 맵
-* 낮/밤 존재
-* Collision 존재
+머리 위로 `+5` 가 다섯 번 떠올랐다 사라진다.
 
-### Building
-
-* Farm
-* Kitchen
-* House
-* Barrier
-
-모두 실제 게임 상태에 영향을 준다.
-
-### NPC
-
-Farmer, Cook, Carpenter가 존재한다.
-
-각 NPC는:
-
-* 이동
-* 직업 행동
-* 식사
-* 취침
-* 위험 회피
-
-중 필요한 행동을 수행한다.
-
-### Village Life
-
-다음 Chain이 실제로 실행된다.
-
-```text
-Farm
-
-↓
-
-Farmer
-
-↓
-
-Crop
-
-↓
-
-Cook
-
-↓
-
-Food
-
-↓
-
-Villagers Eat
-```
-
-### Defense
-
-다음 Chain이 실행된다.
-
-```text
-Night
-
-↓
-
-Monster
-
-↓
-
-NPC Flee
-
-↓
-
-Barrier
-
-↓
-
-Village Protected
-```
-
-### Progress
-
-다음 Chain이 실행된다.
-
-```text
-Village Restoration
-
-↓
-
-World State 변화
-
-↓
-
-New Resident
-```
-
----
-
-# 95. MVP의 최종 장면
-
-아침.
-
-새로운 주민이 마을에 도착한다.
-
-플레이어 뒤로 다음 모습이 보이는 것이 이상적이다.
-
-```text
-농부가 밭으로 이동한다.
-
-요리사가 주방을 준비한다.
-
-집에서 주민이 나온다.
-
-마을에는 불빛과 연기가 보인다.
-
-어제 만든 방벽이 입구를 지키고 있다.
-```
-
-새 주민이 말한다.
-
-```text
-"멀리서 불빛이 보여서 와봤어."
-
-"여기 다시 사람들이 살기 시작한 거야?"
-```
-
-이 장면에서 MVP가 전달해야 하는 감정은 하나다.
-
-> 이곳은 처음에 폐허였지만, 이제 마을이 되었다.
-
-그리고 플레이어가 다음 생각을 한다면 MVP의 핵심 목표가 달성된 것이다.
-
-> 다음에는 무엇을 만들어주면 좋을까?
+마을의 종이 광장 가운데 서 있다.

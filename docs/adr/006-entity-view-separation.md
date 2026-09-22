@@ -2,6 +2,22 @@
 
 Status: Accepted
 Date: 2026-09-22
+Amended: 2026-09-22 (ADR 011)
+
+> **엔진 전환에 따른 보정.**
+>
+> 이 ADR 의 원문은 렌더 엔진으로 Phaser 3 를, 뷰의 단위로 Sprite 를 전제한다.
+> ADR 011 이 Three.js 로 전환했으므로 다음과 같이 읽는다.
+>
+> ```text
+> Phaser                →  three
+> Phaser.GameObjects.Sprite  →  THREE.Object3D
+> src/game/entities/    →  src/game/**  (전체가 three 를 import 하지 않는다)
+> EntityView            →  src/render/ 아래에 둔다
+> ```
+>
+> **결정의 내용 자체는 변하지 않는다.** 오히려 엔진이 한 번 교체된 프로젝트이므로
+> 이 경계의 가치가 입증되었다.
 
 ## 배경
 
