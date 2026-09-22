@@ -2,8 +2,8 @@
 
 # Small Village Restoration Game — Task Breakdown
 
-Version: 0.1
-Status: MVP Task Baseline
+Version: 0.2
+Status: MVP Task Baseline (2차 정합성 정리 반영)
 Related Documents:
 
 ```text
@@ -233,10 +233,11 @@ WorldScene 의 코드가 30줄 이하다
 ```text
 64 × 64 타일, 32px 맵 작성
 레이어: Ground, GroundDecoration, Objects, Ruins,
-        Collision, BuildableArea, SpawnPoints, Interaction
+        Collision, BuildableArea, SpawnPoints
 영역: 마을(중앙) / 숲(북) / 채석장(서) / 물가(동) / 위험 지역(남)
 마을 입구를 정확히 한 곳, 폭 5 타일로 만든다
-SpawnPoints 오브젝트 전체 배치
+입구 5 타일을 BuildableArea 안에 포함시킨다
+SpawnPoints 오브젝트 전체 배치 (자원 노드 포함)
 Ruins 에 무너진 밭과 무너진 집 배치 (hint 속성 부여)
 JSON export
 ```
@@ -247,15 +248,23 @@ AC:
 맵 크기가 64 × 64 이다
 위험 지역에서 마을로 들어오는 통로가 정확히 한 곳이고 폭이 5 타일이다
 village_gate 오브젝트가 그 통로 중앙에 있다
+입구 5 타일이 BuildableArea 안에 있다
 SpawnPoints 에 필수 이름 11종이 모두 있다
+resource_tree 12개 이상 / resource_rock 8개 이상 / resource_plant 4개 이상
+plaza 가 마을 한가운데에 있다 (노숙 / 식사 / 몬스터 목표로 함께 쓰인다)
+각 건물 후보 위치(무너진 밭·집)의 진입 타일이 통행 가능하다
 Ruins 타일이 Collision 레이어에 포함되지 않는다
 Ruins 타일이 BuildableArea 안에 있다
 Buildings 레이어가 존재하지 않는다
+Interaction 레이어가 존재하지 않는다
 ```
 
 참조: `MVP_SPEC.md` 8장, 13장, 14장
 
 주의: 입구 폭 5 타일 제약을 깨면 `safetyLevel` 계산과 엔딩 조건이 무의미해진다.
+
+주의: 자원 노드가 최소 개수보다 적으면 첫 사이클을 Respawn 없이 끝낼 수 없다.
+`MVP_SPEC.md` 8.3의 근거를 참조한다.
 
 ---
 
@@ -415,6 +424,7 @@ AC:
 테스트: off 후 리스너가 호출되지 않는다
 전역 싱글턴이 아니다
 FARM_BUILT / KITCHEN_BUILT 등 건물별 이벤트가 없다
+GameEventMap 에 DIALOGUE_ENDED 가 있다
 ```
 
 참조: `ARCHITECTURE.md` 7장, 74장
@@ -552,7 +562,7 @@ InteractionSystem 이 채집이나 대화를 직접 구현하지 않는다
 작업:
 
 ```text
-tree / rock / plant 노드 생성 (SpawnPoints 기준)
+tree / rock / plant 노드 생성 (SpawnPoints 기준, 최소 개수 검사)
 채집 (gatherSeconds 1.2초, 진행 표시)
 획득량: tree 3 wood / rock 3 stone / plant 1 seed
 Respawn: respawnAtTotalGameMinutes 기준
@@ -566,6 +576,7 @@ AC:
 채집한 노드가 사라진다
 게임 시간 240분 후 나무가 같은 위치에 다시 나타난다
 테스트: respawnAt 판정이 totalGameMinutes 기준이다
+노드 수가 최소 개수(12 / 8 / 4)보다 적으면 시작 시 Error 가 발생한다
 Date.now() 나 performance.now() 를 사용하지 않는다
 ```
 
@@ -609,8 +620,8 @@ isWalkable 의 actor 인자에 기본값이 없다
 작업:
 
 ```text
-validate({ config, origin, inventory }): BuildValidationResult
-5가지 Invalid 사유 판정
+validate({ config, origin, inventory, gateTiles }): BuildValidationResult
+6가지 Invalid 사유 판정
 순수 함수. Phaser / Scene / Registry 의존 없음
 ```
 
@@ -622,12 +633,17 @@ AC:
 테스트: Collision 타일 포함 → 'map_collision'
 테스트: 기존 건물과 겹침 → 'overlaps_building'
 테스트: BuildableArea 밖 → 'outside_buildable_area'
+테스트: 입구 타일에 집 → 'blocks_village_gate'
+테스트: 입구 타일에 방벽 → valid
 테스트: 자원 부족 → 'insufficient_resources' + missing 내용
 테스트: Ruins 타일 위 → valid  (폐허는 막지 않는다)
 validate 가 Phaser 를 import 하지 않는다
 ```
 
-참조: `MVP_SPEC.md` 19장, `ARCHITECTURE.md` 26장, 81장
+참조: `MVP_SPEC.md` 19장, 19.2장, `ARCHITECTURE.md` 26장, 81장, ADR 009
+
+주의: 입구 보호가 없으면 집으로 입구를 덮어 엔딩이 영구히 막히는 상태가 만들어진다.
+MVP 에는 철거가 없으므로 되돌릴 수 없다.
 
 ---
 
@@ -652,6 +668,8 @@ AC:
 B 키로 메뉴가 열린다
 Farm 선택 후 마우스를 움직이면 3x3 Ghost 가 타일에 스냅된다
 자원이 부족하면 Ghost 가 Invalid 로 표시되고 "나무가 부족합니다 (6 / 4)" 가 보인다
+입구 타일에 집을 겹치면 "마을 입구에는 방벽만 세울 수 있습니다" 가 보인다
+입구 타일 위의 방벽 Ghost 는 Valid 로 표시된다
 무너진 밭 위에서 "여기에 밭을 복구할 수 있습니다" 가 보인다
 미해금 건물은 선택할 수 없다
 ```
@@ -788,15 +806,18 @@ Debug Panel 에 NPC 별 stateLabel 이 표시된다
 작업:
 
 ```text
-NPCSchedule    시각 → ScheduledActivity
+NPCSchedule    시각 → ScheduledActivity ('eat' | 'work' | 'free' | 'sleep')
 NPCContext     조립 (NPCSystem 이 담당)
 NPCDecisionSystem.decide(npc, context): NPCAction
 우선순위 4단계
+hasEatenThisMeal 초기화 (NPCSystem 이 GAME_HOUR_CHANGED 구독)
 ```
 
 AC:
 
 ```text
+테스트: 06:00 → 'free' / 07:00 → 'eat' / 08:00 → 'work' / 22:00 → 'sleep'
+ScheduledActivity 에 'wake' 가 없다
 테스트: Farmer, 09:00, farm null, threat false → IdleAction
 테스트: Farmer, 09:00, farm phase 'empty', seed 1, threat false → 밭으로 MoveTo
 테스트: Farmer, 09:00, threat true → FleeAction  (직업 행동보다 우선)
@@ -805,9 +826,10 @@ AC:
 테스트: 22:00, bed 없음 → plaza 로 MoveTo
 NPCDecisionSystem 이 EntityRegistry / Scene / WorldQuery 를 직접 참조하지 않는다
 NPCContext 리터럴만으로 테스트가 작성된다
+GameClockSystem 이 NPC 목록을 직접 참조하지 않는다
 ```
 
-참조: `ARCHITECTURE.md` 29 ~ 30장, 78장, `MVP_SPEC.md` 37장
+참조: `ARCHITECTURE.md` 29 ~ 30장, 33장, 78장, `MVP_SPEC.md` 37장, 39장
 
 ---
 
@@ -860,6 +882,7 @@ AC:
 
 ```text
 밭을 지으면 플레이어의 추가 명령 없이 농부가 밭으로 걸어간다
+농부가 밭의 진입 타일(origin + entranceOffset)에 선다
 농부가 씨앗을 심는다
 작물이 시각적으로 자란다
 growMinutes 후 농부가 수확한다
@@ -926,7 +949,7 @@ FOOD_COOKED emit
 AC:
 
 ```text
-crop 이 2 이상이고 주방이 있으면 요리사가 주방으로 이동한다
+crop 이 2 이상이고 주방이 있으면 요리사가 주방의 진입 타일로 이동한다
 조리 중 연기가 올라온다
 crop 이 2 감소하고 food 가 3 증가한다
 crop 이 2 미만이면 요리사가 대기한다
@@ -946,7 +969,7 @@ CollectCropAction 이 존재하지 않는다
 ```text
 EatAction (eatSeconds 4초)
 hasEatenThisMeal 플래그 (식사 시간대 전환 시 초기화)
-diningSpot 이동
+WorldQuery.findDiningSpot  주방 있으면 주방 진입 타일, 없으면 plaza
 food -1
 MEAL_EATEN emit
 ```
@@ -954,7 +977,10 @@ MEAL_EATEN emit
 AC:
 
 ```text
-18:00 에 주민 3명이 식사 장소로 모인다
+테스트: 주방 있음 → findDiningSpot 이 주방 진입 타일을 반환한다
+테스트: 주방 없음 → findDiningSpot 이 plaza 를 반환한다
+findDiningSpot 이 null 을 반환하지 않는다
+18:00 에 주민 3명이 주방 앞으로 모인다
 각자 food 를 1 소비한다
 food 가 3 감소한다
 같은 식사 시간대에 반복 식사하지 않는다
@@ -973,8 +999,9 @@ food 가 0 이면 식사를 건너뛰고 페널티가 없다
 작업:
 
 ```text
-House 건물 (4x4, residentCapacity 3)
+House 건물 (4x4, residentCapacity 3, entranceOffset {x:1,y:4})
 WorldQuery.getBedCount / getAssignedBed (NPC id 순서, 결정적)
+door = house.origin + entranceOffset
 ```
 
 AC:
@@ -984,6 +1011,8 @@ AC:
 테스트: 집 1채 + NPC 4명 → 3명 배정, 1명 null
 테스트: getAssignedBed 를 여러 번 호출해도 같은 결과
 테스트: 집 0채 → 전원 null
+테스트: origin (10,10) 인 집의 door 가 (11,14) 다
+같은 집에 배정된 NPC 들의 door 가 동일하다
 ```
 
 참조: `MVP_SPEC.md` 28장, `ARCHITECTURE.md` 13장, 41.2장
@@ -1108,10 +1137,11 @@ BuildingConfig 에 worldStateEffects 가 없다
 작업:
 
 ```text
-data/dialogues.ts
+data/dialogues.ts   DialogueDefinition (id, speaker, lines, objectiveOnEnd?)
 DialogueBox (NPC 이름 + 대사 + [계속])
 대화 중 플레이어 입력 제한
 NPC 머리 위 대화 가능 표시
+대화 종료 시 DIALOGUE_ENDED { dialogueId } emit
 스토리 조건을 직접 결정하지 않는다
 ```
 
@@ -1122,10 +1152,12 @@ NPC 에게 [E] 로 말을 걸면 대사가 표시된다
 대화 중 플레이어가 움직이지 않는다
 [계속] 으로 진행하고 종료된다
 대화 선택지가 없다
+종료 시 DIALOGUE_ENDED 가 1회 발행된다
 DialogueSystem 이 이벤트 조건을 판정하지 않는다
+DialogueSystem 이 ObjectiveSystem 을 직접 호출하지 않는다
 ```
 
-참조: `MVP_SPEC.md` 65장, `ARCHITECTURE.md` 55장
+참조: `MVP_SPEC.md` 65장, 47.1.1장, `ARCHITECTURE.md` 55장
 
 ---
 
@@ -1137,8 +1169,11 @@ DialogueSystem 이 이벤트 조건을 판정하지 않는다
 
 ```text
 현재 목표 하나만 관리
+Objective { id, text, progress?: 'blockedGateTiles' }
 OBJECTIVE_CHANGED emit
-진행 수치 표시 지원 ("마을 입구를 막으세요 (3 / 5)")
+DIALOGUE_ENDED 구독 → dialogues[id].objectiveOnEnd 적용
+BUILDING_PLACED 구독 → progress 재계산
+WORLD_STATE_CHANGED 구독 → 방벽 완성 시 대기 문구로 전환
 ```
 
 AC:
@@ -1146,10 +1181,14 @@ AC:
 ```text
 화면에 현재 목표 하나가 표시된다
 목표가 바뀌면 화면이 갱신된다
+농부와 대화가 끝나면 목표가 "농부를 위해 밭을 복구하세요" 로 바뀐다
+방벽을 3개 세우면 목표에 "(3 / 5)" 가 표시된다
+방벽 5개를 세우면 목표가 "마을을 지켰다. 아침을 기다리세요." 로 바뀐다
+진행 수치를 매 프레임 계산하지 않는다 (이벤트 기반)
 Quest Log 가 없다
 ```
 
-참조: `MVP_SPEC.md` 64장, `ARCHITECTURE.md` 56장
+참조: `MVP_SPEC.md` 64장, 64.1장, 60.4장, `ARCHITECTURE.md` 56장
 
 ---
 
@@ -1216,12 +1255,18 @@ NEW_RESIDENT      safetyLevel 60 → false
 
 ```text
 게임 시작 시 목표 "마을을 둘러보세요" 가 표시된다
-농부와 대화하면 목표가 "밭을 복구하세요" 로 바뀌고 Farm 이 해금된다
+게임 시작 시점에 이미 Farm 이 해금되어 있다 (대사와 무관)
+농부 머리 위에 대화 가능 표시가 뜬다
+농부와 대화가 끝나면 목표가 "농부를 위해 밭을 복구하세요" 로 바뀐다
 농부와 대화하지 않고 밭을 지어도 이후 진행이 막히지 않는다
+이벤트 정의가 대사 종료를 조건으로 삼지 않는다
 조건에 "또는" 이 없다
 ```
 
-참조: `MVP_SPEC.md` 45장, 47장, `ARCHITECTURE.md` 52.2장
+참조: `MVP_SPEC.md` 45장, 47장, 47.1.1장, `ARCHITECTURE.md` 52.2장, 55.2장
+
+주의: 건물 해금을 대사 종료에 걸면 `MVP_SPEC.md` 47.2 와 충돌한다.
+해금은 이벤트 발생 즉시이며, 대사는 목표 문구만 바꾼다.
 
 ---
 
@@ -1235,6 +1280,7 @@ NEW_RESIDENT      safetyLevel 60 → false
 Monster Entity (순수 데이터) + View
 MonsterState (spawn / moveToVillage / attackObstacle / leave)
 spawn (spawnCount 3, monster_spawn 위치)
+목표 지점 = WorldQuery.getPlazaPosition() (마을 중심 타일)
 'monster' 통행 레이어로 경로 계산
 경로 없음 → attackObstacle (attackObstacleSeconds 8초) → leave
 despawnHour 05:00 강제 despawn
@@ -1247,7 +1293,9 @@ AC:
 ```text
 집을 지은 그날 밤에 몬스터 3마리가 나타난다
 몬스터가 마을 방향으로 이동한다
-방벽이 없으면 마을 중심에 도달하고 VILLAGE_BREACHED 가 발생한다
+방벽이 없으면 plaza 에 도달하고 VILLAGE_BREACHED 가 발생한다
+도달 판정이 plaza 타일과의 맨해튼 거리 1 이하다
+몬스터 전용 목표 오브젝트를 맵에 추가하지 않았다
 경로가 막히면 8초 후 leave 로 전이한다
 05:00 이 지나면 반드시 despawn 한다
 몬스터가 제자리에 영구히 멈추는 상태가 없다
@@ -1330,6 +1378,7 @@ NPC 가 방벽 타일을 통과할 수 있다
 
 ```text
 spawnResident 커맨드 처리 (role 'farmer', village_gate 위치)
+방벽 완성 후 아침까지의 대기 목표 문구 (60.4)
 새 주민이 기존 농부와 동일한 AI 로 즉시 생활 시작
 엔딩 대사 2줄
 카메라가 마을을 잠시 보여준다
@@ -1341,6 +1390,8 @@ AC — Acceptance Test 7 전체:
 
 ```text
 방벽 완성 후 아침에 새 주민이 입구에 등장한다
+방벽을 낮에 완성하면 목표가 "아침을 기다리세요" 로 바뀌고 다음 아침에 발생한다
+기다리는 동안 채집과 건설이 가능하다
 이벤트가 1회만 발생한다
 population 이 4 가 된다
 housingLevel 이 100 → 75 로 내려간다

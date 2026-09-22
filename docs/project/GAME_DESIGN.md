@@ -9,6 +9,8 @@ docs/project/GAME_DESIGN.md   (이 문서 — 왜 만드는가)
 docs/project/MVP_SPEC.md      (무엇을 만드는가)
 docs/project/ARCHITECTURE.md  (어떤 구조로 만드는가)
 docs/project/TASKS.md         (어떤 순서로 만드는가)
+docs/adr/                     (구조적 결정 기록)
+docs/state/                   (작업 완료 기록과 다음 할 일)
 ```
 
 이 문서는 게임의 의도와 감정 목표를 정의한다.
@@ -248,7 +250,9 @@ NPC의 수를 늘리기 전에 이 세 NPC가 **충분히 살아 있는 것처�
 
 행동을 한다.
 
-주민들은 식사 시간에 주방이나 식사 공간으로 이동한다.
+주민들은 식사 시간에 주방 앞으로 모인다.
+
+주방이 없는 동안에는 광장이 그 역할을 한다.
 
 ---
 

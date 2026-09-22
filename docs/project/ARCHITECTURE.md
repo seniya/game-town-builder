@@ -2,8 +2,8 @@
 
 # Small Village Restoration Game — Architecture Guide
 
-Version: 0.2
-Status: MVP Architecture Baseline (문서 정합성 정리 반영)
+Version: 0.3
+Status: MVP Architecture Baseline (2차 정합성 정리 반영)
 Related Documents:
 
 ```text
@@ -311,6 +311,7 @@ export interface GameEventMap {
 
   // ── 진행 ───────────────────────────────────────
   GAME_EVENT_TRIGGERED: { id: GameEventId };
+  DIALOGUE_ENDED: { dialogueId: string };
   NEW_RESIDENT_ARRIVED: { npcId: EntityId };
 
   // ── 표시 갱신 (UI 전용) ─────────────────────────
@@ -759,7 +760,10 @@ export interface WorldQuery {
   // ── 침대 배정 ───────────────────────────────────
   /** 전체 침대 수. 집들의 residentCapacity 합계. */
   getBedCount(): number;
-  /** 이 NPC 에게 배정된 침대. 없으면 null. NPC id 순서로 결정적으로 배정. */
+  /**
+   * 이 NPC 에게 배정된 침대. 없으면 null. NPC id 순서로 결정적으로 배정.
+   * door = house.origin + BUILDINGS.house.entranceOffset (24.2)
+   */
   getAssignedBed(npcId: EntityId): { houseId: EntityId; door: GridPosition } | null;
 
   // ── 마을 입구 ───────────────────────────────────
@@ -769,9 +773,11 @@ export interface WorldQuery {
   countBlockedGateTiles(): number;
 
   // ── 장소 ────────────────────────────────────────
+  /** 마을 광장. 노숙 장소이자 몬스터의 목표인 마을 중심 타일 */
   getPlazaPosition(): GridPosition;
   findSafePosition(from: GridPosition): GridPosition | null;
-  findDiningSpot(): GridPosition | null;
+  /** 주방이 있으면 주방 진입 타일, 없으면 plaza. null 을 반환하지 않는다 */
+  findDiningSpot(): GridPosition;
 
   // ── 위험 ────────────────────────────────────────
   isThreatNear(position: GridPosition, radiusTiles: number): boolean;
@@ -788,6 +794,20 @@ MVP에서 음식은 월드에 놓인 오브젝트가 아니라 `VillageStorage.f
 
 음식 보유 여부는 `storage.food >= foodPerMeal`로 판정하고,
 식사 장소는 `findDiningSpot()`이 제공한다.
+
+```ts
+findDiningSpot(): GridPosition {
+  const kitchen = this.findNearestBuilding(plaza, 'kitchen');
+  return kitchen ? entranceTileOf(kitchen) : this.getPlazaPosition();
+}
+```
+
+주방이 있으면 주방의 진입 타일, 없으면 `plaza`를 반환한다.
+
+`null`을 반환하지 않는다. `plaza`는 항상 존재하므로 반환할 값이 언제나 있고,
+`null`을 허용하면 식사 판단에 의미 없는 분기가 하나 늘어난다.
+
+규칙의 정본은 `MVP_SPEC.md` 39.2이다.
 
 ## 13.2 WorldQuery 는 조회만 한다
 
@@ -893,6 +913,7 @@ export interface NavigationGrid {
 
   setBuildingBlocked(tiles: readonly GridPosition[]): void;
   setBarrier(tiles: readonly GridPosition[]): void;
+  /** 불러오기 시 그리드를 다시 만들 때만 사용한다. MVP 에 철거는 없다. */
   clear(tiles: readonly GridPosition[]): void;
 
   /** 그리드가 변경될 때마다 증가한다. 경로 무효화 판정에 사용. */
@@ -1000,7 +1021,7 @@ index++
 
 ## 17.2 경로 무효화와 재계산
 
-건설이나 철거로 그리드가 바뀌면 이미 진행 중인 경로를 반드시 다시 계산한다.
+건설로 그리드가 바뀌면 이미 진행 중인 경로를 반드시 다시 계산한다.
 
 ```text
 BuildingSystem 이 NavigationGrid 를 변경
@@ -1234,6 +1255,9 @@ export interface BuildingConfig {
   height: number;
   cost: Partial<Record<InventoryItemId, number>>;
 
+  /** NPC 가 서는 타일. origin 기준 상대 좌표. 점유 영역 바깥 */
+  entranceOffset: GridPosition;
+
   /** 이 건물이 제공하는 침대 수. 집만 > 0 */
   residentCapacity: number;
 
@@ -1248,6 +1272,7 @@ farm: {
   width: 3,
   height: 3,
   cost: { wood: 6, stone: 2, seed: 3 },
+  entranceOffset: { x: 1, y: 3 },
   residentCapacity: 0,
   blocksMonsters: false,
 }
@@ -1275,6 +1300,32 @@ blocksMonsters      →  입구 커버리지 →  safetyLevel 이 계산된다
 ```
 
 같은 숫자를 두 곳에서 관리하지 않으므로 어긋날 수 없다.
+
+## 24.2 entranceOffset 이 필요한 이유
+
+건물 타일은 두 통행 레이어 모두 Blocked 이므로 NPC 는 건물 위에 설 수 없다.
+
+그런데 다음 네 곳이 모두 "건물의 어느 타일 앞" 을 필요로 한다.
+
+```text
+PlantAction / HarvestAction   농부가 서는 타일
+CookAction                    요리사가 서는 타일
+getAssignedBed().door         NPC 가 들어가 사라지는 타일
+findDiningSpot()              주민이 모이는 타일
+```
+
+네 곳이 각자 다른 규칙으로 좌표를 계산하면 값이 어긋난다.
+
+전부 한 식으로 계산한다.
+
+```ts
+const entrance = {
+  x: building.origin.x + config.entranceOffset.x,
+  y: building.origin.y + config.entranceOffset.y,
+};
+```
+
+자세한 값은 `MVP_SPEC.md` 24.1에 있다.
 
 ---
 
@@ -1355,6 +1406,8 @@ export interface BuildValidationInput {
   /** 점유 영역의 좌상단 타일 */
   origin: GridPosition;
   inventory: Readonly<InventoryState>;
+  /** 마을 입구 타일. VillageGate.getGateTiles() */
+  gateTiles: readonly GridPosition[];
 }
 
 export type BuildInvalidReason =
@@ -1362,6 +1415,7 @@ export type BuildInvalidReason =
   | 'map_collision'
   | 'overlaps_building'
   | 'outside_buildable_area'
+  | 'blocks_village_gate'
   | 'insufficient_resources';
 
 export interface BuildValidationResult {
@@ -1400,14 +1454,55 @@ Ghost Preview 가 Valid (녹색) 로 표시된다
 
 Preview의 의미가 사라진다.
 
-## 26.2 Ruins 는 막지 않는다
+## 26.2 입구 타일은 방벽만 허용한다
+
+```ts
+const occupiesGate = occupiedTiles.some((t) =>
+  gateTiles.some((g) => g.x === t.x && g.y === t.y)
+);
+
+if (occupiesGate && config.blocksMonsters !== true) {
+  return { valid: false, reason: 'blocks_village_gate' };
+}
+```
+
+입구 타일은 `BuildableArea` 안에 있어야 한다. 방벽을 세워야 하기 때문이다.
+
+그런데 다른 건물까지 허용하면 두 가지 방식으로 게임이 진행 불능이 된다.
+
+```text
+집(4×4) 이 입구 4칸을 덮는다
+    →  그 칸에 방벽을 세울 수 없다 (overlaps_building)
+    →  safetyLevel 이 100 에 도달할 수 없다
+    →  EVENT_NEW_RESIDENT 가 영원히 발생하지 않는다
+
+밭(3×3) + 주방(2×2) 이 입구 5칸을 전부 덮는다
+    →  건물 타일은 두 통행 레이어 모두 Blocked 다
+    →  플레이어 · NPC · 새 주민 전원이 통과할 수 없다
+```
+
+둘 다 되돌릴 수 없다. MVP에는 철거가 없기 때문이다(`MVP_SPEC.md` 92장).
+
+`blocksMonsters === true`인 건물은 방벽뿐이므로 조건 한 줄로 충분하다.
+
+건물 종류나 입구 판정 규칙을 새로 만들지 않는다.
+
+자세한 이유는 `MVP_SPEC.md` 19.2에 있다.
+
+관련 ADR:
+
+```text
+docs/adr/009-village-gate-build-restriction.md
+```
+
+## 26.3 Ruins 는 막지 않는다
 
 `Ruins` 레이어 타일은 어떤 Invalid 사유에도 해당하지 않는다.
 
 폐허 위에 건설할 수 있어야 "무너진 밭을 복구한다"는 서사가 성립한다.
 (`MVP_SPEC.md` 8.2)
 
-## 26.3 순수 함수로 둔다
+## 26.4 순수 함수로 둔다
 
 `validate`는 클래스가 아니라 순수 함수로 둔다.
 
@@ -1472,21 +1567,22 @@ src/game/systems/npc/NPCDecisionSystem.ts
 
 NPC의 다음 행동을 결정한다.
 
-기본 우선순위:
+기본 우선순위는 **4단계**다. 자세한 내용과 이유는 30.3에 있다.
 
 ```text
-1. 위험
-2. 생존
-3. 필수 스케줄
-4. 직업 행동
-5. Idle / 자유 행동
+1. 위험 회피    threatNearby
+2. 필수 스케줄  식사 / 취침
+3. 직업 행동    농사 / 요리 / 점검
+4. 자유 행동    Idle / 광장 배회
 ```
-
-예:
 
 ```ts
 decide(npc: NPC, context: NPCContext): NPCAction;
 ```
+
+위에서 아래로 한 번만 평가한다. 위 단계가 성립하면 아래는 평가하지 않는다.
+
+점수를 합산하지 않는다. Utility AI를 쓰지 않는다.
 
 ---
 
@@ -1514,7 +1610,7 @@ export interface NPCContext {
 
   // ── 장소 ────────────────────────────────────────
   readonly plaza: GridPosition;
-  readonly diningSpot: GridPosition | null;
+  readonly diningSpot: GridPosition;
 
   // ── 이 NPC 의 상태 ──────────────────────────────
   /** 이번 식사 시간대에 이미 먹었는가 */
@@ -1721,19 +1817,17 @@ src/game/systems/npc/NPCSchedule.ts
 
 Schedule은 시간에 따른 기본 목적을 제공한다.
 
-예:
-
 ```ts
-interface ScheduleEntry {
+export type ScheduledActivity = 'eat' | 'work' | 'free' | 'sleep';
+
+export interface ScheduleEntry {
   startHour: number;
   activity: ScheduledActivity;
 }
 ```
 
-예:
-
 ```text
-06:00 wake
+06:00 free
 07:00 eat
 08:00 work
 12:00 eat
@@ -1742,6 +1836,25 @@ interface ScheduleEntry {
 20:00 free
 22:00 sleep
 ```
+
+`wake`를 두지 않는다.
+
+기상은 `sleep` 시간대가 끝나는 것으로 표현되고,
+06:00 이후의 행동은 `free`와 구별할 규칙이 없다.
+
+값을 하나 늘려도 대응하는 판단 규칙이 없으면 `decide()`에 비어 있는 분기가 생긴다.
+
+우선순위(30.3)와의 대응은 다음과 같다.
+
+```text
+eat / sleep   →  2단계 필수 스케줄
+work          →  3단계 직업 행동
+free          →  4단계 자유 행동
+```
+
+즉 `ScheduledActivity` 는 4단계 우선순위를 전부 덮으며, 남는 값이 없다.
+
+시간표의 정본은 `MVP_SPEC.md` 39장이다.
 
 Schedule은 절대 규칙이 아니다.
 
@@ -2013,7 +2126,7 @@ context.storage.food >= foodPerMeal ?
 ↓
 YES                                   NO
 ↓                                     ↓
-diningSpot 으로 이동                    Idle (식사 건너뜀)
+diningSpot 으로 이동 (39.2)             Idle (식사 건너뜀)
 ↓
 EatAction (eatSeconds 실시간 4초)
 ↓
@@ -2042,10 +2155,23 @@ MVP는 `hunger: number` 같은 누적 수치를 구현하지 않는다.
 플래그는 식사 시간대가 바뀔 때 초기화한다.
 
 ```text
-GameClockSystem 이 새 식사 시간대에 진입
+GameClockSystem 이 GAME_HOUR_CHANGED 를 emit
+    ↓
+NPCSystem 이 구독한다
+    ↓
+새 식사 시간대(07 / 12 / 18 시)에 진입했으면
     ↓
 모든 NPC 의 hasEatenThisMeal = false
 ```
+
+초기화 주체는 `GameClockSystem`이 아니라 `NPCSystem`이다.
+
+`GameClockSystem`이 NPC 목록을 직접 건드리면 71장의 허용 참조 목록에 없는
+의존이 생기고, 시계가 NPC를 아는 구조가 된다.
+
+플래그의 소유자는 NPC이므로 `NPCSystem`이 갱신한다(87.2).
+
+식사 시간대의 정의는 `MVP_SPEC.md` 39.1에 있다.
 
 ## 40.3 음식이 없으면 그냥 넘어간다
 
@@ -2096,7 +2222,13 @@ door 위치에서 활동 시작
 ```text
 전체 침대 수 = 집들의 residentCapacity 합계
 배정 순서   = NPC id 순서 (결정적)
+door        = house.origin + config.entranceOffset   (24.2)
 ```
+
+침대마다 좌표를 두지 않는다.
+
+MVP는 건물 내부를 Scene으로 만들지 않으므로,
+같은 집에 배정된 세 NPC는 모두 같은 문으로 들어가 숨겨진다.
 
 주민 4명 + 집 1채(침대 3)이면 마지막 NPC가 `RestAction`을 수행한다.
 
@@ -2202,7 +2334,7 @@ src/game/systems/monster/MonsterSystem.ts
 
 ```text
 - Monster Spawn (GameEventSystem 의 spawnMonsters 커맨드로 호출)
-- Village Target 설정
+- Village Target 설정 (WorldQuery.getPlazaPosition)
 - Pathfinding ('monster' 통행 레이어 사용)
 - 이동
 - 경로 차단 시 AttackObstacle 전이
@@ -2216,6 +2348,21 @@ Monster 종류는 MVP에서 하나만 사용한다.
 Monster는 항상 `actor = 'monster'` 레이어로 경로를 계산한다(15.1).
 
 이 레이어에서만 Barrier가 Blocked로 취급된다.
+
+## 46.1 목표 지점은 plaza 다
+
+몬스터의 목표인 "마을 중심 타일"은 `WorldQuery.getPlazaPosition()`이다.
+
+몬스터 전용 목표 오브젝트를 맵에 따로 두지 않는다.
+
+광장은 주민이 밤을 보내고 식사하는 곳이므로,
+몬스터가 거기 도달했다는 것이 곧 "마을이 뚫렸다"는 뜻이 된다.
+
+도달 판정은 광장 타일과의 맨해튼 거리가 1 이하일 때 성립한다.
+
+광장 타일 자체에 NPC가 서 있어 경로가 닿지 않는 경우를 피하기 위해서다.
+
+정의의 정본은 `MVP_SPEC.md` 55.2이다.
 
 ---
 
@@ -2619,12 +2766,60 @@ DialogueSystem 책임:
 - 대사 표시
 - 대화 중 Player 입력 제한
 - 대사 진행
-- 대화 종료
+- 대화 종료 시 DIALOGUE_ENDED emit
 ```
 
 스토리 조건을 직접 결정하지 않는다.
 
 GameEventSystem에서 Dialogue 요청을 보낸다.
+
+## 55.1 대사 데이터가 다음 목표를 들고 있다
+
+```ts
+export interface DialogueDefinition {
+  id: string;
+  speaker: NPCRole;
+  lines: string[];
+  /** 대사가 끝났을 때 설정할 목표. 없으면 목표를 바꾸지 않는다. */
+  objectiveOnEnd?: Objective;
+}
+```
+
+`data/dialogues.ts`에 둔다.
+
+```text
+DialogueSystem 이 마지막 줄을 닫는다
+    ↓
+DIALOGUE_ENDED { dialogueId } emit
+    ↓
+ObjectiveSystem 이 구독한다
+    ↓
+DIALOGUES[dialogueId].objectiveOnEnd 가 있으면 적용
+```
+
+`DialogueSystem`은 자신이 무슨 목표를 세울지 알지 못하고,
+`ObjectiveSystem`은 대사 내용을 알지 못한다. 둘을 잇는 것은 데이터다.
+
+## 55.2 건물 해금은 대사에 걸지 않는다
+
+건물 해금과 대화 가능 표시는 **이벤트 발생 즉시** 일어난다.
+
+목표 문구만 대사 종료 후에 바뀐다.
+
+```text
+unlockBuilding       이벤트 발생 즉시
+markNpcHasDialogue   이벤트 발생 즉시
+objectiveOnEnd       대사 종료 후
+```
+
+해금을 대사에 걸면 `MVP_SPEC.md` 47.2의
+"대화하지 않고 바로 밭을 지어도 진행된다"가 성립하지 않는다.
+
+또한 54장의 "이벤트 조건은 Dialogue 에 의존하지 않는다"와도 충돌한다.
+
+`DIALOGUE_ENDED`는 목표 **표시**만 바꾸며, 어떤 이벤트의 조건도 되지 않는다.
+
+자세한 근거는 `MVP_SPEC.md` 47.1.1에 있다.
 
 ---
 
@@ -2638,16 +2833,58 @@ GameEventSystem에서 Dialogue 요청을 보낸다.
 src/game/systems/objective/ObjectiveSystem.ts
 ```
 
-예:
-
 ```ts
-interface Objective {
+export type ObjectiveProgressKind = 'blockedGateTiles';
+
+export interface Objective {
   id: string;
   text: string;
+  /** 있으면 text 뒤에 " (current / total)" 를 붙여 표시한다 */
+  progress?: ObjectiveProgressKind;
 }
 ```
 
-GameEventSystem이 Objective를 변경할 수 있다.
+Objective를 바꾸는 경로는 세 개다.
+
+```text
+1. GameEventSystem 의 objective 커맨드          (51.1)
+2. DIALOGUE_ENDED  →  objectiveOnEnd            (55.1)
+3. BUILDING_PLACED →  progress 값 재계산         (56.1)
+```
+
+## 56.1 진행 수치
+
+```text
+progress            current                              total
+──────────────────────────────────────────────────────────────────────
+blockedGateTiles    worldQuery.countBlockedGateTiles()   balance.village.gateTiles
+```
+
+`BUILDING_PLACED`를 구독하여 다시 계산하고, 값이 바뀌었으면
+`OBJECTIVE_CHANGED`를 발행한다.
+
+매 프레임 계산하지 않는다. 입구 타일이 막히는 사건은 건설뿐이다.
+
+MVP에서 진행 수치를 쓰는 목표는 방벽 하나뿐이므로
+범용 진행도 시스템을 만들지 않고 종류를 열거형 하나로 둔다.
+
+## 56.2 방벽 완성 후의 대기 목표
+
+`EVENT_BARRIER_REQUEST`가 완료되고 `safetyLevel == 100`이 되었지만
+아직 `morning`이 아닌 동안, 목표를 대기 문구로 바꾼다.
+
+```text
+방벽 미완성   "마을 입구를 막으세요"  + progress
+방벽 완성     "마을을 지켰다. 아침을 기다리세요."
+```
+
+플레이어는 최대 실시간 약 7분을 기다린다(`MVP_SPEC.md` 40.4).
+
+문구가 없으면 완료된 목표를 보며 진행이 막혔다고 판단한다.
+
+이 전환은 `ObjectiveSystem`이 `WORLD_STATE_CHANGED`를 구독해 수행한다.
+
+`EVENT_NEW_RESIDENT`의 조건은 45장 그대로이며 목표와 무관하다.
 
 ---
 
@@ -2911,12 +3148,12 @@ src/game/data/
 파일 예:
 
 ```text
-buildings.ts
-resources.ts
-npcs.ts
-events.ts
-balance.ts
-dialogues.ts
+buildings.ts   BuildingConfig 4종 (크기 / 비용 / entranceOffset / 침대 / 방벽 여부)
+resources.ts   ResourceNode 종류별 획득량과 Respawn
+npcs.ts        NPCRole 별 기본값
+events.ts      GameEventDefinition 6개
+balance.ts     전체 밸런스 수치
+dialogues.ts   DialogueDefinition. objectiveOnEnd 포함 (55.1)
 ```
 
 게임 밸런스 값은 가능한 한 이곳에 둔다.
@@ -3019,11 +3256,12 @@ entity.ts    EntityId, EntityView, MovableEntity
 world.ts     GridPosition, WorldPosition, GameTime, DayPhase,
              WorldStateView, VillageStorageState, PathActor
 npc.ts       NPCRole, NPCActionKind, NPCStateLabel, NPCAction,
-             ActionStatus, NPCContext, ScheduledActivity
+             ActionStatus, NPCContext, ScheduledActivity, ScheduleEntry
 building.ts  BuildingType, BuildingConfig, FarmPhase,
-             BuildInvalidReason, BuildValidationResult
+             BuildInvalidReason, BuildValidationInput, BuildValidationResult
 events.ts    GameEventId, GameEventMap, GameEventCommand,
-             EventContext, Objective
+             EventContext, GameEventDefinition,
+             Objective, ObjectiveProgressKind, DialogueDefinition
 item.ts      InventoryItemId, InventoryState, ResourceNodeType
 ```
 
@@ -3281,14 +3519,17 @@ Rendering
 대상                    테스트 형태
 ──────────────────────────────────────────────────────────
 InventorySystem         add / remove / has 경계값
-BuildValidator          순수 함수. 81장의 5가지 Invalid 사유
+BuildValidator          순수 함수. 81장의 6가지 Invalid 사유
 computeWorldState       순수 함수. 42.3 의 계산 예시
 GameClockSystem         totalGameMinutes → day/hour/minute/dayPhase
 A* Pathfinding          80장의 4가지 케이스 + 두 통행 레이어
 NPCDecisionSystem       NPCContext 리터럴 → 기대 Action
+NPCSchedule             시각 → ScheduledActivity 4종
 FarmSystem              plant / 성장 판정 / harvest 수지
 GameEventDefinition     canTrigger 조건표 (45장) 전체
 VillageStorage          seed 수지 (심기 -1, 수확 +1)
+WorldQuery              침대 배정 결정성 / findDiningSpot 분기 / entrance 계산
+ObjectiveSystem         progress 재계산과 대기 문구 전환
 SaveSystem              직렬화 → 역직렬화 왕복
 ```
 
@@ -3370,13 +3611,21 @@ Barrier 추가 후 경로 변경
 ```text
 빈 공간 → Valid
 
-Map Collision → Invalid
+Map Collision → Invalid  'map_collision'
 
-기존 Building 겹침 → Invalid
+기존 Building 겹침 → Invalid  'overlaps_building'
 
-자원 부족 → Invalid
+BuildableArea 밖 → Invalid  'outside_buildable_area'
 
-맵 밖 → Invalid
+입구 타일에 집 → Invalid  'blocks_village_gate'
+
+입구 타일에 방벽 → Valid
+
+자원 부족 → Invalid  'insufficient_resources' + missing
+
+맵 밖 → Invalid  'out_of_bounds'
+
+Ruins 타일 위 → Valid
 ```
 
 ---
@@ -3464,7 +3713,7 @@ Save Version 불일치
 예:
 
 ```ts
-findNearestFarm(): Building | null;
+findNearestBuilding(from: GridPosition, type: BuildingType): Building | null;
 ```
 
 undefined와 null을 혼용하지 않는다.
@@ -3968,7 +4217,9 @@ docs/adr/
 ├─ 005-barrier-blocks-monsters-only.md
 ├─ 006-entity-view-separation.md
 ├─ 007-game-event-commands.md
-└─ 008-action-as-single-npc-state.md
+├─ 008-action-as-single-npc-state.md
+├─ 009-village-gate-build-restriction.md
+└─ 010-dialogue-ends-only-updates-objective.md
 ```
 
 각 ADR은 배경 / 결정 / 검토한 대안 / 예상되는 결과를 포함한다.

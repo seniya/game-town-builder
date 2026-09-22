@@ -2,8 +2,8 @@
 
 # Small Village Restoration Game — MVP Specification
 
-Version: 0.2
-Status: MVP Spec Baseline (문서 정합성 정리 반영)
+Version: 0.3
+Status: MVP Spec Baseline (2차 정합성 정리 반영)
 Target: Desktop Web Browser
 Genre: 2D Top-down Village Restoration / Life Simulation
 
@@ -317,9 +317,15 @@ Objects           정적 장식 오브젝트 (충돌 없음)
 Ruins             폐허 — 건설 가능, 충돌 없음
 Collision         이동 불가 타일
 BuildableArea     건설 허용 영역
-SpawnPoints       시작 위치 오브젝트
-Interaction       상호작용 오브젝트 (자원 노드 등)
+SpawnPoints       시작 위치 / 자원 노드 오브젝트
 ```
+
+자원 노드도 `SpawnPoints` 레이어의 오브젝트로 배치한다.
+
+별도의 `Interaction` 레이어를 두지 않는다.
+
+상호작용 대상을 두 레이어에 나누어 두면 파싱 경로가 두 개가 되고,
+어느 쪽에 넣어야 하는지 판단할 기준이 없다.
 
 ## 8.1 Buildings 레이어를 두지 않는다
 
@@ -366,16 +372,37 @@ player           플레이어 시작 위치            1개
 npc_farmer       농부 시작 위치               1개
 npc_cook         요리사 시작 위치              1개
 npc_carpenter    목수 시작 위치               1개
-plaza            마을 광장 (식사 / 노숙 / 집합)  1개
+plaza            마을 광장 (마을 중심 타일)      1개
 village_gate     마을 입구 기준 타일            1개
 monster_spawn    몬스터 스폰 위치              1개 이상
 safe_spot        NPC 도피 지점                1개 이상
-resource_tree    나무                        복수
-resource_rock    돌                          복수
-resource_plant   야생 식물                    복수
+resource_tree    나무                        12개 이상
+resource_rock    돌                           8개 이상
+resource_plant   야생 식물                     4개 이상
 ```
 
 이름이 빠져 있으면 게임 시작 시 명확한 Error를 발생시킨다.
+
+자원 노드 개수도 검사 대상이다. 최소 개수보다 적으면 Error를 발생시킨다.
+
+### plaza 는 세 가지 용도로 쓰인다
+
+```text
+1. 집이 없거나 침대가 부족한 NPC 의 밤 위치 (RestAction)
+2. 주방이 없을 때의 식사 장소 (39.2 참조)
+3. 몬스터의 목표 지점 = 마을 중심 타일 (55.2 참조)
+```
+
+세 용도가 모두 "마을의 한가운데"를 뜻하므로 오브젝트를 따로 두지 않는다.
+
+### 자원 노드 최소 개수의 근거
+
+첫 사이클에 필요한 채집은 나무 12회 / 돌 6회 / 야생 식물 3회다(77.3).
+
+노드 수가 이보다 적으면 플레이어가 Respawn(실시간 80초)을 기다려야 하고,
+첫 저녁까지의 3분 20초(40.1) 안에 첫 사이클을 끝낼 수 없다.
+
+최소 개수는 **첫 사이클을 Respawn 없이 충당할 수 있는 양**으로 정한다.
 
 ---
 
@@ -608,6 +635,10 @@ village_gate = (32, 40)
 → 입구 타일 = (30,40) (31,40) (32,40) (33,40) (34,40)
 ```
 
+입구 타일은 `BuildableArea` 안에 있어야 한다. 방벽을 세워야 하기 때문이다.
+
+대신 입구에는 **방벽만** 지을 수 있다. 다른 건물은 Invalid 다(19.2).
+
 ## 14.2 왜 이 제약이 필요한가
 
 `EVENT_NEW_RESIDENT`의 조건은 "방벽으로 입구를 막았다"이다.
@@ -733,13 +764,14 @@ Valid
 Invalid
 ```
 
-판단 조건은 다음 5개이며, 전부 `BuildValidator` **한 곳에서** 판정한다.
+판단 조건은 다음 6개이며, 전부 `BuildValidator` **한 곳에서** 판정한다.
 
 ```text
 out_of_bounds             점유 타일이 맵 밖으로 나가는가
 map_collision             Collision 레이어 타일을 포함하는가
 overlaps_building         기존 건물과 겹치는가
 outside_buildable_area    BuildableArea 밖인가
+blocks_village_gate       입구 타일을 방벽이 아닌 건물로 점유하는가
 insufficient_resources    비용만큼의 자원이 Inventory에 있는가
 ```
 
@@ -758,6 +790,7 @@ validate(input: {
   config: BuildingConfig;
   origin: GridPosition;
   inventory: InventoryState;
+  gateTiles: readonly GridPosition[];
 }): BuildValidationResult;
 ```
 
@@ -770,6 +803,48 @@ Invalid 사유는 화면에 표시한다.
 
 ```text
 나무가 부족합니다 (6 / 4)
+```
+
+## 19.2 입구 타일에는 방벽만 지을 수 있다
+
+입구 5 타일(14.1)은 `BuildableArea` 안에 있어야 한다.
+
+방벽을 그 위에 세워야 `safetyLevel`이 올라가기 때문이다.
+
+그러나 다른 건물까지 허용하면 게임이 진행 불가능해진다.
+
+```text
+집(4×4)으로 입구 5칸 중 4칸을 덮는다
+    ↓
+그 타일에 방벽을 세울 수 없다  (overlaps_building)
+    ↓
+safetyLevel 이 영원히 100 에 도달하지 못한다
+    ↓
+EVENT_NEW_RESIDENT 가 발생하지 않는다  →  엔딩 도달 불가
+```
+
+```text
+밭(3×3) + 주방(2×2) 으로 입구 5칸을 전부 덮는다
+    ↓
+건물 타일은 두 통행 레이어 모두 Blocked 다 (29.2)
+    ↓
+플레이어 · NPC · 새 주민 전원이 통과할 수 없다  →  완전한 진행 불능
+```
+
+따라서 다음 규칙을 둔다.
+
+```text
+점유 타일이 입구 타일을 하나라도 포함하고
+config.blocksMonsters !== true 이면
+    →  blocks_village_gate
+```
+
+방벽만 `blocksMonsters === true`이므로 입구에는 방벽만 지을 수 있다.
+
+Invalid 사유는 화면에 표시한다.
+
+```text
+마을 입구에는 방벽만 세울 수 있습니다
 ```
 
 ---
@@ -942,6 +1017,46 @@ Kitchen
 House
 Barrier
 ```
+
+## 24.1 모든 건물은 진입 타일을 가진다
+
+NPC 는 건물 타일 위에 설 수 없다. 건물 타일은 두 통행 레이어 모두 Blocked 다.
+
+따라서 각 건물은 **NPC 가 서서 작업하는 타일**을 하나 정의한다.
+
+```ts
+/** origin 기준 상대 좌표. 점유 영역 바깥의 통행 가능한 타일이어야 한다. */
+entranceOffset: GridPosition;
+```
+
+```text
+건물      크기    entranceOffset   실제 타일
+──────────────────────────────────────────────────────
+Farm     3 × 3   (1, 3)          밭 아래 가운데
+Kitchen  2 × 2   (0, 2)          주방 아래 왼쪽
+House    4 × 4   (1, 4)          집 아래. 이것이 "문" 이다
+Barrier  1 × 1   —               사용하지 않는다
+```
+
+이 값이 없으면 다음을 결정할 수 없다.
+
+```text
+농부가 밭의 어느 칸 앞에 서서 심는가
+요리사가 주방의 어느 칸 앞에 서서 조리하는가
+NPC 가 집의 어디로 들어가 사라지는가   (WorldQuery.getAssignedBed().door)
+식사 장소는 어디인가                  (39.2)
+```
+
+`door`, `diningSpot`, 작업 위치는 전부 다음 한 식으로 계산한다.
+
+```text
+entranceTile = building.origin + config.entranceOffset
+```
+
+건물마다 다른 규칙을 두지 않는다.
+
+Ghost Preview 는 진입 타일이 통행 불가면 경고를 표시하되, 배치를 막지는 않는다.
+MVP 맵은 건물 배치 후보 주변이 열려 있으므로 Invalid 사유로 만들 만큼 흔하지 않다.
 
 ---
 
@@ -1164,6 +1279,17 @@ residentCapacity = 3
 NPC 는 배정된 침대가 있을 때만 취침한다
 ```
 
+배정 결과는 집의 id 와 **문 타일**을 함께 반환한다.
+
+```text
+door = house.origin + BUILDINGS.house.entranceOffset   (24.1)
+```
+
+침대마다 다른 좌표를 두지 않는다.
+
+MVP는 건물 내부를 Scene으로 만들지 않으므로,
+같은 집에 배정된 NPC 세 명은 모두 같은 문으로 들어가 숨겨진다.
+
 배정은 NPC id 순서로 결정적으로 수행한다.
 
 같은 상황에서 매번 다른 NPC가 노숙하면 디버깅이 어렵다.
@@ -1237,6 +1363,10 @@ Player             통과 가능
 NPC                통과 가능
 New Resident       통과 가능
 ```
+
+방벽 이외의 건물은 **두 통행 레이어 모두 Blocked**다.
+
+집과 밭은 사람도 통과할 수 없다. 방벽만 예외다.
 
 이전 판의 기본값은 "모든 Entity에게 Collision"이었다.
 
@@ -1361,9 +1491,11 @@ NPC 추가는 MVP 완료 이전에 금지한다.
 ```text
 Idle
 Move
-Farm
+Plant
+Harvest
 Eat
 Sleep
+Rest
 Flee
 Talk
 ```
@@ -1383,13 +1515,17 @@ Talk
 ```text
 Idle
 Move
-CollectCrop
 Cook
 Eat
 Sleep
+Rest
 Flee
 Talk
 ```
+
+작물을 밭에서 주방으로 옮기는 별도 행동(`CollectCrop`)은 두지 않는다.
+
+작물은 `VillageStorage`의 숫자이므로 "가져오는" 단계에 상태 변화가 없다(27.2).
 
 ---
 
@@ -1409,6 +1545,7 @@ Move
 Inspect
 Eat
 Sleep
+Rest
 Flee
 Talk
 ```
@@ -1535,7 +1672,8 @@ NPC 행동은 우선순위에 의해 결정한다.
 
 `생존 행동`은 Hunger 수치를 전제한다.
 
-그러나 MVP는 Hunger 수치를 구현하지 않고 **일정 기반 식사**를 사용한다(40장).
+그러나 MVP는 Hunger 수치를 구현하지 않고 **일정 기반 식사**를 사용한다
+(39장, `ARCHITECTURE.md` 40장).
 
 따라서 그 단계는 비어 있는 단계이며 삭제했다.
 
@@ -1615,27 +1753,70 @@ MVP에는 일시적으로 통행을 막는 오브젝트가 존재하지 않는�
 
 주민에게 기본 생활 패턴을 제공한다.
 
-예:
+`NPCSchedule`은 현재 시각을 다음 4종의 활동 중 하나로 변환한다.
+
+```ts
+type ScheduledActivity = 'eat' | 'work' | 'free' | 'sleep';
+```
 
 ```text
-06:00 Wake Up
+시각      ScheduledActivity   의미
+────────────────────────────────────────────────
+06:00    free                기상 후 자유 행동
+07:00    eat                 아침
+08:00    work                오전 업무
+12:00    eat                 점심
+13:00    work                오후 업무
+18:00    eat                 저녁
+20:00    free                자유 시간
+22:00    sleep               취침
+```
 
-07:00 Breakfast
+`wake`라는 활동을 따로 두지 않는다.
 
-08:00 Work
+기상은 `sleep`이 끝나는 것으로 표현되며, 06:00 이후의 행동은 `free`와 같다.
+값을 하나 늘려도 그 값에 대응하는 판단 규칙이 없으면 비어 있는 분기가 된다.
 
-12:00 Lunch
+`ScheduledActivity`와 우선순위(37장)의 대응은 다음과 같다.
 
-13:00 Work
-
-18:00 Dinner
-
-20:00 Free Time
-
-22:00 Sleep
+```text
+eat / sleep   →  2단계 필수 스케줄
+work          →  3단계 직업 행동
+free          →  4단계 자유 행동 (Idle / 광장 배회)
 ```
 
 정확한 시간은 향후 플레이 테스트로 조정한다.
+
+## 39.1 식사 시간대는 1시간이다
+
+```text
+eat 시간대   07:00 ~ 08:00 / 12:00 ~ 13:00 / 18:00 ~ 20:00
+```
+
+한 시간대에 NPC는 **한 번만** 먹는다.
+
+`hasEatenThisMeal` 플래그로 관리하며, 식사 시간대가 바뀌면 초기화한다.
+
+플래그가 없으면 같은 시간대에 음식을 계속 먹어 저장소가 순식간에 비워진다.
+
+## 39.2 식사 장소
+
+식사 장소는 다음 순서로 결정한다.
+
+```text
+1. 주방이 있으면   →  주방의 진입 타일 (24.1)
+2. 주방이 없으면   →  plaza
+```
+
+`WorldQuery.findDiningSpot()`이 이 규칙을 구현한다.
+
+주방을 우선하는 이유는 첫 번째 저녁(51장)의 연출 때문이다.
+
+주민들이 조명과 연기가 있는 주방 앞에 모여야
+"내가 만든 주방에서 저녁이 시작됐다"는 것이 보인다.
+
+주방이 없는 동안에는 음식 자체가 존재하지 않으므로 이 경로는 사실상 쓰이지 않지만,
+`null`을 반환하면 식사 판단에 분기가 하나 더 생기므로 항상 유효한 위치를 반환한다.
 
 ---
 
@@ -1712,6 +1893,24 @@ balance.gameClock.realSecondsPerGameHour
 
 밤에도 플레이어는 자원 채집과 건설을 계속할 수 있어야 한다.
 NPC가 전원 취침 중이라고 해서 플레이어의 조작을 막지 않는다.
+
+## 40.4 엔딩 직전의 대기 구간
+
+`EVENT_NEW_RESIDENT`는 `dayPhase == 'morning'`을 조건으로 가진다(45장).
+
+`morning`은 06:00 ~ 08:00, 즉 2 게임시간 = **실시간 40초**다.
+
+플레이어가 방벽을 낮에 완성하면 다음 아침까지 최대 21 게임시간,
+즉 **실시간 약 7분**을 기다린다.
+
+이것은 버그가 아니라 의도된 연출이다. 새 주민은 아침에 와야 한다.
+
+다만 아무 안내 없이 7분을 기다리게 하면 플레이어는 진행이 막혔다고 느낀다.
+
+따라서 조건이 충족되어 대기 중일 때 목표를 바꾼다(60.4).
+
+이 대기 시간이 실제로 지루한지는 첫 플레이테스트의 2순위 확인 항목이다.
+`realSecondsPerGameHour`를 올리면 대기도 함께 길어진다는 점에 주의한다.
 
 ---
 
@@ -1951,10 +2150,13 @@ interface BuildingConfig {
   height: number;
   cost: Partial<Record<InventoryItemId, number>>;
 
+  /** NPC 가 서는 타일. origin 기준 상대 좌표. 점유 영역 바깥 (24.1) */
+  entranceOffset: GridPosition;
+
   /** 이 건물이 제공하는 침대 수. 집만 > 0 */
   residentCapacity: number;
 
-  /** 이 건물이 입구 타일을 막는가. 방벽만 true */
+  /** 이 건물이 몬스터의 통행을 막는가. 방벽만 true (19.2 / 29.1) */
   blocksMonsters: boolean;
 }
 ```
@@ -1967,18 +2169,30 @@ interface BuildingConfig {
 
 Event는 특정 조건이 충족되면 발생한다.
 
-구조 예:
+**인터페이스의 정본은 `ARCHITECTURE.md` 51장이다.**
 
 ```ts
-interface GameEvent {
-  id: string;
-  condition: () => boolean;
-  trigger: () => void;
+interface GameEventDefinition {
+  id: GameEventId;
   once: boolean;
+
+  canTrigger(context: EventContext): boolean;
+
+  /** 부작용을 직접 일으키지 않고 수행할 커맨드를 반환한다. */
+  execute(context: EventContext): GameEventCommand[];
 }
 ```
 
-실제 구현 구조는 `ARCHITECTURE.md`에서 정의한다.
+`execute`가 `void`가 아니라 커맨드 목록을 반환하는 이유는
+이벤트 정의를 순수 함수로 유지하여 조건과 결과를 그대로 테스트하기 위해서다.
+
+이벤트 정의가 `DialogueSystem`이나 `MonsterSystem`을 직접 호출하지 않는다.
+
+관련 ADR:
+
+```text
+docs/adr/007-game-event-commands.md
+```
 
 ---
 
@@ -2072,6 +2286,7 @@ EVENT_FARM_REQUEST 발생
 ↓
 Objective     "마을을 둘러보세요."
 Farmer 머리 위  대화 가능 표시 (!)
+Build Menu    Farm 해금            ← 대사와 무관하게 이 시점에 해금된다
 ↓
 플레이어가 Farmer 에게 접근하여 [E]
 ↓
@@ -2080,8 +2295,60 @@ Dialogue      "밭이 망가져서 먹을 것을 만들 수 없어."
 Dialogue 종료
 ↓
 Objective     "농부를 위해 밭을 복구하세요."
-Build Menu    Farm 해금
 ```
+
+## 47.1.1 해금은 이벤트 시점에, 목표 문구만 대사 이후에 바뀐다
+
+이전 판의 흐름은 `Dialogue 종료 → Farm 해금`이었다.
+
+그 순서는 구현할 수단이 없었다.
+
+```text
+GameEventCommand 에 "대사가 끝나면 ~한다" 를 표현할 수단이 없다
+GameEventMap 에 대사 종료를 알리는 이벤트가 없다
+54장은 "이벤트 조건이 Dialogue 에 의존해선 안 된다" 고 금지한다
+```
+
+또한 47.2가 "대화하지 않고 바로 밭을 지어도 진행된다"고 명시하는데,
+해금이 대사에 걸려 있으면 애초에 지을 수가 없어 두 규칙이 충돌한다.
+
+따라서 다음과 같이 나눈다.
+
+```text
+건물 해금     이벤트 발생 즉시. unlockBuilding 커맨드.
+대화 가능 표시 이벤트 발생 즉시. markNpcHasDialogue 커맨드.
+목표 문구     대사가 끝난 뒤 바뀐다.
+```
+
+목표 문구만 대사 이후에 바뀌는 이유는 **정보의 순서** 때문이다.
+
+플레이어가 이유를 듣기 전에 "밭을 복구하세요"라고 지시하면
+Problem → Build 순서가 Build → Problem 으로 뒤집힌다.
+
+대사 종료를 목표에 연결하는 방법은 다음 하나다.
+
+```text
+DialogueSystem 이 대사 종료 시 DIALOGUE_ENDED { dialogueId } 를 emit 한다
+    ↓
+ObjectiveSystem 이 구독한다
+    ↓
+data/dialogues.ts 의 해당 대사에 objectiveOnEnd 가 있으면 적용한다
+```
+
+```ts
+interface DialogueDefinition {
+  id: string;
+  speaker: NPCRole;
+  lines: string[];
+  /** 대사가 끝났을 때 설정할 목표. 없으면 목표를 바꾸지 않는다. */
+  objectiveOnEnd?: Objective;
+}
+```
+
+`DialogueSystem`은 자신이 무슨 목표를 세울지 알지 못하고,
+`ObjectiveSystem`은 대사 내용을 알지 못한다.
+
+둘을 잇는 것은 데이터이며, 진행 조건은 여전히 게임 상태만으로 판정된다.
 
 ## 47.2 이벤트 조건과 대사는 분리한다
 
@@ -2283,6 +2550,17 @@ VILLAGE_BREACHED emit
 leave
 ```
 
+**마을 중심 타일은 `plaza` 오브젝트의 타일이다**(8.3).
+
+몬스터의 목표 지점을 위해 오브젝트를 따로 두지 않는다.
+
+광장은 주민이 밤을 보내고 식사하는 곳이므로,
+몬스터가 거기까지 들어왔다는 것이 곧 "마을이 뚫렸다"는 뜻이 된다.
+
+도달 판정은 `plaza` 타일에 인접(맨해튼 거리 1 이하)하면 성립한 것으로 본다.
+
+광장 타일 자체가 다른 Entity로 점유되어 경로가 닿지 않는 경우를 피하기 위해서다.
+
 `VILLAGE_BREACHED`는 MVP에서 다음 용도로만 쓴다.
 
 ```text
@@ -2447,6 +2725,28 @@ Village Population
 
 이 지점이 MVP 플레이의 종료 지점이다.
 
+## 60.4 아침을 기다리는 동안의 목표
+
+`EVENT_BARRIER_REQUEST`가 완료되고 `safetyLevel == 100`이 되었지만
+아직 `morning`이 아닌 동안, 플레이어는 최대 실시간 7분을 기다린다(40.4).
+
+이때 목표를 바꾼다.
+
+```text
+방벽 미완성   "마을 입구를 막으세요  (3 / 5)"
+방벽 완성     "마을을 지켰다. 아침을 기다리세요."
+아침 도달     (EVENT_NEW_RESIDENT 발생)
+```
+
+이 문구가 없으면 플레이어는 목표가 "(5 / 5)"로 완료된 채
+아무 일도 일어나지 않는 화면을 보게 되고, 진행이 막혔다고 판단한다.
+
+목표 전환은 `EVENT_NEW_RESIDENT`의 조건과 무관하다.
+
+`ObjectiveSystem`이 `safetyLevel`을 보고 전환하며, 이벤트 조건은 45장 그대로다.
+
+기다리는 동안 플레이어는 채집과 건설을 계속할 수 있다.
+
 ---
 
 # 61. MVP 완료 후 플레이 유지
@@ -2513,6 +2813,43 @@ Seed    3
 ```
 
 Quest Log 시스템은 만들지 않는다.
+
+## 64.1 진행 수치가 필요한 목표가 하나 있다
+
+방벽 목표는 진행 상황을 숫자로 보여준다(29.5).
+
+```text
+마을 입구를 막으세요  (3 / 5)
+```
+
+`Objective`가 고정 문자열만 가지면 이 숫자는 갱신되지 않는다.
+
+따라서 진행 수치의 **출처**를 목표에 선언한다.
+
+```ts
+type ObjectiveProgressKind = 'blockedGateTiles';
+
+interface Objective {
+  id: string;
+  text: string;
+  /** 있으면 text 뒤에 " (current / total)" 를 붙여 표시한다 */
+  progress?: ObjectiveProgressKind;
+}
+```
+
+```text
+progress            current                              total
+──────────────────────────────────────────────────────────────────────
+blockedGateTiles    worldQuery.countBlockedGateTiles()   balance.village.gateTiles
+```
+
+`ObjectiveSystem`이 `BUILDING_PLACED`를 구독하여 값을 다시 계산하고,
+바뀌었으면 `OBJECTIVE_CHANGED`를 발행한다.
+
+매 프레임 계산하지 않는다. 입구 타일이 막히는 사건은 건설뿐이다.
+
+MVP에서 진행 수치를 쓰는 목표는 이 하나뿐이므로
+범용 진행도 시스템을 만들지 않고 종류를 열거형 하나로 둔다.
 
 ---
 
@@ -3056,6 +3393,7 @@ export const BUILDINGS = {
     type: 'farm',
     width: 3, height: 3,
     cost: { wood: 6, stone: 2, seed: 3 },
+    entranceOffset: { x: 1, y: 3 },
     residentCapacity: 0,
     blocksMonsters: false,
   },
@@ -3063,6 +3401,7 @@ export const BUILDINGS = {
     type: 'kitchen',
     width: 2, height: 2,
     cost: { wood: 8, stone: 4 },
+    entranceOffset: { x: 0, y: 2 },
     residentCapacity: 0,
     blocksMonsters: false,
   },
@@ -3070,6 +3409,7 @@ export const BUILDINGS = {
     type: 'house',
     width: 4, height: 4,
     cost: { wood: 12, stone: 6 },
+    entranceOffset: { x: 1, y: 4 },   // 이 타일이 "문" 이다
     residentCapacity: 3,
     blocksMonsters: false,
   },
@@ -3077,6 +3417,7 @@ export const BUILDINGS = {
     type: 'barrier',
     width: 1, height: 1,
     cost: { wood: 2, stone: 1 },
+    entranceOffset: { x: 0, y: 1 },   // 사용하지 않는다
     residentCapacity: 0,
     blocksMonsters: true,
   },
@@ -3627,6 +3968,8 @@ NPC보다 자원 채집 시간이 더 기억에 남음
 
 ```text
 Gamepad Input
+
+Building Demolish / 이동 / 환불
 
 Barrier Durability / Destruction
 
