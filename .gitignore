@@ -33,3 +33,6 @@ pnpm-debug.log*
 
 # 도구 캐시
 graft/.cache/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
