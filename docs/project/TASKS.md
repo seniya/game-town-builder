@@ -238,12 +238,12 @@ prettier
 
 Acceptance Criteria:
 
-- [ ] `pnpm dev` 로 빈 캔버스가 뜬다
-- [ ] `pnpm build` 가 성공한다
-- [ ] `pnpm test` 가 0 개 테스트로 성공한다
-- [ ] game / ui / workers에서 `three`와 `three/*` import가 lint 에러가 된다
-- [ ] `pnpm lint`와 `pnpm typecheck`가 성공한다. 실제 설치 버전·Node 환경과 dev/build/test 결과를 기록한다
-- [ ] `pnpm-lock.yaml` 이 커밋되어 있다
+- [x] `pnpm dev` 로 빈 캔버스가 뜬다
+- [x] `pnpm build` 가 성공한다
+- [x] `pnpm test` 가 0 개 테스트로 성공한다
+- [x] game / ui / workers에서 `three`와 `three/*` import가 lint 에러가 된다
+- [x] `pnpm lint`와 `pnpm typecheck`가 성공한다. 실제 설치 버전·Node 환경과 dev/build/test 결과를 기록한다
+- [x] `pnpm-lock.yaml` 이 커밋되어 있다
 
 ---
 
