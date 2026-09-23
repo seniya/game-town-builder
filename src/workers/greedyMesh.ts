@@ -100,10 +100,14 @@ export function greedyMesh(
 
   // padded 인덱스의 축별 보폭: x = 1, y = 324, z = 18
   const stride = [1, P * P, P];
-  /** padded 인덱스의 블록 정의. air·모르는 id 는 undefined. */
+  /**
+   * padded 인덱스의 블록 정의. air·모르는 id·렌더 모형 블록(prop: door / bed)은 undefined.
+   * 모형 블록은 면을 만들지 않고 이웃 면을 가리지도 않는다(모형이 그 자리를 따로 그린다, ADR 026).
+   */
   const defAtIndex = (index: number): BlockDefinition | undefined => {
     const id = padded[index] ?? 0;
-    return id === 0 ? undefined : defs[id];
+    const def = id === 0 ? undefined : defs[id];
+    return def?.prop ? undefined : def;
   };
   /** AO·컬링의 가림 판정. 불투명 블록만 가린다. */
   const occludes = (index: number): boolean => defAtIndex(index)?.opaque === true;

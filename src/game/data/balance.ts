@@ -34,6 +34,9 @@ export const balance = {
     eyeHeight: 1.6,
     shoulderOffset: 0.6,
     mouseRadiansPerPixel: 0.0025,
+    /** 천장 걷어 내기: 수평 반경과 머리 위 탐색 높이 (MVP_SPEC 9.3) */
+    ceilingCutRadius: 7,
+    ceilingSearchHeight: 6,
     /** 한 프레임 dt 의 상한. 탭 복귀 스파이크로 벽을 통과하지 않게 한다 (ARCHITECTURE 3) */
     maxFrameSeconds: 0.1,
   },

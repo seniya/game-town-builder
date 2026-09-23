@@ -23,26 +23,29 @@ export interface LightKey {
   readonly night: number;
 }
 
-/** 하루의 조명 키프레임. 시각 순이며 24 시는 0 시와 같다. */
+/**
+ * 하루의 조명 키프레임. 시각 순이며 24 시는 0 시와 같다.
+ * 밤 값은 G2 관찰(밤 밝기 어색) 뒤 달빛·반사광을 한 단계 올렸다(ADR 026). 방향은 HR-010 에서 다시 확인한다.
+ */
 export const LIGHT_KEYS: readonly LightKey[] = [
   {
     hour: 0,
     sky: 0x0d1633,
     sun: 0x8fa6dc,
-    sunIntensity: 0.16,
-    hemiSky: 0x2b3866,
-    hemiGround: 0x16161c,
-    hemiIntensity: 0.42,
+    sunIntensity: 0.24,
+    hemiSky: 0x3c4c82,
+    hemiGround: 0x1e1e26,
+    hemiIntensity: 0.58,
     night: 1,
   },
   {
     hour: 4.5,
     sky: 0x18203f,
     sun: 0x8fa6dc,
-    sunIntensity: 0.18,
-    hemiSky: 0x323e6c,
-    hemiGround: 0x18181e,
-    hemiIntensity: 0.44,
+    sunIntensity: 0.25,
+    hemiSky: 0x404e84,
+    hemiGround: 0x1e1e26,
+    hemiIntensity: 0.58,
     night: 1,
   },
   {
@@ -92,17 +95,17 @@ export const LIGHT_KEYS: readonly LightKey[] = [
     sunIntensity: 0.24,
     hemiSky: 0x444f80,
     hemiGround: 0x221e24,
-    hemiIntensity: 0.44,
+    hemiIntensity: 0.54,
     night: 0.8,
   },
   {
     hour: 20.6,
     sky: 0x0d1633,
     sun: 0x8fa6dc,
-    sunIntensity: 0.16,
-    hemiSky: 0x2b3866,
-    hemiGround: 0x16161c,
-    hemiIntensity: 0.42,
+    sunIntensity: 0.24,
+    hemiSky: 0x3c4c82,
+    hemiGround: 0x1e1e26,
+    hemiIntensity: 0.58,
     night: 1,
   },
 ];

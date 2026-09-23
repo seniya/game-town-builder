@@ -44,11 +44,51 @@ export const CAMERA_WALL_MARGIN = 0.25;
  * 광선을 보내 카메라를 막는 블록(window·door 포함)에 닿으면 그 앞에서 멈춘다.
  * 카메라 위치 = origin − direction × distance.
  */
-export function cameraBoomDistance(world: CollisionWorld, player: Player): number {
+export function cameraBoomDistance(
+  world: CollisionWorld,
+  player: Player,
+  cut: CeilingCut | null = null,
+): number {
   const ray = aimRay(world, player);
   const d = ray.direction;
   const back = { x: -d.x, y: -d.y, z: -d.z };
   const max = balance.player.cameraDistance;
-  const hit = raycastVoxels(world, ray.origin, back, max, isCameraBlocking);
+  const read = cut
+    ? {
+        getBlock: (x: number, y: number, z: number) =>
+          isCut(cut, x, y, z) ? 0 : world.getBlock(x, y, z),
+      }
+    : world;
+  const hit = raycastVoxels(read, ray.origin, back, max, isCameraBlocking);
   return hit ? Math.max(0, hit.distance - CAMERA_WALL_MARGIN) : max;
+}
+
+/** 천장 걷어 내기의 범위 (MVP_SPEC 9.3). y 이상이고 (x, z) 에서 수평 radius 안인 칸을 그리지 않는다. */
+export interface CeilingCut {
+  readonly y: number;
+  readonly x: number;
+  readonly z: number;
+  readonly radius: number;
+}
+
+/**
+ * 플레이어 머리 위(발 칸 +2 ~ +1+ceilingSearchHeight)에 카메라를 막는 블록이 있으면 그 가장 낮은 y 로 천장 범위를 만든다.
+ * 없으면 null(지붕 밑이 아니다). 블록·충돌은 바꾸지 않는 표현 전용 범위다.
+ */
+export function ceilingCutFor(world: CollisionWorld, player: Player): CeilingCut | null {
+  const p = player.body.pos;
+  const x = Math.floor(p.x);
+  const z = Math.floor(p.z);
+  const feet = Math.floor(p.y + 0.01);
+  for (let y = feet + 2; y <= feet + 1 + balance.player.ceilingSearchHeight; y++) {
+    if (isCameraBlocking(world.getBlock(x, y, z))) {
+      return { y, x: p.x, z: p.z, radius: balance.player.ceilingCutRadius };
+    }
+  }
+  return null;
+}
+
+/** 칸이 천장 범위 안인가. */
+export function isCut(cut: CeilingCut, x: number, y: number, z: number): boolean {
+  return y >= cut.y && Math.hypot(x + 0.5 - cut.x, z + 0.5 - cut.z) <= cut.radius;
 }

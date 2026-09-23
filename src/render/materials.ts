@@ -17,6 +17,10 @@ export interface VoxelLightingUniforms {
   readonly pointCount: THREE.IUniform<number>;
   /** 점광원이 닿는 거리(블록) */
   readonly pointRange: THREE.IUniform<number>;
+  /** 천장 걷어 내기 (MVP_SPEC 9.3): x = 켜짐(0/1), y = 천장 y, z = 수평 반경 */
+  readonly cutParams: THREE.IUniform<THREE.Vector3>;
+  /** 천장 걷어 내기의 수평 중심 (x, z) */
+  readonly cutCenter: THREE.IUniform<THREE.Vector2>;
 }
 
 /** 조명 uniform 한 벌을 만든다. 불투명·반투명 재질이 같은 객체를 공유한다. */
@@ -34,6 +38,8 @@ export function createVoxelLighting(): VoxelLightingUniforms {
     },
     pointCount: { value: 0 },
     pointRange: { value: 9 },
+    cutParams: { value: new THREE.Vector3(0, 0, 0) },
+    cutCenter: { value: new THREE.Vector2(0, 0) },
   };
 }
 
@@ -70,6 +76,8 @@ uniform vec3 pointPositions[16];
 uniform vec3 pointColors[16];
 uniform int pointCount;
 uniform float pointRange;
+uniform vec3 cutParams;
+uniform vec2 cutCenter;
 varying vec2 vUv;
 varying float vTile;
 varying float vAo;
@@ -77,6 +85,11 @@ varying vec3 vNormal;
 varying vec3 vWorld;
 #include <fog_pars_fragment>
 void main() {
+  // 천장 걷어 내기: 지붕 밑의 플레이어 주변에서 천장 높이 이상의 면을 그리지 않는다 (MVP_SPEC 9.3).
+  // 천장 y 평면의 면은 아래를 향한 면(천장 밑면)만 지우고 위를 향한 면(벽 윗면)은 남긴다
+  if (cutParams.x > 0.5 && distance(vWorld.xz, cutCenter) <= cutParams.z) {
+    if (vWorld.y > cutParams.y + 0.01 || (vWorld.y > cutParams.y - 0.01 && vNormal.y < -0.5)) discard;
+  }
   float t = floor(vTile + 0.5);
   float column = mod(t, atlasGrid.x);
   float row = floor(t / atlasGrid.x);
@@ -159,6 +172,19 @@ export function createCharacterMaterial(color: number): THREE.Material {
  */
 export function createCharacterSpriteMaterial(texture: THREE.Texture): THREE.SpriteMaterial {
   return new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+}
+
+/** 침대·문 렌더 모형의 단색 재질 (ADR 026). 캐릭터와 같이 장면 광원(해·반사광·torch)을 받는다. */
+export function createPropMaterial(color: number): THREE.Material {
+  return new THREE.MeshLambertMaterial({ color });
+}
+
+/**
+ * 천장 걷어 내기 단면 재질 (MVP_SPEC 9.3). 윗면에 빛이 닿지 않는 밤에도 까맣게 보이지 않도록 약한 자체 밝기를 준다.
+ * 색은 인스턴스 색이 곱해진다.
+ */
+export function createCeilingCapMaterial(): THREE.Material {
+  return new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x2e261e });
 }
 
 /** 조준 블록 테두리 선 재질 (TASK-012). 깊이 검사를 켜 두어 가려진 모서리는 그리지 않는다. */

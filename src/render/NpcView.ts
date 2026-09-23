@@ -6,6 +6,7 @@ import type { NPC } from '../game/entities/NPC';
 import type { ActionView, BlockPos, NPCRole, PlacedObjectSnapshot } from '../game/types';
 import { facingOffset } from '../game/voxel/PlacementIndex';
 import { createCharacterMaterial, createCharacterSpriteMaterial } from './materials';
+import { BED_SURFACE } from './PropView';
 
 /** 역할별 옷차림. */
 interface Outfit {
@@ -163,8 +164,7 @@ export class NpcView {
     this.head.add(this.hat);
     this.figure.add(this.legL, this.legR, torso, ...front, this.armL, this.armR, this.head);
     this.object3d.add(this.figure);
-    // 잘 때만 보이는 베개와 이불(렌더 표현. 침대 블록은 월드에 이미 있다)
-    this.bedding.add(box(0.56, 0.1, 0.36, LINEN, 0, -0.1, 0.5));
+    // 잘 때만 보이는 이불(렌더 표현. 침대·베개는 PropView 가 그린다)
     const blanket = box(0.7, 0.36, 1.12, BLANKET, 0, -0.1, -0.24);
     const fold = box(0.71, 0.37, 0.12, LINEN, 0, -0.1, 0.3);
     this.bedding.add(blanket, fold);
@@ -249,7 +249,7 @@ export class NpcView {
   }
 
   /**
-   * 침대에 눕기. 머리는 anchor 칸 쪽, 발은 facing 쪽이다. 침대 윗면에 등을 대고 눕는다.
+   * 침대에 눕기. 머리는 anchor 칸 쪽(베개), 발은 facing 쪽이다. 매트리스 윗면(BED_SURFACE)에 등을 대고 눕는다.
    * 게임 위치는 접근 셀에 있고, 이 자세는 렌더에서만 침대 위로 옮긴다 (ARCHITECTURE 12.3).
    */
   private poseLying(bed: PlacedObjectSnapshot): void {
@@ -258,14 +258,14 @@ export class NpcView {
     // 침대 두 칸의 가운데, 윗면 높이
     const cx = a.x + 0.5 + o.dx * 0.5;
     const cz = a.z + 0.5 + o.dz * 0.5;
-    const top = a.y + 1;
+    const top = a.y + BED_SURFACE;
     // 머리 방향 h = 발 칸 → anchor 칸 = −facing
     const headYaw = Math.atan2(-o.dx, -o.dz);
     this.object3d.position.set(cx, top, cz);
     this.object3d.rotation.set(0, headYaw, 0);
     // 서 있는 모형(+y 가 머리, −z 가 앞)을 등으로 눕힌다: +y → +z(머리 쪽), 앞 → 위
     this.figure.rotation.set(Math.PI / 2, 0, 0);
-    this.figure.position.set(0, 0.17, -0.74);
+    this.figure.position.set(0, 0.17, -0.62);
     this.legL.rotation.x = 0;
     this.legR.rotation.x = 0;
     this.armL.rotation.set(0, 0, 0.12);
@@ -278,7 +278,7 @@ export class NpcView {
     this.zs.forEach((s, i) => {
       const t = (this.time * 0.45 + i / 3) % 1;
       s.visible = true;
-      s.position.set(0.18 + t * 0.2, 0.55 + t * 0.7, 0.74);
+      s.position.set(0.18 + t * 0.2, 0.55 + t * 0.7, 0.8);
       s.scale.setScalar(0.16 + t * 0.18);
       (s.material as THREE.SpriteMaterial).opacity = Math.sin(t * Math.PI) * 0.9;
     });

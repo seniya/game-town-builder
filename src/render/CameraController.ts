@@ -4,28 +4,42 @@
 import type * as THREE from 'three';
 import { balance } from '../game/data/balance';
 import type { Player } from '../game/entities/Player';
-import { aimRay, cameraBoomDistance } from '../game/systems/aim';
+import { aimRay, cameraBoomDistance, ceilingCutFor, type CeilingCut } from '../game/systems/aim';
 import type { CollisionWorld } from '../game/voxel/collision';
+import type { VoxelLightingUniforms } from './materials';
 
-/** 카메라가 이보다 가까우면 캐릭터 모형을 숨긴다. */
-export const HIDE_PLAYER_BELOW = 0.9;
+/**
+ * 카메라가 이보다 가까우면 캐릭터 모형을 숨긴다. 좁은 방에서 카메라가 벽에 밀려 모형이 화면을 가리지 않게 한다
+ * (TASK-033 G2 "카메라가 벽에 가림", ADR 026).
+ */
+export const HIDE_PLAYER_BELOW = 1.6;
 
 /** 플레이어를 따라가는 카메라. */
 export class CameraController {
   /** 마지막 update 에서 정한 카메라 거리. 벽에 막히면 cameraDistance 보다 작다. */
   distance: number = balance.player.cameraDistance;
+  /** 마지막 update 의 천장 걷어 내기 범위. 지붕 밑이 아니면 null (MVP_SPEC 9.3) */
+  ceilingCut: CeilingCut | null = null;
 
   /** 제어할 카메라, 충돌을 읽을 월드, 따라갈 플레이어를 받는다. */
   constructor(
     private readonly camera: THREE.PerspectiveCamera,
     private readonly world: CollisionWorld,
     private readonly player: Player,
+    private readonly lighting: VoxelLightingUniforms | null = null,
   ) {}
 
   /** 카메라 위치와 방향을 갱신한다. 게임 update 뒤, 렌더 전에 부른다. */
   update(): void {
     const { origin: o, direction: d } = aimRay(this.world, this.player);
-    this.distance = cameraBoomDistance(this.world, this.player);
+    // 지붕 밑이면 천장을 걷어 낸다: 셰이더가 그리지 않고 카메라 충돌에서도 뺀다 (MVP_SPEC 9.3)
+    const cut = ceilingCutFor(this.world, this.player);
+    this.ceilingCut = cut;
+    if (this.lighting) {
+      this.lighting.cutParams.value.set(cut ? 1 : 0, cut?.y ?? 0, cut?.radius ?? 0);
+      if (cut) this.lighting.cutCenter.value.set(cut.x, cut.z);
+    }
+    this.distance = cameraBoomDistance(this.world, this.player, cut);
     this.camera.position.set(
       o.x - d.x * this.distance,
       o.y - d.y * this.distance,

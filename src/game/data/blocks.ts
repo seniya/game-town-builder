@@ -48,6 +48,7 @@ function def(
   cells = 1,
 ): BlockDefinition {
   const translucent = TRANSLUCENT.has(name);
+  const prop = PROPS.has(name);
   return {
     id: BlockId[name],
     name,
@@ -59,11 +60,15 @@ function def(
     drops,
     cells,
     translucent,
+    prop,
   };
 }
 
 /** 반투명 메시로 그리는 블록. 게임 규칙에는 영향이 없는 렌더 분류다. */
 const TRANSLUCENT: ReadonlySet<BlockName> = new Set<BlockName>(['water', 'window']);
+
+/** 청크 메시 대신 렌더 모형으로 그리는 블록 (ADR 026). 게임 규칙에는 영향이 없는 렌더 분류다. */
+const PROPS: ReadonlySet<BlockName> = new Set<BlockName>(['door', 'bed']);
 
 const B = BlockId;
 

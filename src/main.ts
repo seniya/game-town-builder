@@ -24,6 +24,8 @@ import { RoomLabelView } from './render/RoomLabelView';
 import { DayNightVisual } from './render/DayNightVisual';
 import { NavOverlayView } from './render/NavOverlayView';
 import { NpcViews } from './render/NpcView';
+import { PropView } from './render/PropView';
+import { CeilingCapView } from './render/CeilingCapView';
 import { RoomOverlayView } from './render/RoomOverlayView';
 import { blockItem } from './game/systems/InventorySystem';
 import type { BlockPos } from './game/types';
@@ -257,8 +259,11 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
   if (!player || !blockEdit) throw new Error('조작 모드에는 플레이어가 필요하다');
   const canvas = renderer.webgl.domElement;
   bindDomInput(canvas, world.input);
-  const camera = new CameraController(renderer.camera, world.voxels, player);
+  const camera = new CameraController(renderer.camera, world.voxels, player, renderer.lighting);
   const body = new PlayerView();
+  const caps = new CeilingCapView(world.voxels);
+  renderer.scene.add(caps.object3d);
+  let lastUpdate = performance.now();
   const highlight = new Highlight();
   const crosshair = new Crosshair(document.body);
   const iconFor = createItemIconProvider();
@@ -301,6 +306,9 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
     paused: () => screen.paused,
     update: () => {
       camera.update();
+      const now = performance.now();
+      caps.update((now - lastUpdate) / 1000, camera.ceilingCut);
+      lastUpdate = now;
       body.syncFrom(player, camera.distance >= HIDE_PLAYER_BELOW);
       const target = screen.state.kind === 'playing' ? blockEdit.target : null;
       highlight.show(target ? target.pos : null, world.voxels.placements, blockEdit.breakProgress);
@@ -344,6 +352,8 @@ function start(): void {
     plazaCenter: world.plazaCenter,
   });
   renderer.scene.add(npcViews.object3d);
+  const props = new PropView(world.voxels.placements, () => world.characterBodies());
+  renderer.scene.add(props.object3d);
   const dayNight = new DayNightVisual(
     renderer,
     world.clock,
@@ -442,6 +452,7 @@ function start(): void {
     );
     roomLabels.update(frameMs / 1000, diagnosing);
     npcViews.update(frameMs / 1000);
+    props.update(frameMs / 1000);
     dayNight.update(frameMs / 1000);
     navOverlay.update(
       frameMs / 1000,

@@ -436,6 +436,10 @@ F3             디버그 패널
 카메라 충돌에서는 고체 블록과 door 가 카메라를 막는다(window 포함). 마우스 감도는
 픽셀당 0.0025 라디안이다. 이 값들은 조작감 조정 대상이며 34장에 둔다.
 
+천장 걷어 내기(TASK-033 G2 개선, ADR 026): 플레이어 머리 위 6 칸 안(발 칸 +2 ~ +7)에 카메라를 막는 블록이
+있으면, 그중 가장 낮은 블록의 y 이상이고 플레이어에서 수평 7 칸 안인 블록을 그리지 않으며 카메라 충돌에서도 뺀다.
+집 안에서 지붕이 시야와 카메라를 막지 않게 하기 위해서다. 블록 자체·충돌·방 판정은 바뀌지 않는다(보이지만 않는다).
+
 1 인칭을 구현하지 않는다. 자기가 만든 마을을 보는 게임이다.
 
 ## 9.4 충돌
@@ -1954,6 +1958,7 @@ export const balance = {
     pitchMinDeg: -80, pitchMaxDeg: 60,              // 9.3
     eyeHeight: 1.6, shoulderOffset: 0.6,            // 9.3 시선 원점·어깨점
     mouseRadiansPerPixel: 0.0025,
+    ceilingCutRadius: 7, ceilingSearchHeight: 6,   // 9.3 천장 걷어 내기
     maxFrameSeconds: 0.1,                           // ARCHITECTURE 3 의 dt 클램프
   },
 

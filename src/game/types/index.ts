@@ -116,6 +116,11 @@ export interface BlockDefinition {
   readonly cells: number;
   /** 반투명 메시로 그린다 (water / window). 뒤가 비쳐 보인다 (TASK-007) */
   readonly translucent: boolean;
+  /**
+   * 청크 메시 대신 렌더 모형(render/PropView)으로 그린다 (door / bed, ADR 026). 렌더 구분일 뿐
+   * 충돌·통행·방 판정·설치 규칙은 blocks 의 다른 필드 그대로다.
+   */
+  readonly prop: boolean;
 }
 
 /** 청크 메시의 버퍼 한 벌. 좌표는 청크 로컬(0~16)이다. 쿼드마다 정점 4 개, 인덱스 6 개. */

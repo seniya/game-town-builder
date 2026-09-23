@@ -669,6 +669,10 @@ Worker 파일에는 알고리즘을 두지 않는다. 메시지 배선만 한다
 (water / window)는 반투명 메시로 분리한다. 계측용 옵션 `{ ao, greedy }`로 면 컬링·병합·AO의
 감소량을 따로 측정한다.
 
+구현(ADR 026): 천장 걷어 내기(MVP_SPEC 9.3)는 복셀 셰이더 uniform `cutParams` / `cutCenter` 로 그리지 않을 범위를 받는다.
+범위 계산은 게임 쪽 순수 함수 `ceilingCutFor`(systems/aim.ts)이고 카메라 충돌도 같은 범위를 뺀다. 지붕에 가려 메시에 없던 벽 윗면은
+render/CeilingCapView 가 단면 판으로 그린다. door / bed 는 메시에서 빠지고 render/PropView 가 그린다(문 여닫힘 포함).
+
 ## 9.4 materials.ts
 
 **재질 생성은 이 파일 한 곳에만 있다.**
@@ -1837,6 +1841,7 @@ src/game/data/
 ```text
 cells        다중 칸 객체의 점유 칸 수. bed / door = 2, 나머지 1. setBlock 거부 판정에 쓴다
 translucent  반투명 메시 분리. water / window 만 true
+prop         청크 메시 대신 render/PropView 모형으로 그린다. door / bed 만 true (ADR 026). 메셔는 air 처럼 본다
 ```
 
 `drops`의 항목은 `ItemRef`(블록 또는 재료 seed / crop / food)를 가리킨다. seed는 블록이 아니다.
@@ -2196,6 +2201,7 @@ DI 컨테이너
 023  Phase C 방 판정 kernel·재판정 큐·방 식별·진단    Accepted
 024  채석장 재생 시각·소유자·당일 처리 키 (READY-04)  Accepted
 025  Phase D 통행·경로·NPC 판단·취침 배정·낮밤        Accepted
+026  G2 이후 표현: 침대·문 모형, 천장 걷어 내기, 밤 밝기  Accepted
 ```
 
 ---
