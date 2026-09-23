@@ -1,12 +1,24 @@
 // F3 패널의 게임 쪽 계측 수집과 디버그 명령 (ARCHITECTURE 26, TASK-016). 순수 TypeScript 다.
 // 렌더 계측(FPS·드로우콜·청크)은 main 이 render 에서 읽어 패널에 따로 넘긴다.
+import type { NPC } from '../entities/NPC';
 import type { Player } from '../entities/Player';
 import type { NavigationGraph, NavigationStats } from '../nav/NavigationGraph';
 import type { PathScheduler, PathSchedulerStats } from '../nav/PathScheduler';
 import type { RoomRegistry, RoomRegistryStats } from '../room/RoomRegistry';
-import type { BlockPos, DayPhase, Vec3 } from '../types';
+import type { ActionView, BlockPos, DayPhase, Vec3 } from '../types';
 import type { BlockEditSystem } from './BlockEditSystem';
 import { formatClock, type GameClockSystem } from './GameClockSystem';
+import type { SleepStats, SleepSystem } from './SleepSystem';
+
+/** NPC 한 줄 (ARCHITECTURE 26: id / 현재 Action label / 목적지 / 경로 길이). */
+export interface NPCDebugLine {
+  readonly id: string;
+  readonly label: string;
+  readonly destination: BlockPos | null;
+  readonly pathLength: number;
+  readonly pos: Vec3;
+  readonly bed: string | null;
+}
 import type { RoomSystem } from './RoomSystem';
 
 /** 게임 쪽 디버그 표시값. */
@@ -35,6 +47,8 @@ export interface GameDebugSnapshot {
   /** 통행 캐시·경로 요청 계측 */
   readonly nav: NavigationStats | null;
   readonly paths: PathSchedulerStats | null;
+  readonly npcs: readonly NPCDebugLine[];
+  readonly sleep: SleepStats | null;
   /** 방: 인식 수 / 타입별 / 재판정 큐 길이 / 마지막 판정 소요 ms (ARCHITECTURE 26) */
   readonly rooms: RoomRegistryStats | null;
   /** "방 경계 상시 표시" 디버그 명령 */
@@ -50,6 +64,11 @@ export class DebugSystem {
   showNavCells = false;
   /** 통행 계측 대상. GameWorld 가 연결한다 */
   navSources: { readonly nav: NavigationGraph; readonly paths: PathScheduler } | null = null;
+  /** NPC 계측 대상. GameWorld 가 연결한다 */
+  npcSources: {
+    readonly npcs: () => Iterable<NPC<ActionView>>;
+    readonly sleep: SleepSystem;
+  } | null = null;
 
   /** 플레이어와 블록 편집 시스템을 받는다(없으면 관찰용 장면). 방 계측은 선택이다. */
   constructor(
@@ -112,9 +131,30 @@ export class DebugSystem {
       showNavCells: this.showNavCells,
       nav: this.navSources ? this.navSources.nav.stats : null,
       paths: this.navSources ? this.navSources.paths.stats : null,
+      npcs: this.npcLines(),
+      sleep: this.npcSources ? this.npcSources.sleep.stats : null,
       rooms: this.rooms ? this.rooms.stats : null,
       showRoomBounds: this.showRoomBounds,
       diagnosisActive: this.roomSystem?.diagnosisActive ?? false,
     };
+  }
+
+  /** NPC 줄 목록. */
+  private npcLines(): NPCDebugLine[] {
+    const src = this.npcSources;
+    if (!src) return [];
+    const out: NPCDebugLine[] = [];
+    for (const npc of src.npcs()) {
+      const a = npc.action;
+      out.push({
+        id: npc.id,
+        label: a.label,
+        destination: a.destination ?? null,
+        pathLength: a.remainingPath?.length ?? 0,
+        pos: npc.body.pos,
+        bed: src.sleep.assignedBed(npc.id)?.objectId ?? null,
+      });
+    }
+    return out;
   }
 }

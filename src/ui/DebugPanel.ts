@@ -205,6 +205,11 @@ export class DebugPanel {
       g.nav && g.paths
         ? `통행 캐시 ${g.nav.cachedCells} · 감시 칸 ${g.nav.watchedCells} · 경로 대기 ${g.paths.pending} · 이번 프레임 확장 ${g.paths.lastFrameNodes} · 완료 ${g.paths.completed}`
         : '통행 —',
+      `NPC ${g.npcs.length}${g.sleep ? ` · 침대 배정 ${g.sleep.assigned}/${g.sleep.beds} (확인 중 ${g.sleep.checking})` : ''}`,
+      ...g.npcs.map(
+        (n) =>
+          `  ${n.id}: ${n.label} · 목적지 ${fmtVec(n.destination, 0)} · 경로 ${n.pathLength} · 침대 ${n.bed ?? '—'}`,
+      ),
       ...(this.extraLines ? this.extraLines() : []),
       `몬스터 / 감사 / 레벨 / WorldState: 해당 Task 에서 추가`,
     ].join('\n');

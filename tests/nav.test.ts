@@ -274,8 +274,10 @@ describe('findPath (TASK-025)', () => {
     const f = navFixture(80);
     const goal = { kind: 'cell' as const, pos: f.cell(70, 70) };
     // 캐시 없이 처음 탐색하는 경우와 같은 조건으로 여러 번 재어 중앙값을 본다
+    // JIT 준비 3 회 뒤 9 회의 중앙값. 다른 테스트 파일과 병렬 실행되는 부하에서 한 번의 튐으로 실패하지 않게 한다
+    for (let i = 0; i < 3; i++) findPath(f.graph, f.cell(6, 6), goal, 'npc', 4000);
     const times: number[] = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 9; i++) {
       f.graph.clear();
       const t0 = performance.now();
       const r = findPath(f.graph, f.cell(6, 6), goal, 'npc', 4000);
@@ -283,7 +285,7 @@ describe('findPath (TASK-025)', () => {
       expect(r.path).not.toBeNull();
     }
     times.sort((a, b) => a - b);
-    expect(times[3]).toBeLessThanOrEqual(5);
+    expect(times[4]).toBeLessThanOrEqual(5);
   });
 });
 

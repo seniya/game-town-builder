@@ -1,6 +1,6 @@
 // 브라우저 시각 검증용 고정 장면 (TASKS 2.7: TASK-006 / 007). 게임 콘텐츠가 아니다.
 // 기존 블록만 쓰며 새 블록·가구를 만들지 않는다. main.ts 가 ?scene= 로 고른다.
-import type { BlockPos, WriteBlock } from '../types';
+import type { BlockPos, NPCRole, WriteBlock } from '../types';
 import { BlockId } from './blocks';
 
 /** 고정 장면 정의. */
@@ -18,6 +18,12 @@ export interface VisualFixture {
   readonly playerSpawn?: BlockPos;
   /** 채석장 재생 후보 (MVP_SPEC 14.2). 고정 섬만 있다 */
   readonly quarryCandidates?: readonly BlockPos[];
+  /** 광장 중심(종 칸). 주민이 쉬고 모이는 칸의 기준이다 */
+  readonly plazaCenter?: BlockPos;
+  /** 처음부터 사는 주민과 시작 칸 */
+  readonly residents?: readonly { readonly role: NPCRole; readonly cell: BlockPos }[];
+  /** ?time= 이 없을 때의 시작 시각(시). 없으면 07:00 */
+  readonly defaultStartHour?: number;
   /** 카메라 궤도 시점들. 첫 번째가 기본이며 ?view= 로 고른다 */
   readonly views: readonly {
     readonly target: BlockPos;
@@ -280,5 +286,95 @@ export const roomLabFixture: VisualFixture = {
     { target: { x: 26, y: 12, z: 28 }, distance: 46, yaw: 0.35, pitch: 0.75 },
     { target: { x: 20, y: 12, z: 11 }, distance: 26, yaw: 0.2, pitch: 0.6 },
     { target: { x: 20, y: 12, z: 45 }, distance: 26, yaw: 0.2, pitch: 0.6 },
+  ],
+};
+
+/** 취침 실험장의 시작 인벤토리(TASK-033 관찰용). 기존 블록만이며 게임 초기값이 아니다. */
+export const SLEEP_LAB_KIT: readonly { readonly blockId: number; readonly count: number }[] = [
+  { blockId: BlockId.plank, count: 64 },
+  { blockId: BlockId.bed, count: 4 },
+  { blockId: BlockId.door, count: 3 },
+  { blockId: BlockId.torch, count: 16 },
+  { blockId: BlockId.window, count: 16 },
+  { blockId: BlockId.plank, count: 64 },
+  { blockId: BlockId.stone_brick, count: 64 },
+  { blockId: BlockId.plank, count: 64 },
+  { blockId: BlockId.table, count: 2 },
+  { blockId: BlockId.chair, count: 4 },
+];
+
+/**
+ * TASK-033 관찰 장면: 풀밭 가운데 종(광장)과 주민 세 명, 불 켜진 작은 침실 한 채.
+ * 침실은 내부 5 × 5, 판자 바닥·벽 세 층·지붕, 창문 둘, 남쪽 문, 침대 하나, 바닥 torch 하나다.
+ * 플레이어는 빈 땅(서쪽)에 직접 침실을 짓고 침대를 더 놓을 수 있다. 기본 시작 시각은 19:00 이다.
+ */
+export const sleepLabFixture: VisualFixture = {
+  size: { sizeX: 64, sizeY: 28, sizeZ: 64 },
+  playerSpawn: { x: 32, y: 11, z: 41 },
+  plazaCenter: { x: 32, y: 11, z: 32 },
+  residents: [
+    { role: 'farmer', cell: { x: 30, y: 11, z: 35 } },
+    { role: 'cook', cell: { x: 35, y: 11, z: 34 } },
+    { role: 'carpenter', cell: { x: 32, y: 11, z: 29 } },
+  ],
+  defaultStartHour: 19,
+  build(write) {
+    const g = 10;
+    const y = g + 1;
+    fill(write, 0, 0, 0, 63, 0, 63, BlockId.bedrock);
+    fill(write, 0, 1, 0, 63, g - 3, 63, BlockId.stone);
+    fill(write, 0, g - 2, 0, 63, g - 1, 63, BlockId.dirt);
+    fill(write, 0, g, 0, 63, g, 63, BlockId.grass);
+    // 광장: 종과 네 귀퉁이의 torch
+    write(32, y, 32, BlockId.bell);
+    for (const [tx, tz] of [
+      [28, 28],
+      [36, 28],
+      [28, 36],
+      [36, 36],
+    ] as const) {
+      write(tx, y, tz, BlockId.torch);
+    }
+    // 침실 한 채: 내부 x 38~42, z 22~26. 벽 세 층, 지붕, 동쪽 창문 둘. 문은 objects 로 (40, y, 27)
+    fill(write, 38, g, 22, 42, g, 26, BlockId.plank);
+    ringWall(write, 37, 21, 5, 5, y, BlockId.plank, 3, [[40, 27]]);
+    write(40, y + 2, 27, BlockId.plank);
+    write(43, y + 1, 23, BlockId.window);
+    write(43, y + 1, 25, BlockId.window);
+    write(37, y + 1, 24, BlockId.window);
+    fill(write, 36, y + 3, 20, 44, y + 3, 28, BlockId.plank);
+    fill(write, 37, y + 4, 21, 43, y + 4, 27, BlockId.plank);
+    write(42, y, 26, BlockId.torch);
+    // 침실 앞 torch 하나(밤에 문을 찾을 수 있게)
+    write(42, y, 29, BlockId.torch);
+    // 빈 땅 가장자리의 나무 두 그루(풍경)
+    for (const [tx, tz] of [
+      [50, 44],
+      [14, 20],
+    ] as const) {
+      for (let k = 1; k <= 4; k++) write(tx, g + k, tz, BlockId.log);
+      for (let yy = g + 3; yy <= g + 5; yy++)
+        for (let dz = -2; dz <= 2; dz++)
+          for (let dx = -2; dx <= 2; dx++) {
+            if (Math.abs(dx) + Math.abs(dz) + (yy - g - 3) > 3) continue;
+            if (dx === 0 && dz === 0 && yy <= g + 4) continue;
+            write(tx + dx, yy, tz + dz, BlockId.leaves);
+          }
+    }
+  },
+  objects: [
+    { blockId: BlockId.door, anchor: { x: 40, y: 11, z: 27 }, facing: 'south' },
+    { blockId: BlockId.bed, anchor: { x: 38, y: 11, z: 23 }, facing: 'south' },
+  ],
+  views: [
+    { target: { x: 36, y: 12, z: 30 }, distance: 26, yaw: 0.35, pitch: 0.5 },
+    // 침실 문 앞: 주민이 걸어 들어가는 장면
+    { target: { x: 40, y: 12, z: 26 }, distance: 9, yaw: 0.25, pitch: 0.35 },
+    // 창문 너머 침대
+    { target: { x: 39, y: 12, z: 24 }, distance: 7, yaw: 1.45, pitch: 0.3 },
+    // 방 안: 침대에 누운 주민
+    { target: { x: 38.5, y: 12, z: 24 }, distance: 3, yaw: 0.6, pitch: 0.5 },
+    // 광장: 종 둘레에 앉은 주민
+    { target: { x: 32, y: 11.5, z: 32 }, distance: 9, yaw: 0.4, pitch: 0.6 },
   ],
 };

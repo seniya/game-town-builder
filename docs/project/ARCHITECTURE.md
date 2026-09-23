@@ -62,7 +62,7 @@ types      ←  아무것도 의존하지 않는다
 voxel      ←  types, data
 room       ←  types, data, voxel
 nav        ←  types, data, voxel
-entities   ←  types, data (Action 인터페이스는 types에 둔다)
+entities   ←  types, data (Action 의 읽기 view `ActionView`는 types에 둔다. 실행 인터페이스는 actions/Action.ts)
 actions    ←  types, entities, voxel, nav, room
 systems    ←  위 전부
 GameWorld  ←  systems
@@ -949,7 +949,8 @@ export interface PathResult {
 
 export type PathGoal =
   | { kind: 'cell'; pos: BlockPos }
-  | { kind: 'radius'; center: Vec3; radius: number };
+  | { kind: 'radius'; center: Vec3; radius: number }
+  | { kind: 'cells'; cells: readonly BlockPos[] }; // 가구 approachCells 중 하나 (TASK-033)
 export interface PathSearchState {
   readonly from: BlockPos;
   readonly goal: PathGoal;
@@ -1174,6 +1175,11 @@ Action 은 `GameWorld` 전체를 받지 않는다. 필요한 것만 받는다.
 
 ---
 
+구현(TASK-028, ADR 025): `ActionContext`의 nav 는 통행 그래프이고 경로 요청은 `paths`(PathScheduler)로 따로 받는다.
+rooms 는 `findContaining`만 여는 RoomQuery 다. `ActionServices`는 지금 `sleep.isAssigned`만 있다(감사·조리·식사·수리는
+해당 Task). Action 은 읽기 view `ActionView`(kind / label / key / facilityUse(pose 포함) / pose / remainingPath / destination)를
+확장하며, NPC 엔티티는 `NPC<A extends ActionView>`로 실행 타입을 모른다. 이동 중 경로 요청이 대기 중이면 제자리에 선다.
+
 # 14. NPCDecisionSystem
 
 ```ts
@@ -1213,13 +1219,23 @@ export interface RepairCandidate {
   readonly approachCells: readonly BlockPos[];
 }
 
-export function decideAction(ctx: NPCContext): Action | null;
+export function decideAction(ctx: NPCContext): ActionPlan | null;
 ```
 
 방 목록 전체나 DamageLog 전체를 NPC 마다 넘기지 않는다. 14.4 / 14.5 의 원칙이며
 주민 수가 늘어도 판단 입력의 크기가 주민 수 × 월드 규모로 자라지 않게 한다.
 후보 선정의 비용은 소유 시스템이 변경 시점에 한 번 치른다.
 `assignedBed` 도 같은 규칙의 예외가 아니라 SleepSystem 이 이미 좁혀 준 결과다.
+
+구현(TASK-029, ADR 025): `decideAction`은 Action 객체 대신 순수 데이터 `ActionPlan`(idle / move / sleep / rest /
+eat / role / flee / talk + 판단 키 `key`)을 반환하고, NPCSystem(11 번)이 Action 으로 만든다. 판단은 Action 을
+만들거나 시작하지 않으므로 아직 없는 Action(식사·역할·도피·대화)의 판단도 테스트할 수 있다. 그런 계획은 실행 쪽에서
+그 사실을 적은 대기(IdleAction)로 선다. 계획의 key 가 현재 Action 의 key 와 같으면 null(유지)이다.
+이동 계획이 진행 중이면 목적 칸에 막 들어섰어도 이동이 칸 가운데에서 끝날 때까지 유지한다.
+Context 는 여기에 `minuteOfDay`, `mealActive`(MealSystem 전에는 false), `plazaSpot`(이 주민의 광장 칸)을 더하고,
+worldState 는 WorldStateSystem(TASK-039) 에서 더한다. NPCDecisionSystem 은 같은 슬롯에서 SleepSystem 을 먼저 돌린다.
+기본 행동(5 단계)은 MVP_SPEC 19.5 를 따른다: 기상(05~07)·자유 행동(19~20)에는 광장 칸으로 가고 그 밖에는 대기다.
+실패한 계획은 재계산 최소 간격(0.5 초) 동안 같은 key 로 다시 시작하지 않는다.
 
 ## 14.1 우선순위는 5 단계. 위에서 아래로 한 번만
 
@@ -1309,7 +1325,7 @@ NPCSystem             Action 실행. NPC 이동
 FarmSystem            crop 성장 단계. farmland 파괴 시 정리
 CookingSystem         조리 진행. crop → food
 MealSystem            식사 시간 판정. hasEatenThisMeal 리셋
-SleepSystem           침대 배정 / 해제
+SleepSystem           침대 배정 / 해제. 후보 침대까지 실제 경로가 나오면 확정한다 (update 10 번, 판단 전)
 GratitudeSystem       포인트 누적. 최초 인식 보너스 중복 방지
 VillageLevelSystem    게이트 평가. 종 상호작용 처리. 해금 적용
 ResidentArrivalSystem 레벨별 도착 예약과 실제 스폰의 유일한 소유자
@@ -2179,6 +2195,7 @@ DI 컨테이너
 022  Phase B 플레이어 이동·편집 원자성·화면 상태     Accepted
 023  Phase C 방 판정 kernel·재판정 큐·방 식별·진단    Accepted
 024  채석장 재생 시각·소유자·당일 처리 키 (READY-04)  Accepted
+025  Phase D 통행·경로·NPC 판단·취침 배정·낮밤        Accepted
 ```
 
 ---

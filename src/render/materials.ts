@@ -2,12 +2,21 @@
 import * as THREE from 'three';
 import { ATLAS_COLUMNS, ATLAS_ROWS } from './atlas';
 
+/** 복셀 셰이더가 받는 점광원 수의 상한 (MVP_SPEC 34 performance.maxPointLights 와 같다). */
+export const MAX_VOXEL_POINT_LIGHTS = 16;
+
 /** 복셀 셰이더가 공유하는 조명 uniform. Renderer 가 광원 값으로 갱신한다. */
 export interface VoxelLightingUniforms {
   readonly sunDirection: THREE.IUniform<THREE.Vector3>;
   readonly sunColor: THREE.IUniform<THREE.Color>;
   readonly skyAmbient: THREE.IUniform<THREE.Color>;
   readonly groundAmbient: THREE.IUniform<THREE.Color>;
+  /** torch 점광원 (TASK-034). 쓰는 개수는 pointCount, 나머지는 무시한다 */
+  readonly pointPositions: THREE.IUniform<THREE.Vector3[]>;
+  readonly pointColors: THREE.IUniform<THREE.Color[]>;
+  readonly pointCount: THREE.IUniform<number>;
+  /** 점광원이 닿는 거리(블록) */
+  readonly pointRange: THREE.IUniform<number>;
 }
 
 /** 조명 uniform 한 벌을 만든다. 불투명·반투명 재질이 같은 객체를 공유한다. */
@@ -17,6 +26,14 @@ export function createVoxelLighting(): VoxelLightingUniforms {
     sunColor: { value: new THREE.Color(1, 1, 1) },
     skyAmbient: { value: new THREE.Color(0.5, 0.5, 0.5) },
     groundAmbient: { value: new THREE.Color(0.3, 0.3, 0.3) },
+    pointPositions: {
+      value: Array.from({ length: MAX_VOXEL_POINT_LIGHTS }, () => new THREE.Vector3()),
+    },
+    pointColors: {
+      value: Array.from({ length: MAX_VOXEL_POINT_LIGHTS }, () => new THREE.Color(0, 0, 0)),
+    },
+    pointCount: { value: 0 },
+    pointRange: { value: 9 },
   };
 }
 
@@ -27,12 +44,14 @@ varying vec2 vUv;
 varying float vTile;
 varying float vAo;
 varying vec3 vNormal;
+varying vec3 vWorld;
 #include <fog_pars_vertex>
 void main() {
   vUv = uv;
   vTile = tile;
   vAo = ao;
   vNormal = normal;
+  vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
   vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * mvPosition;
   #include <fog_vertex>
@@ -47,10 +66,15 @@ uniform vec3 sunColor;
 uniform vec3 skyAmbient;
 uniform vec3 groundAmbient;
 uniform float alphaCut;
+uniform vec3 pointPositions[16];
+uniform vec3 pointColors[16];
+uniform int pointCount;
+uniform float pointRange;
 varying vec2 vUv;
 varying float vTile;
 varying float vAo;
 varying vec3 vNormal;
+varying vec3 vWorld;
 #include <fog_pars_fragment>
 void main() {
   float t = floor(vTile + 0.5);
@@ -67,7 +91,17 @@ void main() {
   // 정점 AO 0~1 을 곡선으로 바꾼다. 한 면만 가려도 눈에 띄게 모서리가 어두워진다
   float occlusion = mix(0.2, 1.0, pow(vAo, 1.6));
   float faceShade = n.y > 0.5 ? 1.0 : (n.y < -0.5 ? 0.6 : (abs(n.x) > 0.5 ? 0.82 : 0.9));
-  vec3 color = texel.rgb * (ambient + sunColor * sun) * occlusion * faceShade;
+  // torch 불빛: 거리 제곱 감쇠, 면이 불을 향할수록 밝다. 모서리 AO 는 그대로 받는다
+  vec3 torch = vec3(0.0);
+  for (int i = 0; i < 16; i++) {
+    if (i >= pointCount) break;
+    vec3 toLight = pointPositions[i] - vWorld;
+    float d = length(toLight);
+    float att = clamp(1.0 - d / pointRange, 0.0, 1.0);
+    float facing = max(dot(n, toLight / max(d, 0.0001)), 0.0) * 0.7 + 0.3;
+    torch += pointColors[i] * att * att * facing;
+  }
+  vec3 color = texel.rgb * (ambient + sunColor * sun + torch) * occlusion * faceShade;
   gl_FragColor = vec4(color, texel.a);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -117,6 +151,14 @@ export function createTransparentMaterial(
 /** 캐릭터 임시 모형의 단색 재질. 캐릭터 모델·애니메이션은 TASK-028 / 033 에서 다시 본다. */
 export function createCharacterMaterial(color: number): THREE.Material {
   return new THREE.MeshLambertMaterial({ color });
+}
+
+/**
+ * 주민 머리 위 작은 표지 스프라이트 재질(잠든 주민의 z, TASK-033). 투명도는 뷰가 바꾼다.
+ * 조명의 영향을 받지 않아 밤에도 읽힌다.
+ */
+export function createCharacterSpriteMaterial(texture: THREE.Texture): THREE.SpriteMaterial {
+  return new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
 }
 
 /** 조준 블록 테두리 선 재질 (TASK-012). 깊이 검사를 켜 두어 가려진 모서리는 그리지 않는다. */

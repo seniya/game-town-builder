@@ -1,5 +1,8 @@
 // update 순서를 소유하는 유일한 객체 (ARCHITECTURE 4). 순서를 임의로 바꾸지 않는다 (4.1).
 // 렌더는 여기서 호출하지 않는다. main.ts 가 world.update 뒤에 renderer.render 를 부른다.
+import type { Action } from './actions/Action';
+import { IdleAction } from './actions/IdleAction';
+import { createNPC, type NPC } from './entities/NPC';
 import type { Player } from './entities/Player';
 import { EntityRegistry } from './EntityRegistry';
 import { EventBus } from './EventBus';
@@ -16,10 +19,13 @@ import { DebugSystem } from './systems/DebugSystem';
 import { GameClockSystem } from './systems/GameClockSystem';
 import { InputSystem } from './systems/InputSystem';
 import { InventorySystem } from './systems/InventorySystem';
+import { NPCDecisionSystem, plazaSpots } from './systems/NPCDecisionSystem';
+import { NPCSystem } from './systems/NPCSystem';
+import { SleepSystem } from './systems/SleepSystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
 import { QuarryRespawnSystem } from './systems/QuarryRespawnSystem';
 import { RoomSystem } from './systems/RoomSystem';
-import type { AabbBody, BlockPos } from './types';
+import type { AabbBody, BlockPos, NPCRole } from './types';
 import { VillageStorage, type VillageStorageInit } from './VillageStorage';
 import { VoxelWorld, type WorldSize } from './voxel/VoxelWorld';
 
@@ -67,12 +73,15 @@ export interface GameWorldInit {
   readonly quarryCandidates?: readonly BlockPos[];
   /** 시작 gameMinutes. 기본 0 = Day 1 07:00 (MVP_SPEC 20) */
   readonly startGameMinutes?: number;
+  /** 광장 중심(종 칸). 주민이 쉬고 모이는 칸의 기준이다. 없으면 광장이 없는 시험 월드다 */
+  readonly plazaCenter?: BlockPos;
 }
 
 /** 게임 상태의 루트. 순수 TypeScript 이며 three 를 모른다. */
 export class GameWorld {
   readonly events = new EventBus();
-  readonly registry = new EntityRegistry();
+  /** 엔티티 목록. population 은 registry.npcs.size 다 (ARCHITECTURE 27) */
+  readonly registry = new EntityRegistry<NPC<Action>>();
   /** 게임 시계 (update 1 번). 모든 판단의 기준이다 */
   readonly clock: GameClockSystem;
   /** 채석장 하루 재생 (MVP_SPEC 14.3). update 4 번의 편집 뒤 */
@@ -99,6 +108,16 @@ export class GameWorld {
   readonly nav: NavigationGraph;
   /** 경로 요청 스케줄러 (update 6 번). 프레임당 확장 예산을 모든 요청이 나눠 쓴다 */
   readonly paths: PathScheduler;
+  /** 침대 배정의 유일한 소유자 (update 10 번, 판단 전) */
+  readonly sleep: SleepSystem;
+  /** NPC 판단 (update 10 번) */
+  readonly npcDecision: NPCDecisionSystem;
+  /** NPC Action 실행 (update 11 번) */
+  readonly npcSystem: NPCSystem;
+  /** 광장 중심. 없으면 null */
+  readonly plazaCenter: BlockPos | null;
+  private residentCounter = 0;
+  private plazaCache: { revision: number; spots: readonly BlockPos[] } | null = null;
 
   private readonly slots = new Map<UpdateSlot, SlotSystem[]>(
     UPDATE_SLOTS.map((slot) => [slot, []]),
@@ -120,7 +139,7 @@ export class GameWorld {
     // 설치 칸 점유 검사 대상. NPC·몬스터 몸체는 해당 엔티티가 생기는 TASK-028 / 045 에서 더한다
     this.blockEdit = player
       ? new BlockEditSystem(this.voxels, player, this.inventory, this.input, this.events, {
-          occupants: () => [player.body],
+          occupants: () => [...this.characterBodies()],
         })
       : null;
     const reader = createRoomReader(this.voxels);
@@ -165,11 +184,69 @@ export class GameWorld {
     this.paths = new PathScheduler(this.nav, balance.performance.pathfindMaxNodes);
     this.attach('nav', this.paths);
     this.debug.navSources = { nav: this.nav, paths: this.paths };
+    this.plazaCenter = init.plazaCenter ?? null;
+    const npcs = (): Iterable<NPC<Action>> => this.registry.npcs.values();
+    this.sleep = new SleepSystem({
+      events: this.events,
+      rooms: () => this.rooms.getAll(),
+      placement: (id) => this.voxels.placements.get(id),
+      npcs,
+      nav: this.nav,
+      paths: this.paths,
+    });
+    this.npcSystem = new NPCSystem({
+      npcs,
+      world: this.voxels,
+      nav: this.nav,
+      paths: this.paths,
+      rooms: this.rooms,
+      clock: this.clock,
+      events: this.events,
+      services: { sleep: { isAssigned: (n, b) => this.sleep.isAssigned(n, b) } },
+      onBedUnreachable: (n, b) => this.sleep.reportUnreachable(n, b),
+    });
+    this.npcDecision = new NPCDecisionSystem(
+      {
+        npcs,
+        clock: this.clock,
+        storage: () => this.storage.snapshot(),
+        assignedBed: (id) => this.sleep.assignedBed(id),
+        plazaSpots: () => this.currentPlazaSpots(),
+        assign: (id, plan) => this.npcSystem.assign(id, plan),
+      },
+      [this.sleep],
+    );
+    this.attach('npcDecision', this.npcDecision);
+    this.attach('npc', this.npcSystem);
+    this.debug.npcSources = { npcs, sleep: this.sleep };
   }
 
   /** 플레이어·NPC·몬스터의 현재 충돌 몸체. 설치·재생 칸 점유 검사에 쓴다. */
   *characterBodies(): Generator<AabbBody> {
     if (this.player) yield this.player.body;
+    for (const npc of this.registry.npcs.values()) yield npc.body;
+  }
+
+  /**
+   * 주민 한 명을 칸에 세운다. 주민 수를 제한하지 않는다(콘텐츠의 정원은 VillageLevelSystem 이 정한다).
+   * 새 주민에게는 다음 판단에서 침대를 찾는다 (MVP_SPEC 18.1).
+   */
+  spawnResident(role: NPCRole, cell: BlockPos): NPC<Action> {
+    this.residentCounter += 1;
+    const npc = createNPC(`${role}-${this.residentCounter}`, role, cell, new IdleAction());
+    this.registry.npcs.add(npc);
+    this.sleep.markDirty();
+    return npc;
+  }
+
+  /** 광장 칸 목록. 통행이 바뀌었을 때만 다시 계산한다. */
+  private currentPlazaSpots(): readonly BlockPos[] {
+    if (!this.plazaCenter) return [];
+    const rev = this.nav.revision;
+    if (!this.plazaCache || this.plazaCache.revision !== rev) {
+      this.plazaCache = { revision: rev, spots: plazaSpots(this.nav, this.plazaCenter) };
+    }
+    return this.plazaCache.spots;
   }
 
   /** 시스템을 슬롯에 연결한다. 같은 슬롯 안에서는 연결한 순서대로 실행한다. */

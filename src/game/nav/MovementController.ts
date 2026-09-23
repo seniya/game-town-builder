@@ -131,11 +131,17 @@ export class MovementController {
 
   /** 수평으로 멈추고 중력만 적용한다(대기·사용 중에도 발밑이 사라지면 떨어진다). */
   stand(dt: number, body: AabbBody): void {
-    body.velocity = {
-      x: 0,
-      y: Math.max(body.velocity.y + balance.player.gravity * dt, balance.player.maxFallSpeed),
-      z: 0,
-    };
-    moveWithCollision(this.world, body, dt, 0);
+    standStill(this.world, body, dt);
   }
+}
+
+/** 몸체를 수평으로 멈추고 중력만 적용한다. 서 있는 Action(대기·취침·휴식)이 공유한다. */
+export function standStill(world: CollisionWorld, body: AabbBody, dt: number): void {
+  if (!(dt > 0)) return;
+  body.velocity = {
+    x: 0,
+    y: Math.max(body.velocity.y + balance.player.gravity * dt, balance.player.maxFallSpeed),
+    z: 0,
+  };
+  moveWithCollision(world, body, dt, 0);
 }

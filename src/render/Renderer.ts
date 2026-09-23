@@ -23,7 +23,7 @@ export interface OrbitView {
   readonly pitch: number;
 }
 
-/** 낮의 하늘색. 낮밤 보간(TASK-034) 전의 고정값이다. */
+/** 낮의 하늘색. DayNightVisual(TASK-034) 이 매 프레임 시각에 맞춰 바꾼다. */
 const SKY_COLOR = 0x9fcbe8;
 
 /** 화면 그리기의 진입점. */
@@ -32,9 +32,12 @@ export class Renderer {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
   readonly chunks: ChunkMeshManager;
-  private readonly sun: THREE.DirectionalLight;
-  private readonly ambient: THREE.HemisphereLight;
-  private readonly lighting = createVoxelLighting();
+  /** 해(밤에는 달빛). DayNightVisual 이 색·세기·방향을 바꾼다 */
+  readonly sun: THREE.DirectionalLight;
+  /** 하늘·땅 반사광 */
+  readonly ambient: THREE.HemisphereLight;
+  /** 복셀 셰이더 조명 uniform. 광원 값과 torch 점광원이 여기로 들어간다 */
+  readonly lighting = createVoxelLighting();
 
   /** 캔버스에 WebGL2 컨텍스트를 만들고 청크 메시 관리자를 연결한다. */
   constructor(
@@ -94,7 +97,7 @@ export class Renderer {
   }
 
   /** 광원 객체의 값을 복셀 셰이더 uniform 으로 옮긴다. 같은 광원을 두 경로가 다르게 쓰지 않게 한다. */
-  private syncLighting(): void {
+  syncLighting(): void {
     this.lighting.sunDirection.value.copy(this.sun.position).normalize();
     this.lighting.sunColor.value.copy(this.sun.color).multiplyScalar(this.sun.intensity);
     this.lighting.skyAmbient.value.copy(this.ambient.color).multiplyScalar(this.ambient.intensity);

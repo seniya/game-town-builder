@@ -303,3 +303,55 @@ export interface GameClockReader {
   readonly minuteOfDay: number;
   readonly phase: DayPhase;
 }
+
+// ── NPC 와 Action (MVP_SPEC 19, ARCHITECTURE 12 / 13) ──────────────────────────
+
+/** 주민 역할 (MVP_SPEC 19.1). villager 는 레벨업으로 도착하는 역할 없는 주민이다. */
+export type NPCRole = 'farmer' | 'cook' | 'carpenter' | 'villager';
+
+/** Action 종류 (MVP_SPEC 19.3). NPC 의 상태는 현재 Action 이다 (ADR 008). */
+export type ActionKind =
+  | 'idle'
+  | 'move'
+  | 'plant'
+  | 'harvest'
+  | 'cook'
+  | 'eat'
+  | 'sleep'
+  | 'rest'
+  | 'repair'
+  | 'flee'
+  | 'talk';
+
+/** Action.update 결과. */
+export type ActionStatus = 'running' | 'done' | 'failed';
+
+/** 렌더가 그릴 사용 자세. 게임 위치(body.pos)는 접근 셀에 남는다 (ARCHITECTURE 12.3). */
+export type UsePose = 'lie' | 'sit';
+
+/** 사용 중인 시설의 렌더 snapshot (ARCHITECTURE 13). */
+export interface FacilityUse {
+  readonly objectId: string;
+  readonly usePosition: Vec3;
+  readonly pose: UsePose;
+}
+
+/**
+ * Action 의 읽기 view. NPC 엔티티와 렌더·UI 는 이것만 안다 (ARCHITECTURE 2.1: entities ← types).
+ * 실행 인터페이스(start / update / cancel)는 actions/Action.ts 가 이 view 를 확장한다.
+ */
+export interface ActionView {
+  readonly kind: ActionKind;
+  /** UI 표시용 이름 (MVP_SPEC 19.3) */
+  readonly label: string;
+  /** 판단이 같은 계획인지 비교하는 키. 같으면 현재 Action 을 유지한다 */
+  readonly key: string;
+  /** 실제 사용 중인 시설의 렌더 snapshot. 이동·대기 중에는 없다 (ARCHITECTURE 13) */
+  readonly facilityUse?: FacilityUse;
+  /** 시설 없이 취하는 자세(광장에 앉기). 없으면 서 있다 */
+  readonly pose?: UsePose;
+  /** 이동 중이면 남은 경로(디버그 표시). 없으면 빈 배열 */
+  readonly remainingPath?: readonly BlockPos[];
+  /** 이동 목적지(디버그 표시) */
+  readonly destination?: BlockPos | null;
+}

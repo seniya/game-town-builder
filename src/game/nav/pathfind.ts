@@ -7,10 +7,14 @@ import { standCellToWorldFeet } from '../voxel/coords';
 import { isPassableFor } from '../voxel/occupancy';
 import { navKey, navPos, type NavigationGraph } from './NavigationGraph';
 
-/** 목적지. radius 는 발밑 중심이 center 에서 radius 안인 통행 가능 칸이면 성공이다. */
+/**
+ * 목적지. radius 는 발밑 중심이 center 에서 radius 안인 통행 가능 칸이면 성공이다.
+ * cells 는 여러 칸 중 하나에 닿으면 성공이다(가구의 접근 셀들, MVP_SPEC 12.2).
+ */
 export type PathGoal =
   | { readonly kind: 'cell'; readonly pos: BlockPos }
-  | { readonly kind: 'radius'; readonly center: Vec3; readonly radius: number };
+  | { readonly kind: 'radius'; readonly center: Vec3; readonly radius: number }
+  | { readonly kind: 'cells'; readonly cells: readonly BlockPos[] };
 
 /** 접근 경로가 실제로 있는 파괴 가능한 장애물 (NO_PATH 에서만 채운다). */
 export interface BoundaryObstacle {
@@ -150,20 +154,32 @@ function before(a: OpenNode, b: OpenNode): boolean {
  * cell 목표는 max(|dx|+|dz|, |dy|), radius 목표는 max(0, 수평 거리 − radius) 가 과대 추정이 없다.
  */
 function heuristic(p: BlockPos, goal: PathGoal): number {
-  if (goal.kind === 'cell') {
-    const dx = Math.abs(goal.pos.x - p.x);
-    const dz = Math.abs(goal.pos.z - p.z);
-    return Math.max(dx + dz, Math.abs(goal.pos.y - p.y));
+  if (goal.kind === 'cell') return cellDistance(p, goal.pos);
+  if (goal.kind === 'cells') {
+    let best = Number.POSITIVE_INFINITY;
+    for (const c of goal.cells) best = Math.min(best, cellDistance(p, c));
+    return Number.isFinite(best) ? best : 0;
   }
   const f = standCellToWorldFeet(p);
   return Math.max(0, Math.hypot(f.x - goal.center.x, f.z - goal.center.z) - goal.radius);
 }
 
+/** 칸 사이의 최소 걸음 수 하한: max(|dx|+|dz|, |dy|). */
+function cellDistance(p: BlockPos, q: BlockPos): number {
+  return Math.max(Math.abs(q.x - p.x) + Math.abs(q.z - p.z), Math.abs(q.y - p.y));
+}
+
 /** 이 칸이 목표를 만족하는가. radius 는 발밑 중심의 3 차원 거리로 판정한다. */
 function reachesGoal(p: BlockPos, goal: PathGoal): boolean {
-  if (goal.kind === 'cell') return p.x === goal.pos.x && p.y === goal.pos.y && p.z === goal.pos.z;
+  if (goal.kind === 'cell') return sameCell(p, goal.pos);
+  if (goal.kind === 'cells') return goal.cells.some((c) => sameCell(p, c));
   const f = standCellToWorldFeet(p);
   return Math.hypot(f.x - goal.center.x, f.y - goal.center.y, f.z - goal.center.z) <= goal.radius;
+}
+
+/** 같은 칸인가. */
+function sameCell(a: BlockPos, b: BlockPos): boolean {
+  return a.x === b.x && a.y === b.y && a.z === b.z;
 }
 
 /** parent 를 따라 경로를 되짚는다. */
@@ -344,10 +360,11 @@ function sameSession(
   if (s.actor !== actor) return false;
   if (s.from.x !== from.x || s.from.y !== from.y || s.from.z !== from.z) return false;
   if (s.goal.kind !== goal.kind) return false;
-  if (goal.kind === 'cell' && s.goal.kind === 'cell') {
-    return (
-      s.goal.pos.x === goal.pos.x && s.goal.pos.y === goal.pos.y && s.goal.pos.z === goal.pos.z
-    );
+  if (goal.kind === 'cell' && s.goal.kind === 'cell') return sameCell(s.goal.pos, goal.pos);
+  if (goal.kind === 'cells' && s.goal.kind === 'cells') {
+    const a = s.goal.cells;
+    const b = goal.cells;
+    return a.length === b.length && a.every((c, i) => sameCell(c, b[i] as BlockPos));
   }
   if (goal.kind === 'radius' && s.goal.kind === 'radius') {
     return (

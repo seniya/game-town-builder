@@ -6,6 +6,8 @@ import {
   meshEditFixture,
   ROOM_LAB_KIT,
   roomLabFixture,
+  SLEEP_LAB_KIT,
+  sleepLabFixture,
   smallHouseFixture,
   type VisualFixture,
 } from './game/data/visualFixtures';
@@ -19,7 +21,9 @@ import { Highlight } from './render/Highlight';
 import { createItemIconProvider } from './render/itemIcons';
 import { Renderer } from './render/Renderer';
 import { RoomLabelView } from './render/RoomLabelView';
+import { DayNightVisual } from './render/DayNightVisual';
 import { NavOverlayView } from './render/NavOverlayView';
+import { NpcViews } from './render/NpcView';
 import { RoomOverlayView } from './render/RoomOverlayView';
 import { blockItem } from './game/systems/InventorySystem';
 import type { BlockPos } from './game/types';
@@ -137,15 +141,21 @@ const islandScene: VisualFixture = {
   playerSpawn: islandPlayerSpawn(),
   views: ISLAND_VIEWS,
   quarryCandidates: islandData.quarryRespawnCandidates,
+  plazaCenter: islandData.bellPos,
+  residents: [
+    { role: 'farmer', cell: islandData.npcSpawns.farmer },
+    { role: 'cook', cell: islandData.npcSpawns.cook },
+    { role: 'carpenter', cell: islandData.npcSpawns.carpenter },
+  ],
 };
 
 /**
  * ?time=시(소수 가능, 19.5 = 19:30) 를 시작 gameMinutes 로 바꾼다. 07:00 이후면 Day 1, 이전이면 Day 2 의 그 시각이다.
  * 관찰 장면용 시작 조건이며 게임 규칙이 아니다.
  */
-function startMinutesFromParam(value: string | null): number {
-  if (value === null) return 0;
-  const hours = Number(value);
+function startMinutesFromParam(value: string | null, fallbackHour?: number): number {
+  if (value === null && fallbackHour === undefined) return 0;
+  const hours = value === null ? (fallbackHour ?? 0) : Number(value);
   if (!(hours >= 0 && hours < 24)) return 0;
   const target = Math.round(hours * 60);
   const start = balance.clock.startHour * 60;
@@ -157,6 +167,7 @@ function pickFixture(name: string | null): VisualFixture {
   if (name === 'mesh-edit') return meshEditFixture;
   if (name === 'house') return smallHouseFixture;
   if (name === 'room-lab') return roomLabFixture;
+  if (name === 'sleep-lab') return sleepLabFixture;
   return islandScene;
 }
 
@@ -168,11 +179,17 @@ function pickView(fixture: VisualFixture, index: number): VisualFixture['views']
 }
 
 /** 고정 장면으로 GameWorld 를 만든다. 다중 칸 객체는 editObject 로 놓는다. */
-function createWorld(fixture: VisualFixture, play: boolean, startGameMinutes: number): GameWorld {
+function createWorld(
+  fixture: VisualFixture,
+  play: boolean,
+  startGameMinutes: number,
+  residentLimit: number,
+): GameWorld {
   const world = new GameWorld({
     storage: balance.storage,
     worldSize: fixture.size,
     startGameMinutes,
+    ...(fixture.plazaCenter ? { plazaCenter: fixture.plazaCenter } : {}),
     ...(fixture.quarryCandidates ? { quarryCandidates: fixture.quarryCandidates } : {}),
     ...(play && fixture.playerSpawn ? { playerSpawn: fixture.playerSpawn } : {}),
   });
@@ -189,9 +206,13 @@ function createWorld(fixture: VisualFixture, play: boolean, startGameMinutes: nu
   world.voxels.markAllDirty();
   // 장면에 미리 지어 둔 방은 로드처럼 조용히 인식한다(인식 연출·보상 이벤트 없음)
   world.rooms.rebuildAll();
-  if (fixture === roomLabFixture && world.player) {
-    for (const k of ROOM_LAB_KIT)
-      world.inventory.add([{ item: blockItem(k.blockId), count: k.count }]);
+  const kit =
+    fixture === roomLabFixture ? ROOM_LAB_KIT : fixture === sleepLabFixture ? SLEEP_LAB_KIT : [];
+  if (world.player) {
+    for (const k of kit) world.inventory.add([{ item: blockItem(k.blockId), count: k.count }]);
+  }
+  for (const r of (fixture.residents ?? []).slice(0, residentLimit)) {
+    world.spawnResident(r.role, r.cell);
   }
   return world;
 }
@@ -296,7 +317,12 @@ function start(): void {
   const fixture = pickFixture(sceneName);
   // ?view= 가 있으면 고정 시점 관찰(측정) 모드, 없고 시작 칸이 있으면 조작 모드다
   const play = fixture.playerSpawn !== undefined && !params.has('view');
-  const world = createWorld(fixture, play, startMinutesFromParam(params.get('time')));
+  const world = createWorld(
+    fixture,
+    play,
+    startMinutesFromParam(params.get('time'), fixture.defaultStartHour),
+    Number(params.get('residents') ?? Number.POSITIVE_INFINITY),
+  );
   const renderer = new Renderer(getCanvas(), world.voxels, {
     workerCount: Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1)),
     chunkUploadsPerFrame: balance.performance.chunkUploadsPerFrame,
@@ -313,6 +339,18 @@ function start(): void {
   if (params.get('nav') === '1') world.debug.showNavCells = true;
   const navOverlay = new NavOverlayView(world.nav);
   renderer.scene.add(navOverlay.object3d);
+  const npcViews = new NpcViews(() => world.registry.npcs.values(), {
+    placement: (id) => world.voxels.placements.get(id),
+    plazaCenter: world.plazaCenter,
+  });
+  renderer.scene.add(npcViews.object3d);
+  const dayNight = new DayNightVisual(
+    renderer,
+    world.clock,
+    world.voxels,
+    world.events,
+    balance.performance.maxPointLights,
+  );
   const orbit = params.get('orbit') !== '0';
   const editDriver =
     sceneName === 'mesh-edit' ? createEditDriver(world, Number(params.get('eps') ?? 20)) : null;
@@ -364,7 +402,7 @@ function start(): void {
   const measureSeconds = Number(params.get('measure') ?? 0);
   const measured: number[] = [];
   let maxDraws = 0;
-  (window as unknown as { __gtb: unknown }).__gtb = { world, renderer, probe };
+  (window as unknown as { __gtb: unknown }).__gtb = { world, renderer, probe, dayNight };
   const startedAt = performance.now();
   let last = startedAt;
   let lastReport = startedAt;
@@ -403,11 +441,13 @@ function start(): void {
       diagnosing ? world.rooms.getDiagnosis().result : null,
     );
     roomLabels.update(frameMs / 1000, diagnosing);
+    npcViews.update(frameMs / 1000);
+    dayNight.update(frameMs / 1000);
     navOverlay.update(
       frameMs / 1000,
       world.debug.showNavCells,
       world.player ? world.player.body.pos : view.target,
-      [],
+      [...world.registry.npcs.values()].map((n) => n.action.remainingPath ?? []),
     );
     clockHud.update();
     renderer.render();
