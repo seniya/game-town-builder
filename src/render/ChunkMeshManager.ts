@@ -77,6 +77,16 @@ export class ChunkMeshManager {
     return n;
   }
 
+  /** 카메라 절두체 안의 메시 청크 수 (PERF-001 계측). 불투명·반투명 중 하나라도 보이면 한 청크로 센다. */
+  countVisible(frustum: THREE.Frustum): number {
+    let n = 0;
+    for (const m of this.meshes.values()) {
+      const meshes = [m.opaque, m.transparent].filter((x): x is THREE.Mesh => x !== null);
+      if (meshes.some((x) => frustum.intersectsObject(x))) n += 1;
+    }
+    return n;
+  }
+
   /**
    * 1 dirty 청크를 큐에 넣는다 2 유휴 Worker 에 하나씩 보낸다
    * 3 완료 결과를 최대 uploadsPerFrame 개 GPU 에 올린다 4 나머지는 다음 프레임으로 미룬다

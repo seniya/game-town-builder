@@ -162,6 +162,8 @@ export const balance = {
     chunkUploadsPerFrame: 2,
     pathfindMaxNodes: 4000,
     maxPointLights: 16,
+    /** 경로가 없던 (주민, 침대) 조합을 블록 변경 뒤 다시 시도하는 최소 간격(초). 편집마다 재탐색하지 않는다 (PERF-001) */
+    sleepRetrySeconds: 1,
   },
 } as const;
 

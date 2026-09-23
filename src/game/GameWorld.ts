@@ -116,6 +116,10 @@ export class GameWorld {
   readonly npcSystem: NPCSystem;
   /** 광장 중심. 없으면 null */
   readonly plazaCenter: BlockPos | null;
+  /** 슬롯별 마지막 update 소요(ms). profile 이 true 일 때만 잰다 (PERF-001) */
+  readonly slotMs = new Map<UpdateSlot, number>();
+  /** 슬롯 계측을 켠다. 기본은 끔(계측 비용을 게임에 얹지 않는다) */
+  profile = false;
   private residentCounter = 0;
   private plazaCache: { revision: number; spots: readonly BlockPos[] } | null = null;
 
@@ -257,7 +261,9 @@ export class GameWorld {
   /** 한 프레임을 16 슬롯 순서대로 진행한다. 비어 있는 슬롯은 건너뛴다. */
   update(dt: number): void {
     for (const slot of UPDATE_SLOTS) {
+      const t0 = this.profile ? performance.now() : 0;
       for (const system of this.slotList(slot)) system.update(dt);
+      if (this.profile) this.slotMs.set(slot, performance.now() - t0);
     }
   }
 

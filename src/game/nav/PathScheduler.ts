@@ -24,6 +24,8 @@ export interface PathRequest {
   readonly explored: number;
   /** 읽은 월드가 바뀌어 처음부터 다시 시작한 횟수 */
   readonly restarts: number;
+  /** 요청한 뒤 지난 nav 슬롯 수(대기 프레임). 끝나면 멈춘다 */
+  readonly waitedFrames: number;
 }
 
 /** 내부 가변 요청. */
@@ -38,6 +40,7 @@ interface Entry {
   explored: number;
   restarts: number;
   search: PathSearchState | undefined;
+  waitedFrames: number;
   /** 이번 세션 이후 영향 범위 안의 변경이 있었다 */
   stale: boolean;
 }
@@ -47,6 +50,10 @@ export interface PathSchedulerStats {
   readonly pending: number;
   readonly lastFrameNodes: number;
   readonly completed: number;
+  /** 대기 중 가장 오래 기다린 요청의 대기 프레임 */
+  readonly oldestWaitFrames: number;
+  /** 끝난 요청 중 가장 오래 기다린 대기 프레임(누적 최대) */
+  readonly maxCompletedWaitFrames: number;
 }
 
 /** 세션 범위 밖이어도 읽는 칸(이웃의 y±2, 장애물 칸)까지 포함하는 여유. */
@@ -58,6 +65,7 @@ export class PathScheduler implements SlotSystem {
   private nextId = 1;
   private lastNodes = 0;
   private completed = 0;
+  private maxCompletedWait = 0;
 
   /** 통행 그래프와 프레임 예산을 받는다. 그래프 변경을 듣고 영향받는 세션을 표시한다. */
   constructor(
@@ -73,6 +81,8 @@ export class PathScheduler implements SlotSystem {
       pending: this.queue.length,
       lastFrameNodes: this.lastNodes,
       completed: this.completed,
+      oldestWaitFrames: this.queue.reduce((m, e) => Math.max(m, e.waitedFrames), 0),
+      maxCompletedWaitFrames: this.maxCompletedWait,
     };
   }
 
@@ -89,6 +99,7 @@ export class PathScheduler implements SlotSystem {
       explored: 0,
       restarts: 0,
       search: undefined,
+      waitedFrames: 0,
       stale: false,
     };
     this.queue.push(entry);
@@ -117,6 +128,7 @@ export class PathScheduler implements SlotSystem {
     const unfinished: Entry[] = [];
     for (let i = 0; i < count; i++) {
       const entry = this.queue.shift() as Entry;
+      entry.waitedFrames += 1;
       if (budget <= 0) {
         unfinished.push(entry);
         continue;
@@ -140,6 +152,7 @@ export class PathScheduler implements SlotSystem {
         entry.result = r;
         entry.search = undefined;
         this.completed += 1;
+        this.maxCompletedWait = Math.max(this.maxCompletedWait, entry.waitedFrames);
       }
     }
     this.queue.push(...unfinished);

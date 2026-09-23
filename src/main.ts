@@ -1,5 +1,6 @@
 // 부트스트랩. game 과 render 를 함께 아는 유일한 위치다 (MVP_SPEC 33, ARCHITECTURE 3).
 // ?scene= 으로 장면을 고른다: 기본은 고정 섬 (TASK-008), mesh-edit (TASK-006) / house (TASK-007) 는 시각 검증용.
+import * as THREE from 'three';
 import { balance } from './game/data/balance';
 import {
   meshEditCells,
@@ -14,6 +15,7 @@ import {
 import { BLOCKS, BlockId } from './game/data/blocks';
 import { GameWorld } from './game/GameWorld';
 import { buildIsland, ISLAND_REGIONS, islandPlayerSpawn } from './game/data/island';
+import { perfFixture } from './game/data/perfFixture';
 import { formatClock, MINUTES_PER_DAY } from './game/systems/GameClockSystem';
 import { CameraController, HIDE_PLAYER_BELOW } from './render/CameraController';
 import { PlayerView } from './render/EntityView';
@@ -170,6 +172,7 @@ function pickFixture(name: string | null): VisualFixture {
   if (name === 'house') return smallHouseFixture;
   if (name === 'room-lab') return roomLabFixture;
   if (name === 'sleep-lab') return sleepLabFixture;
+  if (name === 'perf') return perfFixture;
   return islandScene;
 }
 
@@ -318,6 +321,191 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
   };
 }
 
+/** PERF-001 한 프레임 표본. */
+interface PerfSample {
+  frameMs: number;
+  updateMs: number;
+  npcMs: number;
+  navMs: number;
+  roomMs: number;
+  renderMs: number;
+  draws: number;
+  nodes: number;
+  pathPending: number;
+  oldestWait: number;
+  roomQueue: number;
+  roomFrameMs: number;
+  meshPending: number;
+  uploads: number;
+}
+
+/** 배열의 p 분위수(0~1). */
+function quantile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] ?? 0;
+}
+
+/**
+ * TASK-PERF-001 구동기. 측정 구간(워밍업 뒤 seconds 초) 동안
+ * 0 / 40 초에 20:00 직전, 20 초에 05:00 직전으로 시각을 옮겨 전원 동시 경로 요청을 만들고,
+ * 앞 30 초는 초당 10 칸 편집(국소: 광장 옆 방 안 / 경계: 청크 경계 x = 127·128), 뒤 30 초는 편집 없이 큐 소진을 본다.
+ * 끝나면 `[gtb] PERF 결과` 한 줄을 콘솔에 남긴다.
+ */
+function createPerfDriver(
+  world: GameWorld,
+  renderer: Renderer,
+  seconds: number,
+): { frame: (sinceWarmMs: number, dtMs: number, renderMs: number) => void; result: () => unknown } {
+  world.profile = true;
+  const samples: PerfSample[] = [];
+  const visibleChunks: number[] = [];
+  const visibleNpcs: number[] = [];
+  let bursts = 0;
+  let editBudget = 0;
+  let edits = 0;
+  let done: unknown = null;
+  const frustum = new THREE.Frustum();
+  const m = new THREE.Matrix4();
+  const plaza = world.plazaCenter ?? { x: 0, y: 0, z: 0 };
+  // 국소 편집: 광장 북동쪽 방 안 한 칸, 경계 편집: 청크 경계 두 칸(길 위)
+  const room = world.rooms.findContaining({ x: plaza.x + 7, y: plaza.y, z: plaza.z - 7 });
+  const local =
+    room?.shape.interior.find((c) => world.voxels.getBlock(c.x, c.y, c.z) === BlockId.air) ?? null;
+  const boundary = [
+    { x: 127, y: plaza.y, z: plaza.z + 2 },
+    { x: 128, y: plaza.y, z: plaza.z + 2 },
+  ];
+  const slot = (name: Parameters<typeof world.slotMs.get>[0]): number =>
+    world.slotMs.get(name) ?? 0;
+  return {
+    frame(since, dtMs, renderMs) {
+      if (done) return;
+      const t = since / 1000;
+      if (bursts === 0 && t >= 0) {
+        world.clock.advanceTo(19, 58);
+        bursts = 1;
+      } else if (bursts === 1 && t >= 20) {
+        world.clock.advanceTo(4, 58);
+        bursts = 2;
+      } else if (bursts === 2 && t >= 40) {
+        world.clock.advanceTo(19, 58);
+        bursts = 3;
+      }
+      if (t < 30) {
+        editBudget += (dtMs / 1000) * 10;
+        while (editBudget >= 1) {
+          editBudget -= 1;
+          const c = edits % 2 === 0 && local ? local : (boundary[edits % 2] ?? boundary[0]);
+          if (c) {
+            const cur = world.voxels.getBlock(c.x, c.y, c.z);
+            world.voxels.setBlock(
+              c.x,
+              c.y,
+              c.z,
+              cur === BlockId.air ? BlockId.plank : BlockId.air,
+              'player',
+            );
+          }
+          edits += 1;
+        }
+      }
+      const paths = world.paths.stats;
+      const rooms = world.rooms.stats;
+      const mesh = renderer.chunks.stats;
+      let updateMs = 0;
+      for (const v of world.slotMs.values()) updateMs += v;
+      samples.push({
+        frameMs: dtMs,
+        updateMs,
+        npcMs: slot('npcDecision') + slot('npc'),
+        navMs: slot('nav'),
+        roomMs: slot('room'),
+        renderMs,
+        draws: renderer.drawCalls,
+        nodes: paths.lastFrameNodes,
+        pathPending: paths.pending,
+        oldestWait: paths.oldestWaitFrames,
+        roomQueue: rooms.queueLength,
+        roomFrameMs: rooms.lastFrameMs,
+        meshPending: mesh.pending + mesh.inFlight,
+        uploads: mesh.uploadsThisFrame,
+      });
+      if (samples.length % 30 === 0) {
+        const cam = renderer.camera;
+        m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+        frustum.setFromProjectionMatrix(m);
+        visibleChunks.push(renderer.chunks.countVisible(frustum));
+        let n = 0;
+        for (const npc of world.registry.npcs.values()) {
+          const p = npc.body.pos;
+          if (frustum.containsPoint(new THREE.Vector3(p.x, p.y + 1, p.z))) n += 1;
+        }
+        visibleNpcs.push(n);
+      }
+      if (t < seconds) return;
+      const col = (k: keyof PerfSample): number[] => samples.map((x) => x[k]);
+      const avg = (a: number[]): number => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length);
+      const frames = col('frameMs');
+      const worst = [...frames]
+        .sort((a, b) => b - a)
+        .slice(0, Math.max(1, Math.floor(frames.length / 100)));
+      const half = (k: keyof PerfSample, second: boolean): number[] =>
+        samples.filter((_, i) => i >= samples.length / 2 === second).map((x) => x[k]);
+      const all = world.voxels.allChunkCoords();
+      const memory = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+      done = {
+        seconds,
+        frames: frames.length,
+        avgFps: 1000 / avg(frames),
+        low1Fps: 1000 / avg(worst),
+        frameP95: quantile(frames, 0.95),
+        frameMax: Math.max(...frames),
+        updateAvg: avg(col('updateMs')),
+        updateP95: quantile(col('updateMs'), 0.95),
+        updateMax: Math.max(...col('updateMs')),
+        npcAvg: avg(col('npcMs')),
+        npcMax: Math.max(...col('npcMs')),
+        navAvg: avg(col('navMs')),
+        navMax: Math.max(...col('navMs')),
+        roomMax: Math.max(...col('roomMs')),
+        roomFrameMax: Math.max(...col('roomFrameMs')),
+        renderAvg: avg(col('renderMs')),
+        renderP95: quantile(col('renderMs'), 0.95),
+        drawsAvg: avg(col('draws')),
+        drawsMax: Math.max(...col('draws')),
+        nodesMax: Math.max(...col('nodes')),
+        pathPendingMax: Math.max(...col('pathPending')),
+        oldestWaitMax: Math.max(...col('oldestWait')),
+        maxCompletedWaitFrames: world.paths.stats.maxCompletedWaitFrames,
+        pathPendingEnd: world.paths.stats.pending,
+        roomQueueMaxEdit: Math.max(...half('roomQueue', false)),
+        roomQueueMaxDrain: Math.max(...half('roomQueue', true)),
+        roomQueueEnd: world.rooms.stats.queueLength,
+        meshPendingMaxEdit: Math.max(...half('meshPending', false)),
+        meshPendingEnd: renderer.chunks.stats.pending + renderer.chunks.stats.inFlight,
+        uploadsMax: Math.max(...col('uploads')),
+        edits,
+        chunksTotal: all.length,
+        chunksResident: all.filter((c) => world.voxels.getChunk(c.cx, c.cy, c.cz) !== undefined)
+          .length,
+        chunksMeshed: renderer.chunks.stats.meshedChunks,
+        visibleChunksAvg: avg(visibleChunks),
+        npcs: world.registry.npcs.size,
+        npcsDetailed: world.registry.npcs.size,
+        visibleNpcsAvg: avg(visibleNpcs),
+        rooms: world.rooms.stats.rooms,
+        roomsByType: world.rooms.stats.byType,
+        objects: world.voxels.placements.all().length,
+        bedsAssigned: world.sleep.stats.assigned,
+        heapMB: memory ? memory.usedJSHeapSize / 1048576 : null,
+      };
+      console.info('[gtb] PERF 결과', JSON.stringify(done));
+    },
+    result: () => done,
+  };
+}
+
 /** 앱을 시작한다. */
 function start(): void {
   const params = new URLSearchParams(window.location.search);
@@ -410,9 +598,13 @@ function start(): void {
   });
   if (params.get('debug') === '1') debugPanel.toggle();
   const measureSeconds = Number(params.get('measure') ?? 0);
+  const perf =
+    sceneName === 'perf'
+      ? createPerfDriver(world, renderer, Number(params.get('seconds') ?? 60))
+      : null;
   const measured: number[] = [];
   let maxDraws = 0;
-  (window as unknown as { __gtb: unknown }).__gtb = { world, renderer, probe, dayNight };
+  (window as unknown as { __gtb: unknown }).__gtb = { world, renderer, probe, dayNight, perf };
   const startedAt = performance.now();
   let last = startedAt;
   let lastReport = startedAt;
@@ -461,7 +653,13 @@ function start(): void {
       [...world.registry.npcs.values()].map((n) => n.action.remainingPath ?? []),
     );
     clockHud.update();
+    const renderStart = performance.now();
     renderer.render();
+    const renderMs = performance.now() - renderStart;
+    if (perf && probe.settledAtMs !== null) {
+      const since = now - startedAt - probe.settledAtMs - MEASURE_WARMUP_MS;
+      if (since >= 0) perf.frame(since, frameMs, renderMs);
+    }
     debugPanel.update(now);
     if (measureSeconds > 0 && probe.settledAtMs !== null && probe.measure?.done !== true) {
       const since = now - startedAt - probe.settledAtMs;

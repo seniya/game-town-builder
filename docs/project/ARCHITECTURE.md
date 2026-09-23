@@ -952,6 +952,7 @@ export interface PathResult {
   nodesExplored: number;
   reason?: 'NO_PATH' | 'NODE_LIMIT';
   continuation: PathSearchState | null; // NODE_LIMIT에서 다음 호출로 넘길 상태
+  reachable?: ReadonlySet<number>;      // NO_PATH에서 출발 칸이 닿는 칸(navKey). 같은 영역의 다른 요청자도 같은 목표에 못 간다 (ADR 029)
 }
 
 export type PathGoal =

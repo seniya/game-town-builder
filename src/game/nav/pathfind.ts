@@ -37,6 +37,11 @@ export interface PathResult {
   readonly reason?: 'NO_PATH' | 'NODE_LIMIT';
   /** NODE_LIMIT 에서 다음 호출로 넘길 상태. 끝났으면 null */
   readonly continuation: PathSearchState | null;
+  /**
+   * NO_PATH 에서 출발 칸이 닿을 수 있는 칸 전체(navKey). 이 칸들에 선 다른 actor 도 같은 목표에 갈 수 없다.
+   * 같은 목표를 주민마다 따로 다시 탐색하지 않게 한다 (PERF-001, ADR 029). 그 밖에는 없다
+   */
+  readonly reachable?: ReadonlySet<number>;
 }
 
 /**
@@ -347,6 +352,7 @@ export function findPath(
     nodesExplored: explored,
     reason: 'NO_PATH',
     continuation: null,
+    reachable: s.closed,
   };
 }
 

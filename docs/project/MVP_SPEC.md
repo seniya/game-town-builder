@@ -2074,6 +2074,7 @@ export const balance = {
     chunkUploadsPerFrame: 2,
     pathfindMaxNodes: 4000,
     maxPointLights: 16,
+    sleepRetrySeconds: 1,   // 경로 없던 침대 재시도 최소 간격 (PERF-001, ADR 029)
   },
 } as const;
 ```

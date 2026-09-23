@@ -2,6 +2,7 @@
 // NPC 엔티티에는 배정을 저장하지 않는다. 판단은 assignedBed 조회로, Action 은 isAssigned 포트로만 읽는다.
 // 배정은 "실제 경로가 있는 빈 침대"에만 한다: 후보를 고르면 경로를 요청하고, 경로가 나오면 확정한다.
 // update 10 번 슬롯에서 판단보다 먼저 돈다 (ARCHITECTURE 4.1).
+import { balance } from '../data/balance';
 import { BlockId } from '../data/blocks';
 import type { NPC } from '../entities/NPC';
 import type { EventBus } from '../EventBus';
@@ -9,6 +10,7 @@ import type { SlotSystem } from '../GameWorld';
 import type { NavigationGraph } from '../nav/NavigationGraph';
 import type { PathRequest, PathScheduler } from '../nav/PathScheduler';
 import type { ActionView, BlockPos, Facility, PlacedObjectSnapshot, Room } from '../types';
+import { navKey } from '../nav/NavigationGraph';
 import { npcCell } from './NPCDecisionSystem';
 
 /** 저장 단위 (SaveData.bedAssignments, ARCHITECTURE 23.1). */
@@ -51,6 +53,9 @@ export class SleepSystem implements SlotSystem {
   /** 현재 Bedroom 의 침대 시설. 방이 dirty 인지 함께 둔다 */
   private beds = new Map<string, { facility: Facility; roomDirty: boolean }>();
   private dirty = true;
+  /** 경로 없던 조합을 다시 시도할 블록 변경이 있었다 */
+  private retryWanted = false;
+  private sinceRetry = 0;
 
   /** 방·블록 변경을 구독한다. 침대 파괴는 방 재판정을 기다리지 않고 즉시 해제한다. */
   constructor(private readonly deps: SleepSystemDeps) {
@@ -59,9 +64,10 @@ export class SleepSystem implements SlotSystem {
     deps.events.on('ROOM_TYPE_CHANGED', mark);
     deps.events.on('ROOM_FACILITIES_CHANGED', mark);
     deps.events.on('ROOM_UNREGISTERED', mark);
+    // 블록 변경은 길을 열 수 있다. 그러나 편집마다 경로 없던 조합을 모두 다시 시도하면 빈 침대 수 × 편집 횟수만큼
+    // 탐색이 반복된다. 재시도는 sleepRetrySeconds 에 한 번으로 묶는다 (PERF-001, ADR 029)
     deps.events.on('BLOCK_CHANGED', (c) => {
-      this.unreachable.clear();
-      this.dirty = true;
+      this.retryWanted = true;
       if (c.removedObject?.blockId === BlockId.bed) this.releaseBed(c.removedObject.id);
     });
   }
@@ -114,7 +120,16 @@ export class SleepSystem implements SlotSystem {
   }
 
   /** 변경이 있었거나 경로 확인이 진행 중이면 배정을 맞춘다. */
-  update(): void {
+  update(dt = 0): void {
+    this.sinceRetry += dt;
+    if (this.retryWanted && this.sinceRetry >= balance.performance.sleepRetrySeconds) {
+      this.retryWanted = false;
+      this.sinceRetry = 0;
+      if (this.unreachable.size > 0) {
+        this.unreachable.clear();
+        this.dirty = true;
+      }
+    }
     if (!this.dirty && this.pending.size === 0) return;
     this.dirty = false;
     this.refreshBeds();
@@ -137,11 +152,20 @@ export class SleepSystem implements SlotSystem {
       }
       if (p.request.status === 'pending') continue;
       this.pending.delete(npcId);
-      if (p.request.result?.path) {
+      const result = p.request.result;
+      if (result?.path) {
         this.bedOf.set(npcId, p.bedId);
         this.npcOf.set(p.bedId, npcId);
       } else {
         this.unreachable.add(`${npcId}|${p.bedId}`);
+        // 같은 연결 영역에 선 주민도 이 침대에 갈 수 없다. 주민마다 같은 탐색을 되풀이하지 않는다 (ADR 029)
+        const region = result?.reachable;
+        if (region) {
+          for (const other of npcs) {
+            const c = npcCell(other);
+            if (region.has(navKey(c.x, c.y, c.z))) this.unreachable.add(`${other.id}|${p.bedId}`);
+          }
+        }
         this.dirty = true;
       }
     }
