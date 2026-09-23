@@ -150,3 +150,134 @@ export interface MeshResult extends MeshData {
   readonly coord: ChunkCoord;
   readonly revision: number;
 }
+
+// ── 방 인식 (MVP_SPEC 11 / 12, ARCHITECTURE 10) ────────────────────────────────
+
+/** 블록 id 읽기. room / nav 의 순수 판정이 공유한다. 월드 밖은 air(0) 로 읽는다. */
+export interface BlockReader {
+  /** blockId 를 읽는다. */
+  get(x: number, y: number, z: number): number;
+}
+
+/** 방 판정이 읽는 블록·배치 정보 (ARCHITECTURE 10.1). VoxelWorld 를 직접 받지 않는다. */
+export interface RoomBlockReader extends BlockReader {
+  /** 월드 밖 air 와 내부 air 를 구별한다. */
+  contains(pos: BlockPos): boolean;
+  /** 다중 칸 객체(bed / door)를 조회한다. */
+  objectAt(pos: BlockPos): PlacedObjectSnapshot | undefined;
+}
+
+/** 방 판정 제한값 (MVP_SPEC 11.1). balance.room 에서 온다. */
+export interface RoomLimits {
+  readonly minFloorArea: number;
+  readonly maxFloorArea: number;
+  readonly minWallHeight: number;
+}
+
+/** 방 판정 실패 사유와 확인 가능한 좌표 (MVP_SPEC 11.4). */
+export type RoomFailure =
+  | { readonly reason: 'NOT_ENCLOSED'; readonly at: BlockPos }
+  | { readonly reason: 'NO_FLOOR'; readonly at: BlockPos }
+  | { readonly reason: 'NO_DOOR' }
+  | { readonly reason: 'WALL_TOO_LOW'; readonly at: BlockPos }
+  | { readonly reason: 'TOO_LARGE' }
+  | { readonly reason: 'TOO_SMALL' };
+
+/** 성립한 방의 형태 (ARCHITECTURE 10.1). */
+export interface RoomShape {
+  /** 가구 점유를 포함한 바닥 영역(발 높이 y = floorY 의 칸) */
+  readonly interior: readonly BlockPos[];
+  /** 첫 층 경계. 둘째 층(y+1)도 벽으로 검증했다 */
+  readonly boundary: readonly BlockPos[];
+  /** 경계에 있는 완전한 두 칸 문의 아래 anchor */
+  readonly doors: readonly BlockPos[];
+  /** 내부 영역의 y. 바닥 블록은 floorY - 1 에 있다 */
+  readonly floorY: number;
+}
+
+/** 방 판정 결과. */
+export type RoomDetection =
+  | { readonly ok: true; readonly shape: RoomShape }
+  | { readonly ok: false; readonly failure: RoomFailure };
+
+/**
+ * 진단 모드(Tab)의 결과 (ARCHITECTURE 10.1, MVP_SPEC 11.5).
+ * failureDetail 은 NOT_ENCLOSED 의 원인을 나눈다: 월드 밖 도달(열린 공간)인지, 벽이 아닌 블록인지.
+ */
+export interface RoomDiagnostic {
+  readonly start: BlockPos;
+  readonly detection: RoomDetection;
+  /** 탐색한 내부 칸. 열린 공간이면 탐색 범위다 */
+  readonly explored: readonly BlockPos[];
+  /** 시작점에서 실패 지점(또는 마지막 방문 칸)까지 실제 탐색 경로. 구멍의 정답이라는 뜻이 아니다 */
+  readonly escapeTrace: readonly BlockPos[];
+  /** NOT_ENCLOSED 의 원인. 그 밖의 실패·성공이면 null */
+  readonly failureDetail: 'outside' | 'notWall' | null;
+  /** 성공한 방의 타입. 실패면 null */
+  readonly roomType: RoomType | null;
+  /** 가구 접근 실패·미충족 레시피 (MVP_SPEC 11.5) */
+  readonly facilityIssues: readonly { readonly at: BlockPos; readonly message: string }[];
+}
+
+/** 방 타입 (MVP_SPEC 12.1). */
+export type RoomType = 'DiningRoom' | 'Kitchen' | 'Bedroom' | 'Storeroom' | 'EmptyRoom';
+
+/**
+ * 방 레시피의 조건 (MVP_SPEC 12.1). 조건 종류는 다섯 타입과 1:1 이며 개수만 data 에 둔다.
+ * 판정 로직은 room/matchRecipe.ts 에 있다.
+ */
+export type RoomRecipeRule =
+  | { readonly kind: 'dining'; readonly minTables: number; readonly minChairsPerTable: number }
+  | { readonly kind: 'kitchen'; readonly minStoves: number; readonly minWaterPots: number }
+  | { readonly kind: 'bedroom'; readonly minBeds: number }
+  | { readonly kind: 'storeroom'; readonly minChests: number }
+  | { readonly kind: 'none' };
+
+/** 방 레시피 한 행. priority 내림차순으로 처음 만족하는 타입을 부여한다. */
+export interface RoomRecipe {
+  readonly type: RoomType;
+  readonly priority: number;
+  readonly rule: RoomRecipeRule;
+  /** 화면 표시 이름 (라벨·진단) */
+  readonly displayName: string;
+}
+
+/** 접근 가능한 가구 하나 (ARCHITECTURE 10.2). */
+export interface Facility {
+  /** 다중 칸 객체는 PlacementIndex id, 단일 칸 가구는 posKey(ARCHITECTURE 6.3) */
+  readonly objectId: string;
+  readonly anchor: BlockPos;
+  /** 가구에 수평 인접하고 문과 이어진 보행 셀. NPC 의 A* 목적지 후보다 */
+  readonly approachCells: readonly BlockPos[];
+  /** 렌더의 사용 자세용. body.pos 나 A* 목적지가 아니다 */
+  readonly usePosition: Vec3;
+}
+
+/** 방 타입이 주민에게 주는 시설 (MVP_SPEC 12.4). 최종 타입의 시설만 채운다. */
+export interface RoomFacilities {
+  readonly beds: readonly Facility[];
+  readonly cookingSpots: readonly Facility[];
+  readonly diningSeats: readonly Facility[];
+  readonly chests: readonly Facility[];
+}
+
+/** matchRecipe 결과. */
+export interface RecipeMatch {
+  readonly type: RoomType;
+  readonly facilities: RoomFacilities;
+}
+
+/** 인식된 방 (ARCHITECTURE 10.4). RoomRegistry 가 소유하고 외부에는 읽기 전용으로 보인다. */
+export interface Room {
+  readonly id: string;
+  readonly type: RoomType;
+  readonly shape: RoomShape;
+  readonly facilities: RoomFacilities;
+  /** 라벨·보상 좌표용 대표 칸. 내부 칸 중 무게중심에 가장 가까운 칸 */
+  readonly center: BlockPos;
+  /** 재판정 대기 중. dirty 방의 시설은 신규 예약·완료 보상에 쓰지 않는다 */
+  readonly dirty: boolean;
+}
+
+/** 통행 판정의 주체. door 가 NPC 에게만 비고체이므로 호출부가 항상 명시한다 (ARCHITECTURE 11.2). */
+export type ActorKind = 'npc' | 'monster';
