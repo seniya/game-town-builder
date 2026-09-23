@@ -25,6 +25,17 @@ export const balance = {
     attackIntervalSeconds: 0.5,
     attackRange: 2.5,
     cameraDistance: 5.0,
+    /** 자동으로 오르는 턱 높이 (MVP_SPEC 9.4) */
+    stepUpHeight: 1.0,
+    /** 시선 피치 제한. 음수가 내려다보기 (MVP_SPEC 9.3) */
+    pitchMinDeg: -80,
+    pitchMaxDeg: 60,
+    /** 발밑 중심에서 시선 원점까지의 높이, 카메라 기준 오른쪽 어깨점 거리 (MVP_SPEC 9.3) */
+    eyeHeight: 1.6,
+    shoulderOffset: 0.6,
+    mouseRadiansPerPixel: 0.0025,
+    /** 한 프레임 dt 의 상한. 탭 복귀 스파이크로 벽을 통과하지 않게 한다 (ARCHITECTURE 3) */
+    maxFrameSeconds: 0.1,
   },
 
   inventory: { hotbarSlots: 9, bagSlots: 27, stackSize: 64 },

@@ -9,9 +9,14 @@ import {
 } from './game/data/visualFixtures';
 import { BlockId } from './game/data/blocks';
 import { GameWorld } from './game/GameWorld';
-import { buildIsland, ISLAND_REGIONS } from './game/data/island';
+import { buildIsland, ISLAND_REGIONS, islandPlayerSpawn } from './game/data/island';
+import { CameraController, HIDE_PLAYER_BELOW } from './render/CameraController';
+import { PlayerView } from './render/EntityView';
+import { Highlight } from './render/Highlight';
 import { Renderer } from './render/Renderer';
 import type { BlockPos } from './game/types';
+import { Crosshair } from './ui/Crosshair';
+import { bindDomInput } from './ui/domInput';
 
 /** 브라우저 검증에서 읽는 계측값. 콘솔과 window.__gtb 로 공개한다. */
 interface FrameProbe {
@@ -106,6 +111,7 @@ const islandScene: VisualFixture = {
   size: balance.world,
   build: (write) => void buildIsland(write),
   objects: [],
+  playerSpawn: islandPlayerSpawn(),
   views: ISLAND_VIEWS,
 };
 
@@ -124,8 +130,12 @@ function pickView(fixture: VisualFixture, index: number): VisualFixture['views']
 }
 
 /** 고정 장면으로 GameWorld 를 만든다. 다중 칸 객체는 editObject 로 놓는다. */
-function createWorld(fixture: VisualFixture): GameWorld {
-  const world = new GameWorld({ storage: balance.storage, worldSize: fixture.size });
+function createWorld(fixture: VisualFixture, play: boolean): GameWorld {
+  const world = new GameWorld({
+    storage: balance.storage,
+    worldSize: fixture.size,
+    ...(play && fixture.playerSpawn ? { playerSpawn: fixture.playerSpawn } : {}),
+  });
   const t0 = performance.now();
   fixture.build((x, y, z, id) => world.voxels.writeInitial(x, y, z, id));
   console.info(`[gtb] 월드 생성 ${(performance.now() - t0).toFixed(1)} ms`);
@@ -165,18 +175,45 @@ function createEditDriver(world: GameWorld, editsPerSecond: number): (dt: number
   };
 }
 
+/**
+ * 조작 모드의 입력·카메라·플레이어 모형·조준 표시를 연결한다.
+ * 반환 함수는 매 프레임 world.update 뒤, 렌더 전에 부른다.
+ */
+function createPlayView(world: GameWorld, renderer: Renderer): () => void {
+  const player = world.player;
+  const blockEdit = world.blockEdit;
+  if (!player || !blockEdit) throw new Error('조작 모드에는 플레이어가 필요하다');
+  const canvas = renderer.webgl.domElement;
+  bindDomInput(canvas, world.input);
+  const camera = new CameraController(renderer.camera, world.voxels, player);
+  const body = new PlayerView();
+  const highlight = new Highlight();
+  const crosshair = new Crosshair(document.body);
+  renderer.scene.add(body.object3d, highlight.object3d);
+  return () => {
+    camera.update();
+    body.syncFrom(player, camera.distance >= HIDE_PLAYER_BELOW);
+    const target = blockEdit.target;
+    highlight.show(target ? target.pos : null, world.voxels.placements);
+    crosshair.update(target !== null, world.input.frame.pointerLocked);
+  };
+}
+
 /** 앱을 시작한다. */
 function start(): void {
   const params = new URLSearchParams(window.location.search);
   const sceneName = params.get('scene');
   const fixture = pickFixture(sceneName);
-  const world = createWorld(fixture);
+  // ?view= 가 있으면 고정 시점 관찰(측정) 모드, 없고 시작 칸이 있으면 조작 모드다
+  const play = fixture.playerSpawn !== undefined && !params.has('view');
+  const world = createWorld(fixture, play);
   const renderer = new Renderer(getCanvas(), world.voxels, {
     workerCount: Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1)),
     chunkUploadsPerFrame: balance.performance.chunkUploadsPerFrame,
     maxPixelRatio: Number(params.get('dpr') ?? 2),
   });
   const view = pickView(fixture, Number(params.get('view') ?? 0));
+  const playView = world.player ? createPlayView(world, renderer) : null;
   const orbit = params.get('orbit') !== '0';
   const editDriver =
     sceneName === 'mesh-edit' ? createEditDriver(world, Number(params.get('eps') ?? 20)) : null;
@@ -201,7 +238,7 @@ function start(): void {
   /** 한 프레임: 게임 규칙 → 렌더 (ARCHITECTURE 3). dt 는 0.1 초로 클램프한다. */
   function frame(now: number): void {
     const frameMs = now - last;
-    const dt = Math.min(frameMs / 1000, 0.1);
+    const dt = Math.min(frameMs / 1000, balance.player.maxFrameSeconds);
     last = now;
     if (probe.settledAtMs !== null) {
       probe.frames += 1;
@@ -214,12 +251,15 @@ function start(): void {
     }
     world.update(dt);
     const t = (now - startedAt) / 1000;
-    renderer.setOrbitView({
-      target: view.target,
-      distance: view.distance,
-      yaw: view.yaw + (orbit ? t * 0.05 : 0),
-      pitch: view.pitch,
-    });
+    if (playView) playView();
+    else {
+      renderer.setOrbitView({
+        target: view.target,
+        distance: view.distance,
+        yaw: view.yaw + (orbit ? t * 0.05 : 0),
+        pitch: view.pitch,
+      });
+    }
     renderer.render();
     if (measureSeconds > 0 && probe.settledAtMs !== null && probe.measure?.done !== true) {
       const since = now - startedAt - probe.settledAtMs;

@@ -1,7 +1,12 @@
 // update 순서를 소유하는 유일한 객체 (ARCHITECTURE 4). 순서를 임의로 바꾸지 않는다 (4.1).
 // 렌더는 여기서 호출하지 않는다. main.ts 가 world.update 뒤에 renderer.render 를 부른다.
+import type { Player } from './entities/Player';
 import { EntityRegistry } from './EntityRegistry';
 import { EventBus } from './EventBus';
+import { BlockEditSystem } from './systems/BlockEditSystem';
+import { InputSystem } from './systems/InputSystem';
+import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
+import type { BlockPos } from './types';
 import { VillageStorage, type VillageStorageInit } from './VillageStorage';
 import { VoxelWorld, type WorldSize } from './voxel/VoxelWorld';
 
@@ -43,6 +48,8 @@ export interface GameWorldInit {
   readonly storage: VillageStorageInit;
   /** 월드 크기. MVP 는 balance.world, 시험은 작은 fixture 크기를 쓴다 */
   readonly worldSize: WorldSize;
+  /** 플레이어 시작 칸(발이 놓이는 칸, MVP_SPEC 7.5). 없으면 플레이어 없는 관찰용 월드다 */
+  readonly playerSpawn?: BlockPos;
 }
 
 /** 게임 상태의 루트. 순수 TypeScript 이며 three 를 모른다. */
@@ -51,6 +58,12 @@ export class GameWorld {
   readonly registry = new EntityRegistry();
   readonly storage: VillageStorage;
   readonly voxels: VoxelWorld;
+  /** 입력 수집 (update 2 번). DOM 어댑터가 원시 입력을 넣는다 */
+  readonly input = new InputSystem();
+  /** 플레이어. playerSpawn 이 없으면 null 이다 */
+  readonly player: Player | null;
+  /** 조준·파괴·설치. 플레이어가 없으면 null 이다 */
+  readonly blockEdit: BlockEditSystem | null;
 
   private readonly slots = new Map<UpdateSlot, SlotSystem[]>(
     UPDATE_SLOTS.map((slot) => [slot, []]),
@@ -60,6 +73,13 @@ export class GameWorld {
   constructor(init: GameWorldInit) {
     this.storage = new VillageStorage(this.events, init.storage);
     this.voxels = new VoxelWorld(init.worldSize, this.events);
+    this.attach('input', this.input);
+    this.player = init.playerSpawn ? createPlayer(init.playerSpawn) : null;
+    this.blockEdit = this.player ? new BlockEditSystem(this.voxels, this.player) : null;
+    if (this.player && this.blockEdit) {
+      this.attach('playerMovement', new PlayerMovementSystem(this.voxels, this.player, this.input));
+      this.attach('blockEdit', this.blockEdit);
+    }
   }
 
   /** 시스템을 슬롯에 연결한다. 같은 슬롯 안에서는 연결한 순서대로 실행한다. */

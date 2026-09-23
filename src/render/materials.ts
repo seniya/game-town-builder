@@ -113,3 +113,13 @@ export function createTransparentMaterial(
 ): THREE.Material {
   return createVoxelMaterial(atlas, lighting, true);
 }
+
+/** 캐릭터 임시 모형의 단색 재질. 캐릭터 모델·애니메이션은 TASK-028 / 033 에서 다시 본다. */
+export function createCharacterMaterial(color: number): THREE.Material {
+  return new THREE.MeshLambertMaterial({ color });
+}
+
+/** 조준 블록 테두리 선 재질 (TASK-012). 깊이 검사를 켜 두어 가려진 모서리는 그리지 않는다. */
+export function createHighlightMaterial(): THREE.LineBasicMaterial {
+  return new THREE.LineBasicMaterial({ color: 0x1b1f24, transparent: true, opacity: 0.85 });
+}

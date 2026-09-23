@@ -14,6 +14,8 @@ export interface VisualFixture {
     readonly anchor: BlockPos;
     readonly facing: 'north' | 'east' | 'south' | 'west';
   }[];
+  /** 플레이어 시작 칸. 있으면 ?view= 없이 열 때 직접 걸어 다니는 조작 모드다 */
+  readonly playerSpawn?: BlockPos;
   /** 카메라 궤도 시점들. 첫 번째가 기본이며 ?view= 로 고른다 */
   readonly views: readonly {
     readonly target: BlockPos;
@@ -70,6 +72,8 @@ export function meshEditCells(): BlockPos[] {
  */
 export const smallHouseFixture: VisualFixture = {
   size: { sizeX: 48, sizeY: 32, sizeZ: 48 },
+  // 문(19, 11, 22) 앞 풀밭
+  playerSpawn: { x: 19, y: 11, z: 26 },
   build(write) {
     const g = 10; // 지표면 y
     fill(write, 0, 0, 0, 47, 0, 47, BlockId.bedrock);

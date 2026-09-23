@@ -326,6 +326,11 @@ function standOn(x: number, z: number): BlockPos {
   return { x, y: surfaceY(x, z) + 1, z };
 }
 
+/** 플레이어 시작 칸 (64, 지표면+1, 70) (MVP_SPEC 7.5). 월드를 만들기 전에도 계산할 수 있다. */
+export function islandPlayerSpawn(): BlockPos {
+  return standOn(64, 70);
+}
+
 /**
  * 섬 전체를 쓴다. 두 번 호출해도 같은 블록을 쓰고 같은 IslandData 를 반환한다.
  * 쓰기 순서: 지형 → 나무 → 폐허 → 종. 공기는 쓰지 않는다(월드 기본값).
@@ -355,7 +360,7 @@ export function buildIsland(write: WriteBlock): IslandData {
 
   return {
     bellPos,
-    playerSpawn: standOn(64, 70),
+    playerSpawn: islandPlayerSpawn(),
     npcSpawns: { farmer: standOn(62, 62), cook: standOn(66, 62), carpenter: standOn(64, 60) },
     monsterSpawns: [
       standOn(ISLAND_REGIONS.outskirtsNorth.x, ISLAND_REGIONS.outskirtsNorth.z),

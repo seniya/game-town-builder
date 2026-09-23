@@ -266,6 +266,8 @@ export class GameWorld {
   readonly nav: NavigationGraph;
   readonly storage: VillageStorage;
   readonly clock: GameClockSystem;
+  readonly input: InputSystem;
+  readonly player: Player | null;   // 초기 데이터에 playerSpawn 이 없으면(관찰용 장면) null
 
   worldState: WorldStateData;   // 매 프레임 재계산. 저장하지 않는다
 
@@ -1233,11 +1235,12 @@ VillageStorage(seed/crop/food) 필드나 수자원 시스템을 늘리지 않는
 # 15. 시스템 책임표
 
 ```text
-InputSystem           키보드 / 마우스 입력 수집. update 2 번 자리
+InputSystem           키보드 / 마우스 입력 수집. update 2 번 자리. DOM 연결은 ui/domInput.ts
+PlayerMovementSystem  플레이어 이동·점프·중력·충돌, 물 복귀·안전 지면(MVP_SPEC 9.5). update 3 번 자리
 GameClockSystem       게임 시간 진행. DayPhase 전이 이벤트
 InventorySystem       플레이어 인벤토리 / 핫바
 CraftingSystem        제작 레시피 판정. 해금 확인
-BlockEditSystem       레이캐스트 / 파괴 진행도 / 설치 규칙
+BlockEditSystem       레이캐스트 / 파괴 진행도 / 설치 규칙. 조준 광선은 systems/aim.ts 를 카메라와 공유
 RoomSystem            RoomRegistry.processQueue 호출. 예산 관리
 NPCDecisionSystem     Action 선택 (순수)
 NPCSystem             Action 실행. NPC 이동
@@ -1914,6 +1917,7 @@ WorldState 4 개 지표
 crop 성장 단계             FarmSystem
 침대 배정                  SleepSystem (NPC에는 조회 snapshot만)
 NPC 위치 / 체력 / Action   NPC 엔티티
+플레이어 위치 / 시선 / 안전 지면  Player 엔티티 (GameWorld.player)
 population                EntityRegistry.npcs.size    ★ WorldState 가 아니다
 감사 포인트                GratitudeSystem
 마을 레벨 / 해금            VillageLevelSystem
