@@ -19,7 +19,11 @@ Status: 운영 중 — 정본이 아닌 진행 목록
 
 ## 2. 확인 방법
 
+확인자는 **자기 환경에서** 저장소를 clone해 직접 실행한다. 에이전트는 확인자용 서버를 띄우지 않는다
+(에이전트의 headless 자동 관찰용 임시 서버는 별개다).
+
 ```text
+git clone https://github.com/seniya/game-town-builder.git && cd game-town-builder
 pnpm install
 pnpm dev                       → http://localhost:5173/
 실제 창의 Chrome, 창 크기 1280 × 720 권장, 브라우저 확대 100 %
@@ -47,7 +51,7 @@ pnpm dev                       → http://localhost:5173/
 
 ### G1. TASK-022 방 만들기 (Phase C → D 분기점) — 상태: 관찰 대기
 
-준비된 빌드: `main` 의 Phase C 기록 커밋. `pnpm install && pnpm dev` → Chrome 실제 창 1280 × 720 권장, 소리 켜기.
+준비된 빌드: `main` 의 Phase C 기록 커밋. 확인자 환경에서 2장대로 clone 후 `pnpm install && pnpm dev` → Chrome 실제 창 1280 × 720 권장, 소리 켜기.
 
 플레이 순서(약 20~30 분). 디버그(F3)는 켜지 않는다. 진행이 막힐 때만 관찰자가 알려 준다.
 
