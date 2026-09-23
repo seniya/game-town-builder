@@ -3,7 +3,7 @@
 # Small Village Restoration Game — Task Breakdown
 
 Version: 1.4 (게임 명세 v1.3 유지, 개발 준비·로드맵 보완)
-Status: Phase A 완료 (TASK-001~008·027) — 다음 TASK-009, READY-06 선행
+Status: Phase A·B 완료 (TASK-001~016·027) — 다음 TASK-017
 Date: 2026-09-22
 
 ---
@@ -15,7 +15,7 @@ Date: 2026-09-22
 **Acceptance Criteria 의 정본은 이 문서다.**
 
 전체 이정표와 MVP 이후의 조건부 계획은 [ROADMAP](ROADMAP.md)을 참고한다.
-현재 일반 Task 53개 + PERF 2개 중 Phase A의 9개(001~008·027)가 완료되었다. 세부 정책을 구현 전에 확정할 시점은
+현재 일반 Task 53개 + PERF 2개 중 Phase A·B의 17개(001~016·027)가 완료되었다. 세부 정책을 구현 전에 확정할 시점은
 2.5, 통합 검증 연결은 2.6, 첫 실행 묶음은 2.7에 정리한다.
 
 ## 1.1 Task 하나의 크기 기준

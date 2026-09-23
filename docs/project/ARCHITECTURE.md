@@ -2116,6 +2116,7 @@ DI 컨테이너
 019  Web-first, not Browser-only / 에셋 경계    Accepted (장기 계약)
 020  진행 안내·블록 편집·저장 실행 계약          Accepted
 021  Phase A 복셀 렌더·메싱·고정 섬 구현 방식      Accepted
+022  Phase B 플레이어 이동·편집 원자성·화면 상태     Accepted
 ```
 
 ---
