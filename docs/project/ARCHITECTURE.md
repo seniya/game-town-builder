@@ -292,7 +292,7 @@ export class GameWorld {
  1  clock              시간을 먼저 진행시킨다. 모든 판단의 기준이다
  2  input              플레이어 입력을 읽는다
  3  playerMovement     이동 + 충돌
- 4  blockEdit          파괴 / 설치. 여기서 블록이 바뀐다
+ 4  blockEdit          파괴 / 설치, 이어서 채석장 재생(MVP_SPEC 14.3). 여기서 블록이 바뀐다
  5  room               ★ 블록 변경 이후. 방 재판정 큐를 예산 안에서 처리한다
  6  nav                무효화된 통행 캐시를 정리한다
  7  farm               작물 성장
@@ -393,7 +393,10 @@ ROOM_UNREGISTERED의 `MERGED`는 두 방 이상의 내부가 하나로 이어져
 player    파괴 진행 UI 를 닫는다
 monster   DamageLog 에 기록한다
 npc       농사 또는 목수 수리. 피해 cells가 복구된 경우에만 해결한다
+world     채석장 재생(MVP_SPEC 14.3). 드롭·DamageLog·수리 대상이 아니다
 ```
+
+`world`도 방 재판정·통행 무효화는 다른 주체와 똑같이 거친다. 주체에 따라 방·경로 처리를 건너뛰지 않는다.
 
 ---
 
@@ -1276,7 +1279,8 @@ VillageStorage(seed/crop/food) 필드나 수자원 시스템을 늘리지 않는
 ```text
 InputSystem           키보드 / 마우스 입력 수집. update 2 번 자리. DOM 연결은 ui/domInput.ts
 PlayerMovementSystem  플레이어 이동·점프·중력·충돌, 물 복귀·안전 지면(MVP_SPEC 9.5). update 3 번 자리
-GameClockSystem       게임 시간 진행. DayPhase 전이 이벤트
+GameClockSystem       게임 시간 진행. DayPhase 전이 이벤트. update 1 번 자리
+QuarryRespawnSystem   채석장 하루 8 칸 재생과 respawnedThroughDay (MVP_SPEC 14.3). update 4 번 자리의 BlockEditSystem 뒤
 InventorySystem       플레이어 인벤토리 / 핫바. 핫바 선택은 update 2 번에서 InputSystem 뒤
 CraftingSystem        제작 레시피 판정. 해금 확인
 BlockEditSystem       레이캐스트 / 파괴 진행도 / 설치 규칙. 조준 광선은 systems/aim.ts 를 카메라와 공유
@@ -1725,6 +1729,7 @@ export interface SaveData {
     reportedThroughGameMinutes: number; repairDay: number; repairedCells: number;
   };
   crops: { pos: BlockPos; plantedAtGameMinutes: number }[];
+  quarry: { respawnedThroughDay: number }; // MVP_SPEC 14.3. 없으면 gameMinutes 의 최근 05:00 경계 day
   ending: { pending: boolean; played: boolean };
 }
 ```
@@ -1820,7 +1825,8 @@ interface IslandData {
 
 채석장 재생 칸 선택은 순수 함수 `src/game/voxel/quarryRespawn.ts`의
 `selectQuarryRespawnCells(candidates, { getBlock, isOccupiedByCharacter }, limit)`다.
-호출 시각·소유 시스템·저장은 READY-04에서 정한다.
+호출은 `QuarryRespawnSystem`이 매일 05:00 경계 통과 때 한 번 하고, 고른 칸을
+`setBlock(…, stone, 'world')`로 쓴다. 처리 키·저장은 MVP_SPEC 14.3(READY-04)이다.
 
 ## 24.1 로직에 상수를 쓰지 않는다
 
@@ -1963,6 +1969,7 @@ TASK-020 / 022 구현 범위: 방 줄(인식 수 / 타입별 / 재판정 큐 길
 블록                      VoxelWorld
 방                        RoomRegistry
 crop 성장 단계             FarmSystem
+채석장 재생 처리 키          QuarryRespawnSystem (respawnedThroughDay)
 침대 배정                  SleepSystem (NPC에는 조회 snapshot만)
 NPC 위치 / 체력 / Action   NPC 엔티티
 플레이어 위치 / 시선 / 안전 지면  Player 엔티티 (GameWorld.player)
@@ -2152,6 +2159,7 @@ DI 컨테이너
 021  Phase A 복셀 렌더·메싱·고정 섬 구현 방식      Accepted
 022  Phase B 플레이어 이동·편집 원자성·화면 상태     Accepted
 023  Phase C 방 판정 kernel·재판정 큐·방 식별·진단    Accepted
+024  채석장 재생 시각·소유자·당일 처리 키 (READY-04)  Accepted
 ```
 
 ---

@@ -153,7 +153,7 @@ Task 착수에는 선행 의존 완료와 아래 준비 항목의 해당 기한 
 | READY-01 | **확정** (2026-09-23) | TASK-008 구현 전 | 채석장 후보 = 노출 돌 지대(반지름 10)의 평지 위 원래 stone 칸, y→z→x 고정 순서. 하루 최대 8칸, air·캐릭터 비점유·면 인접 비지형 블록 없음만 복구, 부족분 이월 없음. [MVP_SPEC 14.2](MVP_SPEC.md#142-채석장-재생-후보와-점유-보호-ready-01), [ARCHITECTURE 24 island.ts 계약](ARCHITECTURE.md#islandts-계약-task-008) | island 테스트: 후보 재현·순서, 캐릭터 칸·플레이어 블록·건축물 인접 칸 제외, 후보 부족. 시간 연결은 READY-04 |
 | READY-02 | **확정** (2026-09-23) | TASK-013 구현 전 | 지지 조건은 설치 때만 검사. 지지면이 부서져도 가구·침대·문·횃불·farmland 는 남고 연쇄 파괴·드롭 없음. 한 번의 파괴는 대상 블록 또는 그 다중 칸 객체 전체만 바꾼다. 예외는 기존 규칙인 farmland 제거 시 crop 제거(TASK-030). [MVP_SPEC 10.4.1](MVP_SPEC.md#1041-지지면이-사라진-뒤-ready-02) | 013 테스트: 침대·문·torch 아래를 부숴도 객체·PlacementIndex 유지, 드롭은 부순 블록 것뿐, 인벤토리 부족 시 전체 미변경 |
 | READY-03 | **확정** (2026-09-23) | TASK-015 구현 전 | 화면 상태 = 조작 중 / 모달 / 메뉴. 모달(인벤토리·종·저장소·대사·피해 보고)은 시간·시뮬레이션 진행 + 플레이어 조작만 차단, Esc 메뉴는 일시정지. 락 상실 시 메뉴, 메뉴는 클릭으로 락 복귀. E 로 닫으면 락 재요청, Esc 로 닫으면 메뉴. 모달 전후 눌린 키·버튼은 새로 눌러야 한다. 기절 시 모달 닫기(046). [MVP_SPEC 29.0](MVP_SPEC.md#290-모달-중-시간입력포인터-락-ready-03), [ARCHITECTURE 3](ARCHITECTURE.md#3-런타임-구성) | InputSystem 차단·재입력 테스트, ModalController 상태 전이 테스트, 브라우저에서 E 열기·닫기와 메뉴. 종·대사는 036/040, 저장 UI는 051 |
-| READY-04 | 미정 | TASK-023 구현 전 | READY-01 후보의 하루 8블록 재생 시각·소유 시스템·당일 처리 키와 저장/로드. MVP_SPEC 14/32, ARCHITECTURE 15/23 | 시간 경계 통과·후보 부족·점유 시 처리·배속 중복 방지. 실제 저장 왕복은 051 |
+| READY-04 | **확정** (2026-09-23) | TASK-023 구현 전 | 매일 05:00 경계 통과(직전 < 05:00 ≤ 현재) 때 한 번, 첫 재생 Day 2 05:00. 소유 = QuarryRespawnSystem(update 4 번 슬롯, BlockEditSystem 뒤). 처리 키 respawnedThroughDay = 마지막 처리 경계의 day, 한 프레임 여러 경계도 한 번·보충 없음. 점유 칸은 그날 건너뜀. BLOCK_CHANGED by = 'world'. SaveData.quarry 에 키 저장, 로드 중 미처리·로드 뒤 첫 update 에서 남은 경계 1 회. 시각 강제 설정은 앞으로만. [MVP_SPEC 14.3](MVP_SPEC.md#143-채석장-재생-시각과-당일-처리-키-ready-04) / [20.3](MVP_SPEC.md#203-시간은-앞으로만-간다), [ARCHITECTURE 5.2 / 15 / 23.1](ARCHITECTURE.md#52-block_changed-의-by-필드), [ADR 024](../adr/024-quarry-respawn-timing-ready-04.md) | TASK-023 테스트: 04:59→05:00 경계 1 회·같은 날 재통과 없음, 16× 배속·강제 설정 다중 경계 1 회, 후보 부족, 캐릭터 점유 칸 건너뜀, by='world', 키 snapshot/restore 뒤 중복 없음. 실제 저장 왕복은 051 |
 | READY-05 | 미정 | TASK-046 구현 전 | 몬스터 공격 거리·대상 선택·차폐, 넉백·기절 회복 체력·재피격·안전한 부활 위치. MVP_SPEC 19/24/26/34, ARCHITECTURE 15/23 | 차폐·거리 경계·기절 만료·종 주변 점유와 부활 실패 대안. 기존 체력·기절 시간 유지 |
 | READY-06 | **확정** (2026-09-23) | TASK-009 구현 전 | 물 = 발·머리 칸이 water 면 마지막 안전 지면으로 즉시 복귀(수영·익사·낙하 피해 없음). 수평 월드 밖·y<0 은 플레이어 충돌 고체. 발밑 제거·추락은 중력대로 낙하. 블록에 끼면 위로 가장 가까운 빈 자리. [MVP_SPEC 9.5](MVP_SPEC.md#95-물월드-경계발판-상실-ready-06), [ARCHITECTURE 8.2](ARCHITECTURE.md#82-collisionts) | collision 테스트(월드 밖 벽·y<0), PlayerMovement 테스트(바다 진입 복귀·안전 지면 무효 시 시작 위치·높은 곳 추락·발밑 제거·끼임 해소). 010/013 AC에 연결 |
 | READY-07 | 미정 | TASK-036 구현 전 | F의 거리·대상 선택·가림·우선순위와 일반/미인식 상자의 기부 자격. MVP_SPEC 9/13/29, ARCHITECTURE 15/17/21 | 종·상자·NPC가 가까이 있을 때 패널 하나만 열림, 가림·거리 경계 사례. NPC 실연동은 040 |
@@ -815,14 +815,16 @@ Q  기능이나 보상과 상관없이 방이나 집을 조금 더 예쁘게 꾸
 
 의존: TASK-002, TASK-008
 
-구현 전: READY-04를 확정한다. MVP_SPEC 14/32장의 채석장 재생 시각·소유자·하루 8블록·로드 중복 방지와 TASK-008의 후보 데이터를 연결할 완료 조건을 확정한다.
+구현 전: READY-04 확정 (2026-09-23, [MVP_SPEC 14.3](MVP_SPEC.md#143-채석장-재생-시각과-당일-처리-키-ready-04)). 채석장 재생을 이 Task에서 시계와 연결한다.
 
 작업:
 
 ```text
 GameClockSystem — secondsPerGameHour 25
 DayPhase 6 종 + 전이 이벤트
-디버그 배속 1× / 4× / 16×
+디버그 배속 1× / 4× / 16×, 시각 강제 설정(앞으로만)
+QuarryRespawnSystem — 05:00 경계에서 selectQuarryRespawnCells 8 칸 (READY-04)
+게임 시간 HUD (MVP_SPEC 29: 우측 상단 Day N / HH:MM)
 ```
 
 Acceptance Criteria:
@@ -832,6 +834,9 @@ Acceptance Criteria:
 - [ ] 전이할 때만 `DAY_PHASE_CHANGED` 가 발행된다
 - [ ] 디버그 배속이 동작한다
 - [ ] `gameMinutes` 단일 누적값으로 시간을 표현한다
+- [ ] 채석장은 05:00 경계를 넘을 때 하루 한 번 최대 8 칸 복구한다. 같은 날 다시 넘거나 배속·강제 설정으로 여러 경계를 넘어도 중복되지 않는다 (MVP_SPEC 14.3)
+- [ ] 캐릭터가 선 후보 칸은 건너뛰고, 후보가 모자라면 있는 만큼만 복구한다. BLOCK_CHANGED 의 by 는 `'world'` 다
+- [ ] respawnedThroughDay 를 snapshot / restore 할 수 있고 복원 뒤 같은 날을 다시 처리하지 않는다 (실제 저장 왕복은 TASK-051)
 
 ---
 
