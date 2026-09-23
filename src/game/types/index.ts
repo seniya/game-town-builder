@@ -96,4 +96,28 @@ export interface BlockDefinition {
   readonly drops: readonly BlockDrop[];
   /** 다중 칸 객체(bed / door)의 점유 칸 수. 단일 칸은 1 */
   readonly cells: number;
+  /** 반투명 메시로 그린다 (water / window). 뒤가 비쳐 보인다 (TASK-007) */
+  readonly translucent: boolean;
+}
+
+/** 청크 메시의 버퍼 한 벌. 좌표는 청크 로컬(0~16)이다. 쿼드마다 정점 4 개, 인덱스 6 개. */
+export interface MeshBuffers {
+  readonly positions: Float32Array;
+  readonly normals: Float32Array;
+  /** 쿼드 로컬 반복 좌표. 병합된 w × h 쿼드는 0~w, 0~h 다. 셰이더가 타일 안에서 반복한다 */
+  readonly uvs: Float32Array;
+  /** 정점 AO 0~1. 1 이 가려지지 않은 상태다 */
+  readonly ao: Float32Array;
+  /** 아틀라스 타일 인덱스 = blockId * 3 + 면 종류(0 윗면 / 1 아랫면 / 2 옆면) */
+  readonly tiles: Float32Array;
+  readonly indices: Uint32Array;
+}
+
+/** greedyMesh 의 결과 (ARCHITECTURE 9.3). */
+export interface MeshData {
+  readonly opaque: MeshBuffers;
+  /** 반투명 블록이 없으면 null */
+  readonly transparent: MeshBuffers | null;
+  /** 면 컬링 뒤 보이는 면 수와 병합 뒤 쿼드 수. 계측용이다 */
+  readonly stats: { readonly visibleFaces: number; readonly quads: number };
 }

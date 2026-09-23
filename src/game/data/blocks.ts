@@ -47,8 +47,23 @@ function def(
   drops: readonly BlockDrop[],
   cells = 1,
 ): BlockDefinition {
-  return { id: BlockId[name], name, kind, solid, opaque, terrain, breakSeconds, drops, cells };
+  const translucent = TRANSLUCENT.has(name);
+  return {
+    id: BlockId[name],
+    name,
+    kind,
+    solid,
+    opaque,
+    terrain,
+    breakSeconds,
+    drops,
+    cells,
+    translucent,
+  };
 }
+
+/** 반투명 메시로 그리는 블록. 게임 규칙에는 영향이 없는 렌더 분류다. */
+const TRANSLUCENT: ReadonlySet<BlockName> = new Set<BlockName>(['water', 'window']);
 
 const B = BlockId;
 
