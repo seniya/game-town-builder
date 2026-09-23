@@ -166,3 +166,117 @@ export const smallHouseFixture: VisualFixture = {
     { target: { x: 23, y: 11, z: 20 }, distance: 7, yaw: 1.2, pitch: 0.35 },
   ],
 };
+
+/** 방 실험장의 시작 인벤토리(TASK-022 관찰용). 기존 블록만이며 게임 초기값이 아니다. */
+export const ROOM_LAB_KIT: readonly { readonly blockId: number; readonly count: number }[] = [
+  { blockId: BlockId.plank, count: 64 },
+  { blockId: BlockId.door, count: 4 },
+  { blockId: BlockId.bed, count: 3 },
+  { blockId: BlockId.window, count: 16 },
+  { blockId: BlockId.table, count: 2 },
+  { blockId: BlockId.chair, count: 6 },
+  { blockId: BlockId.torch, count: 16 },
+  { blockId: BlockId.cooking_stove, count: 2 },
+  { blockId: BlockId.water_pot, count: 2 },
+  { blockId: BlockId.chest, count: 2 },
+  { blockId: BlockId.plank, count: 64 },
+  { blockId: BlockId.plank, count: 64 },
+  { blockId: BlockId.stone_brick, count: 64 },
+  { blockId: BlockId.dirt, count: 32 },
+];
+
+/** 판자 두 층 사각 벽. 내부는 x0+1..x0+w, z0+1..z0+d. skip 칸(x,z)은 두 층 모두 비운다. */
+function ringWall(
+  write: WriteBlock,
+  x0: number,
+  z0: number,
+  w: number,
+  d: number,
+  y: number,
+  id: number,
+  height = 2,
+  skip: readonly (readonly [number, number])[] = [],
+): void {
+  const skipped = new Set(skip.map(([x, z]) => `${x},${z}`));
+  for (let x = x0; x <= x0 + w + 1; x++) {
+    for (let z = z0; z <= z0 + d + 1; z++) {
+      const edge = x === x0 || z === z0 || x === x0 + w + 1 || z === z0 + d + 1;
+      if (!edge || skipped.has(`${x},${z}`)) continue;
+      for (let k = 0; k < height; k++) write(x, y + k, z, id);
+    }
+  }
+}
+
+/**
+ * TASK-022 관찰 장면: 넓은 풀밭과 방 판정 사례 일곱 개. 플레이어가 직접 5 × 5 방을 지을 빈 땅이 가운데 있다.
+ * 사례는 모두 문 쪽(+z)에서 다가간다. 표지판이 없으므로 관찰 질문지(HUMAN_REVIEW)에 배치를 적는다.
+ *   북쪽 줄(z 8~14): A 완성된 빈 방 / B 문 없는 방 / C 벽 한 칸 빠진 방 / D 흙벽 공간
+ *   남쪽 줄(z 42~48): E 침대 + 화덕·물통(주방 우선) / F 벽 한 칸이 1 층 / G 방 안의 1 칸 단(같은 높이 제한)
+ */
+export const roomLabFixture: VisualFixture = {
+  size: { sizeX: 64, sizeY: 24, sizeZ: 64 },
+  playerSpawn: { x: 32, y: 11, z: 30 },
+  build(write) {
+    const g = 10;
+    fill(write, 0, 0, 0, 63, 0, 63, BlockId.bedrock);
+    fill(write, 0, 1, 0, 63, g - 3, 63, BlockId.stone);
+    fill(write, 0, g - 2, 0, 63, g - 1, 63, BlockId.dirt);
+    fill(write, 0, g, 0, 63, g, 63, BlockId.grass);
+    const y = g + 1;
+    // A 완성된 빈 방 (내부 5 × 5, 판자 바닥). 문은 objects 로 (8, y, 14)
+    fill(write, 6, g, 8, 10, g, 12, BlockId.plank);
+    ringWall(write, 5, 7, 5, 5, y, BlockId.plank, 2, [[8, 13]]);
+    // B 문 없는 방
+    fill(write, 18, g, 8, 22, g, 12, BlockId.plank);
+    ringWall(write, 17, 7, 5, 5, y, BlockId.plank);
+    // C 벽 한 칸(두 층)이 빠진 방. 문 (32, y, 13)
+    fill(write, 30, g, 8, 34, g, 12, BlockId.plank);
+    ringWall(write, 29, 7, 5, 5, y, BlockId.plank, 2, [
+      [32, 13],
+      [29, 9],
+    ]);
+    // D 흙으로만 둘러싼 공간
+    ringWall(write, 41, 7, 5, 5, y, BlockId.dirt);
+    // E 침대와 화덕·물통이 함께 있는 방(주방이 우선한다). 문 (8, y, 48)
+    fill(write, 6, g, 42, 10, g, 46, BlockId.plank);
+    ringWall(write, 5, 41, 5, 5, y, BlockId.stone_brick, 2, [[8, 47]]);
+    write(9, y, 42, BlockId.cooking_stove);
+    write(10, y, 42, BlockId.water_pot);
+    write(10, y, 45, BlockId.torch);
+    // F 벽 한 칸의 둘째 층이 빠진 방. 문 (20, y, 48)
+    fill(write, 18, g, 42, 22, g, 46, BlockId.plank);
+    ringWall(write, 17, 41, 5, 5, y, BlockId.plank, 2, [[20, 47]]);
+    write(23, y + 1, 44, BlockId.air);
+    // G 방 안에 1 칸 높이 판자 단: 단의 윗칸이 비어 경계 높이가 모자란다(같은 높이 평면 제한). 문 (32, y, 48)
+    fill(write, 30, g, 42, 34, g, 46, BlockId.plank);
+    ringWall(write, 29, 41, 5, 5, y, BlockId.plank, 2, [[32, 47]]);
+    fill(write, 30, y, 42, 31, y, 43, BlockId.plank);
+    // 빈 땅 가장자리의 나무 두 그루(풍경)
+    for (const [tx, tz] of [
+      [52, 30],
+      [12, 30],
+    ] as const) {
+      for (let k = 1; k <= 4; k++) write(tx, g + k, tz, BlockId.log);
+      for (let yy = g + 3; yy <= g + 5; yy++)
+        for (let dz = -2; dz <= 2; dz++)
+          for (let dx = -2; dx <= 2; dx++) {
+            if (Math.abs(dx) + Math.abs(dz) + (yy - g - 3) > 3) continue;
+            if (dx === 0 && dz === 0 && yy <= g + 4) continue;
+            write(tx + dx, yy, tz + dz, BlockId.leaves);
+          }
+    }
+  },
+  objects: [
+    { blockId: BlockId.door, anchor: { x: 8, y: 11, z: 13 }, facing: 'south' },
+    { blockId: BlockId.door, anchor: { x: 32, y: 11, z: 13 }, facing: 'south' },
+    { blockId: BlockId.door, anchor: { x: 8, y: 11, z: 47 }, facing: 'south' },
+    { blockId: BlockId.door, anchor: { x: 20, y: 11, z: 47 }, facing: 'south' },
+    { blockId: BlockId.door, anchor: { x: 32, y: 11, z: 47 }, facing: 'south' },
+    { blockId: BlockId.bed, anchor: { x: 6, y: 11, z: 44 }, facing: 'south' },
+  ],
+  views: [
+    { target: { x: 26, y: 12, z: 28 }, distance: 46, yaw: 0.35, pitch: 0.75 },
+    { target: { x: 20, y: 12, z: 11 }, distance: 26, yaw: 0.2, pitch: 0.6 },
+    { target: { x: 20, y: 12, z: 45 }, distance: 26, yaw: 0.2, pitch: 0.6 },
+  ],
+};

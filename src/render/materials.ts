@@ -135,3 +135,20 @@ export function createCrackMaterial(texture: THREE.Texture): THREE.MeshBasicMate
     polygonOffsetUnits: -2,
   });
 }
+
+/**
+ * 방 경계·진단 오버레이 재질 (TASK-021 / 022). 인스턴스 색을 쓰며 투명도는 뷰가 매 프레임 바꾼다.
+ * xray 면 벽 뒤에서도 보이도록 깊이 검사를 끈다(진단의 실패 좌표·탐색 경로).
+ */
+export function createRoomOverlayMaterial(xray: boolean): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false,
+    depthTest: !xray,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+}

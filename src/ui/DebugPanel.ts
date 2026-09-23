@@ -22,6 +22,8 @@ export interface DebugPanelPort {
   render(): RenderDebugStats;
   setUnlimitedBlocks(on: boolean): void;
   setUnlimitedBlockId(blockId: number): void;
+  /** "방 경계 상시 표시" 디버그 명령 (ARCHITECTURE 26) */
+  setShowRoomBounds(on: boolean): void;
   /** 무제한 모드에서 고를 수 있는 블록 [id, 이름] */
   readonly placeableBlocks: readonly (readonly [number, string])[];
 }
@@ -35,12 +37,24 @@ function fmtVec(v: Vec3 | BlockPos | null, digits = 2): string {
   return `${v.x.toFixed(digits)}, ${v.y.toFixed(digits)}, ${v.z.toFixed(digits)}`;
 }
 
+/** 방 계측 줄 (ARCHITECTURE 26): 인식 수 / 타입별 / 큐 길이 / 마지막 판정 ms / 프레임 처리 ms. */
+function roomLines(g: GameDebugSnapshot): string[] {
+  const r = g.rooms;
+  if (!r) return ['방 —'];
+  const t = r.byType;
+  return [
+    `방 ${r.rooms} (식당 ${t.DiningRoom} 주방 ${t.Kitchen} 침실 ${t.Bedroom} 창고 ${t.Storeroom} 빈 방 ${t.EmptyRoom})${g.diagnosisActive ? '  [진단 중]' : ''}`,
+    `재판정 큐 ${r.queueLength} · 마지막 판정 ${r.lastDetectMs.toFixed(2)} ms · 이번 프레임 ${r.lastFrameMs.toFixed(2)} ms (최대 ${r.maxFrameMs.toFixed(2)}) · 재시작 ${r.restarts}`,
+  ];
+}
+
 /** F3 로 여닫는 디버그 패널. */
 export class DebugPanel {
   private readonly root: HTMLDivElement;
   private readonly text: HTMLPreElement;
   private readonly unlimited: HTMLInputElement;
   private readonly blockSelect: HTMLSelectElement;
+  private readonly roomBounds: HTMLInputElement;
   private open = false;
   private lastRefresh = 0;
 
@@ -87,10 +101,18 @@ export class DebugPanel {
       document.createTextNode('블록 무제한 · 빈 칸이면'),
       this.blockSelect,
     );
+    const roomControls = document.createElement('label');
+    Object.assign(roomControls.style, { display: 'flex', gap: '6px', alignItems: 'center' });
+    this.roomBounds = document.createElement('input');
+    this.roomBounds.type = 'checkbox';
+    this.roomBounds.addEventListener('change', () =>
+      port.setShowRoomBounds(this.roomBounds.checked),
+    );
+    roomControls.append(this.roomBounds, document.createTextNode('방 경계 상시 표시'));
     const note = document.createElement('div');
     note.textContent = '시간 배속: TASK-023 에서 연결 (비활성)';
     note.style.opacity = '0.6';
-    this.root.append(this.text, controls, note);
+    this.root.append(this.text, controls, roomControls, note);
     // 패널 조작 클릭이 뒤의 메뉴(클릭하면 계속)로 전달되지 않게 한다
     this.root.addEventListener('mousedown', (e) => e.stopPropagation());
     parent.append(this.root);
@@ -120,6 +142,7 @@ export class DebugPanel {
     const g = this.port.game();
     const r = this.port.render();
     this.unlimited.checked = g.unlimitedBlocks;
+    this.roomBounds.checked = g.showRoomBounds;
     if (g.unlimitedBlockId !== null && document.activeElement !== this.blockSelect) {
       this.blockSelect.value = String(g.unlimitedBlockId);
     }
@@ -131,7 +154,8 @@ export class DebugPanel {
       `안전 지면 ${fmtVec(g.lastSafeCell, 0)}`,
       `조준 ${fmtVec(g.aimTarget, 0)}  면 ${fmtVec(g.aimFace, 0)}  파괴 ${(g.breakProgress * 100).toFixed(0)}%`,
       `마지막 편집 실패 ${g.lastEditFailure ?? '—'}`,
-      `방 / NPC / 몬스터 / 감사 / 레벨 / WorldState / 시간: 해당 Task 에서 추가`,
+      ...roomLines(g),
+      `NPC / 몬스터 / 감사 / 레벨 / WorldState / 시간: 해당 Task 에서 추가`,
     ].join('\n');
   }
 }

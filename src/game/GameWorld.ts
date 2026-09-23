@@ -4,12 +4,17 @@ import type { Player } from './entities/Player';
 import { EntityRegistry } from './EntityRegistry';
 import { EventBus } from './EventBus';
 import { balance } from './data/balance';
+import { BlockId } from './data/blocks';
+import { ROOM_RECIPES } from './data/roomRecipes';
+import { RoomRegistry } from './room/RoomRegistry';
+import { createRoomReader } from './room/roomReader';
 import { BlockEditSystem } from './systems/BlockEditSystem';
 import { CraftingSystem } from './systems/CraftingSystem';
 import { DebugSystem } from './systems/DebugSystem';
 import { InputSystem } from './systems/InputSystem';
 import { InventorySystem } from './systems/InventorySystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
+import { RoomSystem } from './systems/RoomSystem';
 import type { BlockPos } from './types';
 import { VillageStorage, type VillageStorageInit } from './VillageStorage';
 import { VoxelWorld, type WorldSize } from './voxel/VoxelWorld';
@@ -74,6 +79,10 @@ export class GameWorld {
   readonly player: Player | null;
   /** 조준·파괴·설치. 플레이어가 없으면 null 이다 */
   readonly blockEdit: BlockEditSystem | null;
+  /** 인식된 방과 재판정 큐 (ARCHITECTURE 10.3). 방의 유일한 소유자다 */
+  readonly rooms: RoomRegistry;
+  /** 방 재판정 슬롯과 진단 모드(Tab) */
+  readonly roomSystem: RoomSystem;
 
   private readonly slots = new Map<UpdateSlot, SlotSystem[]>(
     UPDATE_SLOTS.map((slot) => [slot, []]),
@@ -96,11 +105,30 @@ export class GameWorld {
           occupants: () => [player.body],
         })
       : null;
-    this.debug = new DebugSystem(this.player, this.blockEdit);
+    const reader = createRoomReader(this.voxels);
+    this.rooms = new RoomRegistry(reader, this.events, {
+      limits: balance.room,
+      recipes: ROOM_RECIPES,
+      now: () => performance.now(),
+      listDoors: () =>
+        this.voxels.placements
+          .all()
+          .filter((o) => o.blockId === BlockId.door)
+          .map((o) => o.anchor),
+    });
+    this.roomSystem = new RoomSystem(
+      this.rooms,
+      this.events,
+      reader,
+      balance.room.detectBudgetMs,
+      player ? { input: this.input, player } : null,
+    );
+    this.debug = new DebugSystem(this.player, this.blockEdit, this.rooms, this.roomSystem);
     if (this.player && this.blockEdit) {
       this.attach('playerMovement', new PlayerMovementSystem(this.voxels, this.player, this.input));
       this.attach('blockEdit', this.blockEdit);
     }
+    this.attach('room', this.roomSystem);
   }
 
   /** 시스템을 슬롯에 연결한다. 같은 슬롯 안에서는 연결한 순서대로 실행한다. */

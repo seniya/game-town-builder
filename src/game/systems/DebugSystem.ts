@@ -2,8 +2,10 @@
 // 렌더 계측(FPS·드로우콜·청크)은 main 이 render 에서 읽어 패널에 따로 넘긴다.
 // 시간 배속은 GameClockSystem(TASK-023) 이 생기기 전까지 비활성이다.
 import type { Player } from '../entities/Player';
+import type { RoomRegistry, RoomRegistryStats } from '../room/RoomRegistry';
 import type { BlockPos, Vec3 } from '../types';
 import type { BlockEditSystem } from './BlockEditSystem';
+import type { RoomSystem } from './RoomSystem';
 
 /** 게임 쪽 디버그 표시값. */
 export interface GameDebugSnapshot {
@@ -19,14 +21,24 @@ export interface GameDebugSnapshot {
   readonly unlimitedBlockId: number | null;
   /** 아직 연결되지 않은 명령. 해당 Task 에서 활성화한다 */
   readonly timeScaleAvailable: boolean;
+  /** 방: 인식 수 / 타입별 / 재판정 큐 길이 / 마지막 판정 소요 ms (ARCHITECTURE 26) */
+  readonly rooms: RoomRegistryStats | null;
+  /** "방 경계 상시 표시" 디버그 명령 */
+  readonly showRoomBounds: boolean;
+  readonly diagnosisActive: boolean;
 }
 
 /** 디버그 명령과 계측. */
 export class DebugSystem {
-  /** 플레이어와 블록 편집 시스템을 받는다(없으면 관찰용 장면). */
+  /** "방 경계 상시 표시" 명령 상태. 렌더가 읽는다 */
+  showRoomBounds = false;
+
+  /** 플레이어와 블록 편집 시스템을 받는다(없으면 관찰용 장면). 방 계측은 선택이다. */
   constructor(
     private readonly player: Player | null,
     private readonly blockEdit: BlockEditSystem | null,
+    private readonly rooms: RoomRegistry | null = null,
+    private readonly roomSystem: RoomSystem | null = null,
   ) {}
 
   /** 블록 무제한 모드: 설치해도 아이템을 쓰지 않고, 빈 칸이면 선택한 블록을 놓는다. */
@@ -64,6 +76,9 @@ export class DebugSystem {
       unlimitedBlocks: this.unlimitedBlocks,
       unlimitedBlockId: this.unlimitedBlockId,
       timeScaleAvailable: false,
+      rooms: this.rooms ? this.rooms.stats : null,
+      showRoomBounds: this.showRoomBounds,
+      diagnosisActive: this.roomSystem?.diagnosisActive ?? false,
     };
   }
 }

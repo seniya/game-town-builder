@@ -4,6 +4,8 @@ import { balance } from './game/data/balance';
 import {
   meshEditCells,
   meshEditFixture,
+  ROOM_LAB_KIT,
+  roomLabFixture,
   smallHouseFixture,
   type VisualFixture,
 } from './game/data/visualFixtures';
@@ -15,6 +17,9 @@ import { PlayerView } from './render/EntityView';
 import { Highlight } from './render/Highlight';
 import { createItemIconProvider } from './render/itemIcons';
 import { Renderer } from './render/Renderer';
+import { RoomLabelView } from './render/RoomLabelView';
+import { RoomOverlayView } from './render/RoomOverlayView';
+import { blockItem } from './game/systems/InventorySystem';
 import type { BlockPos } from './game/types';
 import { Crosshair } from './ui/Crosshair';
 import { DebugPanel } from './ui/DebugPanel';
@@ -24,6 +29,8 @@ import { bindDomInput } from './ui/domInput';
 import { InventoryPanel } from './ui/InventoryPanel';
 import { bindModalKeys, requestCanvasLock, ScreenStateMachine } from './ui/ModalController';
 import { PauseMenu } from './ui/PauseMenu';
+import { RoomDiagnosticPanel } from './ui/RoomDiagnosticPanel';
+import { RoomSound } from './ui/RoomSound';
 
 /** 브라우저 검증에서 읽는 계측값. 콘솔과 window.__gtb 로 공개한다. */
 interface FrameProbe {
@@ -126,6 +133,7 @@ const islandScene: VisualFixture = {
 function pickFixture(name: string | null): VisualFixture {
   if (name === 'mesh-edit') return meshEditFixture;
   if (name === 'house') return smallHouseFixture;
+  if (name === 'room-lab') return roomLabFixture;
   return islandScene;
 }
 
@@ -154,6 +162,12 @@ function createWorld(fixture: VisualFixture, play: boolean): GameWorld {
     if (!placed) console.warn('고정 장면 객체 배치 실패', o);
   }
   world.voxels.markAllDirty();
+  // 장면에 미리 지어 둔 방은 로드처럼 조용히 인식한다(인식 연출·보상 이벤트 없음)
+  world.rooms.rebuildAll();
+  if (fixture === roomLabFixture && world.player) {
+    for (const k of ROOM_LAB_KIT)
+      world.inventory.add([{ item: blockItem(k.blockId), count: k.count }]);
+  }
   return world;
 }
 
@@ -230,6 +244,10 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
     { inventory: inventoryPanel },
   );
   bindModalKeys(canvas, machine);
+  const diagnosticPanel = new RoomDiagnosticPanel(document.body, {
+    active: () => world.roomSystem.diagnosisActive,
+    diagnosis: () => world.rooms.getDiagnosis(),
+  });
   renderer.scene.add(body.object3d, highlight.object3d);
   const screen = machine;
   (window as unknown as { __gtbScreen: unknown }).__gtbScreen = screen;
@@ -241,6 +259,7 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
       const target = screen.state.kind === 'playing' ? blockEdit.target : null;
       highlight.show(target ? target.pos : null, world.voxels.placements, blockEdit.breakProgress);
       crosshair.update(target !== null, screen.state.kind === 'playing');
+      diagnosticPanel.update();
     },
   };
 }
@@ -260,6 +279,11 @@ function start(): void {
   });
   const view = pickView(fixture, Number(params.get('view') ?? 0));
   const playView = world.player ? createPlayView(world, renderer) : null;
+  const roomOverlay = new RoomOverlayView(world.rooms, world.events);
+  renderer.scene.add(roomOverlay.object3d);
+  const roomLabels = new RoomLabelView(document.body, world.rooms, world.events, renderer.camera);
+  new RoomSound(world.events);
+  if (params.get('bounds') === '1') world.debug.showRoomBounds = true;
   const orbit = params.get('orbit') !== '0';
   const editDriver =
     sceneName === 'mesh-edit' ? createEditDriver(world, Number(params.get('eps') ?? 20)) : null;
@@ -294,6 +318,9 @@ function start(): void {
     },
     setUnlimitedBlocks: (on) => world.debug.setUnlimitedBlocks(on),
     setUnlimitedBlockId: (id) => world.debug.setUnlimitedBlockId(id),
+    setShowRoomBounds: (on) => {
+      world.debug.showRoomBounds = on;
+    },
     placeableBlocks: BLOCKS.filter((b) => b.breakSeconds !== null && b.id !== BlockId.crop).map(
       (b) => [b.id, itemLabel({ kind: 'block', blockId: b.id })] as const,
     ),
@@ -334,6 +361,13 @@ function start(): void {
         pitch: view.pitch,
       });
     }
+    const diagnosing = world.roomSystem.diagnosisActive;
+    roomOverlay.update(
+      frameMs / 1000,
+      diagnosing || world.debug.showRoomBounds,
+      diagnosing ? world.rooms.getDiagnosis().result : null,
+    );
+    roomLabels.update(frameMs / 1000, diagnosing);
     renderer.render();
     debugPanel.update(now);
     if (measureSeconds > 0 && probe.settledAtMs !== null && probe.measure?.done !== true) {

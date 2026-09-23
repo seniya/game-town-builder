@@ -3,8 +3,16 @@ import type {
   BlockChangeSource,
   BlockPos,
   PlacedObjectSnapshot,
+  RoomFailure,
+  RoomType,
   VillageStorageData,
 } from './types';
+
+/**
+ * 방 해제 사유. 판정 실패(RoomFailure) 또는 다른 방에 합쳐짐(MERGED).
+ * MERGED 는 두 방 이상의 내부가 하나로 이어졌을 때 이전 방들을 해제하는 경우다 (ARCHITECTURE 10.4).
+ */
+export type RoomUnregisterReason = RoomFailure | { readonly reason: 'MERGED' };
 
 /**
  * 이벤트 이름 → payload. ARCHITECTURE 5 의 GameEventMap 이 정본이다.
@@ -20,6 +28,10 @@ export interface GameEventMap {
     by: BlockChangeSource;
     removedObject?: PlacedObjectSnapshot;
   };
+  ROOM_REGISTERED: { roomId: string; type: RoomType };
+  ROOM_FACILITIES_CHANGED: { roomId: string };
+  ROOM_TYPE_CHANGED: { roomId: string; from: RoomType; to: RoomType };
+  ROOM_UNREGISTERED: { roomId: string; reason: RoomUnregisterReason };
   STORAGE_CHANGED: VillageStorageData;
   /** 정본의 void payload. lint 규칙(no-invalid-void-type) 때문에 undefined 로 표기한다. */
   INVENTORY_CHANGED: undefined;
