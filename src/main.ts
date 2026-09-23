@@ -19,6 +19,9 @@ import type { BlockPos } from './game/types';
 import { Crosshair } from './ui/Crosshair';
 import { Hotbar } from './ui/Hotbar';
 import { bindDomInput } from './ui/domInput';
+import { InventoryPanel } from './ui/InventoryPanel';
+import { bindModalKeys, requestCanvasLock, ScreenStateMachine } from './ui/ModalController';
+import { PauseMenu } from './ui/PauseMenu';
 
 /** 브라우저 검증에서 읽는 계측값. 콘솔과 window.__gtb 로 공개한다. */
 interface FrameProbe {
@@ -177,11 +180,16 @@ function createEditDriver(world: GameWorld, editsPerSecond: number): (dt: number
   };
 }
 
+/** 조작 모드의 프레임 훅. update 는 world.update 뒤·렌더 전, paused 면 world.update 를 건너뛴다. */
+interface PlayView {
+  readonly update: () => void;
+  readonly paused: () => boolean;
+}
+
 /**
- * 조작 모드의 입력·카메라·플레이어 모형·조준 표시를 연결한다.
- * 반환 함수는 매 프레임 world.update 뒤, 렌더 전에 부른다.
+ * 조작 모드의 입력·화면 상태·카메라·플레이어 모형·조준 표시·HUD 를 연결한다 (TASK-010~015).
  */
-function createPlayView(world: GameWorld, renderer: Renderer): () => void {
+function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
   const player = world.player;
   const blockEdit = world.blockEdit;
   if (!player || !blockEdit) throw new Error('조작 모드에는 플레이어가 필요하다');
@@ -191,20 +199,47 @@ function createPlayView(world: GameWorld, renderer: Renderer): () => void {
   const body = new PlayerView();
   const highlight = new Highlight();
   const crosshair = new Crosshair(document.body);
-  new Hotbar(
+  const iconFor = createItemIconProvider();
+  new Hotbar(document.body, world.events, world.inventory, iconFor, balance.inventory.hotbarSlots);
+  let machine: ScreenStateMachine | null = null;
+  const menu = new PauseMenu(document.body, () => machine?.resumeFromMenu());
+  const inventoryPanel = new InventoryPanel(
     document.body,
     world.events,
-    world.inventory,
-    createItemIconProvider(),
-    balance.inventory.hotbarSlots,
+    {
+      slotCount: balance.inventory.hotbarSlots + balance.inventory.bagSlots,
+      hotbarSlots: balance.inventory.hotbarSlots,
+      slot: (i) => world.inventory.slot(i),
+      recipes: () => world.crafting.statuses(),
+      craft: (id) => void world.crafting.craft(id),
+      swap: (a, b) => world.inventory.swap(a, b),
+      requestClose: () => machine?.close(true),
+    },
+    iconFor,
   );
+  machine = new ScreenStateMachine(
+    {
+      requestLock: () => requestCanvasLock(canvas),
+      exitLock: () => document.exitPointerLock(),
+      setGameplayBlocked: (b) => world.input.setGameplayBlocked(b),
+      showMenu: () => menu.show(),
+      hideMenu: () => menu.hide(),
+    },
+    { inventory: inventoryPanel },
+  );
+  bindModalKeys(canvas, machine);
   renderer.scene.add(body.object3d, highlight.object3d);
-  return () => {
-    camera.update();
-    body.syncFrom(player, camera.distance >= HIDE_PLAYER_BELOW);
-    const target = blockEdit.target;
-    highlight.show(target ? target.pos : null, world.voxels.placements, blockEdit.breakProgress);
-    crosshair.update(target !== null, world.input.frame.pointerLocked);
+  const screen = machine;
+  (window as unknown as { __gtbScreen: unknown }).__gtbScreen = screen;
+  return {
+    paused: () => screen.paused,
+    update: () => {
+      camera.update();
+      body.syncFrom(player, camera.distance >= HIDE_PLAYER_BELOW);
+      const target = screen.state.kind === 'playing' ? blockEdit.target : null;
+      highlight.show(target ? target.pos : null, world.voxels.placements, blockEdit.breakProgress);
+      crosshair.update(target !== null, screen.state.kind === 'playing');
+    },
   };
 }
 
@@ -258,9 +293,9 @@ function start(): void {
       }
       if (editDriver) probe.edits += editDriver(dt);
     }
-    world.update(dt);
+    if (!playView?.paused()) world.update(dt);
     const t = (now - startedAt) / 1000;
-    if (playView) playView();
+    if (playView) playView.update();
     else {
       renderer.setOrbitView({
         target: view.target,

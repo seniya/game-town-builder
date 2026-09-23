@@ -126,6 +126,39 @@ export class InventorySystem implements SlotSystem {
     return true;
   }
 
+  /** remove 를 빼고 add 를 넣는 교환이 가능한가. 제작의 사전 검사다. */
+  canExchange(remove: readonly ItemAmount[], add: readonly ItemAmount[]): boolean {
+    return this.planExchange(remove, add) !== null;
+  }
+
+  /**
+   * remove 를 빼고 add 를 넣는다 (제작, MVP_SPEC 8.5). 재료가 모자라거나 결과를 넣을 공간이 없으면
+   * 아무것도 바꾸지 않고 false. 재료를 뺀 뒤 생긴 빈 칸에 결과를 넣을 수 있다.
+   */
+  exchange(remove: readonly ItemAmount[], add: readonly ItemAmount[]): boolean {
+    const plan = this.planExchange(remove, add);
+    if (!plan) return false;
+    this.slots = plan;
+    this.changed();
+    return true;
+  }
+
+  /** 두 칸의 내용을 바꾼다. 같은 아이템이면 앞 칸(b)으로 가능한 만큼 합친다. UI 의 칸 이동 명령이다. */
+  swap(a: number, b: number): void {
+    if (a === b || !this.validIndex(a) || !this.validIndex(b)) return;
+    const sa = this.slots[a] ?? null;
+    const sb = this.slots[b] ?? null;
+    if (sa && sb && sameItem(sa.item, sb.item) && sb.count < INV.stackSize) {
+      const moved = Math.min(sa.count, INV.stackSize - sb.count);
+      this.slots[b] = { item: sb.item, count: sb.count + moved };
+      this.slots[a] = sa.count > moved ? { item: sa.item, count: sa.count - moved } : null;
+    } else {
+      this.slots[a] = sb;
+      this.slots[b] = sa;
+    }
+    this.changed();
+  }
+
   /** 선택된 핫바 칸에서 1 개를 뺄 수 있는가 (설치 소비). */
   canConsumeSelected(): boolean {
     return (this.selectedStack()?.count ?? 0) > 0;
@@ -149,10 +182,27 @@ export class InventorySystem implements SlotSystem {
     this.changed();
   }
 
-  /** 추가 결과 칸 배열. 공간이 모자라면 null. 넣을 것이 없으면 현재 배열 그대로. */
-  private planAdd(items: readonly ItemAmount[]): (ItemStack | null)[] | null {
-    if (items.every((it) => it.count === 0)) return this.slots;
-    const next = [...this.slots];
+  /** 칸 번호가 범위 안인가. */
+  private validIndex(i: number): boolean {
+    return Number.isInteger(i) && i >= 0 && i < INVENTORY_SLOTS;
+  }
+
+  /** 교환 결과 칸 배열. 불가능하면 null. */
+  private planExchange(
+    remove: readonly ItemAmount[],
+    add: readonly ItemAmount[],
+  ): (ItemStack | null)[] | null {
+    const removed = this.planRemove(remove);
+    return removed ? this.planAdd(add, removed) : null;
+  }
+
+  /** 추가 결과 칸 배열. 공간이 모자라면 null. 넣을 것이 없으면 기준 배열 그대로. */
+  private planAdd(
+    items: readonly ItemAmount[],
+    base: (ItemStack | null)[] = this.slots,
+  ): (ItemStack | null)[] | null {
+    if (items.every((it) => it.count === 0)) return base;
+    const next = [...base];
     for (const { item, count } of items) {
       assertCount(count);
       let left = count;

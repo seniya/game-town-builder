@@ -10,15 +10,10 @@ export type Unbind = () => void;
 
 /**
  * 캔버스와 창의 입력 이벤트를 InputSystem 에 연결한다.
- * 캔버스 클릭으로 포인터 락을 요청하고, 그 클릭은 게임 조작으로 넘기지 않는다.
- * Esc 는 브라우저가 락을 푼다. 락이 풀리거나 창이 포커스를 잃으면 눌린 입력을 모두 뗀다.
- * canLock 이 false 를 반환하면(모달이 열린 동안 등) 클릭으로 락을 걸지 않는다.
+ * 포인터 락 요청은 화면 상태 기계(ModalController)가 한다. 락이 아닐 때의 클릭은 게임 조작이 아니다.
+ * 락이 풀리거나 창이 포커스를 잃으면 눌린 입력을 모두 뗀다.
  */
-export function bindDomInput(
-  canvas: HTMLCanvasElement,
-  input: InputSystem,
-  canLock: () => boolean = () => true,
-): Unbind {
+export function bindDomInput(canvas: HTMLCanvasElement, input: InputSystem): Unbind {
   const isLocked = (): boolean => document.pointerLockElement === canvas;
 
   const onKeyDown = (e: KeyboardEvent): void => {
@@ -28,11 +23,8 @@ export function bindDomInput(
   const onKeyUp = (e: KeyboardEvent): void => input.keyUp(e.code);
   const onMouseMove = (e: MouseEvent): void => input.mouseMove(e.movementX, e.movementY);
   const onMouseDown = (e: MouseEvent): void => {
-    if (!isLocked()) {
-      // 락을 거는 클릭은 조작이 아니다 (클릭 관통 방지)
-      if (e.target === canvas && canLock()) void requestLock(canvas);
-      return;
-    }
+    // 락이 아닐 때의 클릭(메뉴·모달 조작, 락을 거는 클릭)은 게임 조작이 아니다 (클릭 관통 방지)
+    if (!isLocked()) return;
     input.mouseDown(e.button);
   };
   const onMouseUp = (e: MouseEvent): void => input.mouseUp(e.button);
@@ -70,13 +62,4 @@ export function bindDomInput(
     document.removeEventListener('pointerlockchange', onLockChange);
     window.removeEventListener('blur', onBlur);
   };
-}
-
-/** 포인터 락을 요청한다. 브라우저가 거부해도(연속 요청 제한 등) 예외를 밖으로 던지지 않는다. */
-async function requestLock(canvas: HTMLCanvasElement): Promise<void> {
-  try {
-    await canvas.requestPointerLock();
-  } catch {
-    // 사용자가 Esc 직후 다시 클릭하면 브라우저가 잠시 거부한다. 다음 클릭에서 다시 시도한다
-  }
 }

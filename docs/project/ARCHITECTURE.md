@@ -197,6 +197,11 @@ function frame(now: number) {
 `dt` 를 0.1 초로 클램프한다. 탭이 백그라운드에 갔다 오면
 한 프레임에 수십 초가 흘러 캐릭터가 벽을 통과한다.
 
+메뉴(일시정지, MVP_SPEC 29.0) 동안 main 은 `world.update` 를 부르지 않고 렌더만 한다.
+모달 동안에는 `world.update` 를 계속 부르되 `InputSystem.setGameplayBlocked(true)` 로
+플레이어 조작 입력만 비운다. 화면 상태(조작 중 / 모달 / 메뉴)는 UI 의 ModalController 가
+소유하며 게임 상태가 아니다. 저장하지 않는다.
+
 ## 3.1 MVP는 단일 가변 dt로 시작한다
 
 물리 엔진이 없고 결정적 시뮬레이션이 필요하지 않다.

@@ -50,7 +50,11 @@ export const MouseButton = { primary: 0, secondary: 2 } as const;
 
 /** 입력 상태를 모아 프레임마다 InputFrame 으로 확정한다. */
 export class InputSystem implements SlotSystem {
+  /** 실제로 눌려 있는 키 */
   private readonly held = new Set<string>();
+  /** 눌려 있지만 새로 누르기 전까지 게임에 넣지 않는 키 (모달 전후, READY-03) */
+  private readonly suppressed = new Set<string>();
+  private blocked = false;
   private readonly pressedSinceFrame = new Set<string>();
   private readonly buttons = new Set<number>();
   private secondaryClicked = false;
@@ -67,6 +71,8 @@ export class InputSystem implements SlotSystem {
 
   /** 키를 눌렀다. 자동 반복은 새로 누른 것으로 세지 않는다. */
   keyDown(code: string, repeat = false): void {
+    if (this.blocked) this.suppressed.add(code);
+    else if (!repeat) this.suppressed.delete(code);
     if (!repeat && !this.held.has(code)) this.pressedSinceFrame.add(code);
     this.held.add(code);
   }
@@ -74,6 +80,27 @@ export class InputSystem implements SlotSystem {
   /** 키를 뗐다. */
   keyUp(code: string): void {
     this.held.delete(code);
+    this.suppressed.delete(code);
+  }
+
+  /**
+   * 모달 동안 플레이어 조작 입력을 막는다 (MVP_SPEC 29.0). 막는 동안 frame 의 조작 값은 비어 있다.
+   * 막을 때와 풀 때 모두 눌린 키·버튼을 뗀 것으로 하며, 계속 누르고 있던 키는 새로 눌러야 들어간다.
+   */
+  setGameplayBlocked(blocked: boolean): void {
+    this.blocked = blocked;
+    for (const code of this.held) this.suppressed.add(code);
+    this.buttons.clear();
+    this.secondaryClicked = false;
+    this.pressedSinceFrame.clear();
+    this.dx = 0;
+    this.dy = 0;
+    this.wheel = 0;
+  }
+
+  /** 조작 입력이 막혀 있는가. */
+  get gameplayBlocked(): boolean {
+    return this.blocked;
   }
 
   /** 마우스가 움직였다. 락 중일 때만 시선에 쓴다. */
@@ -116,6 +143,7 @@ export class InputSystem implements SlotSystem {
   /** 창이 포커스를 잃었다. keyup 을 못 받으므로 눌린 키를 모두 뗀 것으로 한다. */
   releaseAll(): void {
     this.held.clear();
+    this.suppressed.clear();
     this.buttons.clear();
     this.pressedSinceFrame.clear();
     this.secondaryClicked = false;
@@ -123,7 +151,16 @@ export class InputSystem implements SlotSystem {
 
   /** 쌓인 입력으로 이번 프레임을 확정하고 한 번성 입력을 비운다. */
   update(): void {
-    const h = this.held;
+    if (this.blocked) {
+      this.current = { ...EMPTY_INPUT_FRAME, pointerLocked: this.locked };
+      this.pressedSinceFrame.clear();
+      this.secondaryClicked = false;
+      this.dx = 0;
+      this.dy = 0;
+      this.wheel = 0;
+      return;
+    }
+    const h = new Set([...this.held].filter((c) => !this.suppressed.has(c)));
     const axis = (plus: string, minus: string): number =>
       (h.has(plus) ? 1 : 0) - (h.has(minus) ? 1 : 0);
     let hotbarSelect: number | null = null;

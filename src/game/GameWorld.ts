@@ -3,7 +3,9 @@
 import type { Player } from './entities/Player';
 import { EntityRegistry } from './EntityRegistry';
 import { EventBus } from './EventBus';
+import { balance } from './data/balance';
 import { BlockEditSystem } from './systems/BlockEditSystem';
+import { CraftingSystem } from './systems/CraftingSystem';
 import { InputSystem } from './systems/InputSystem';
 import { InventorySystem } from './systems/InventorySystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
@@ -63,6 +65,8 @@ export class GameWorld {
   readonly input = new InputSystem();
   /** 플레이어 인벤토리 / 핫바. 핫바 선택은 입력 슬롯에서 InputSystem 뒤에 반영한다 */
   readonly inventory: InventorySystem;
+  /** 제작. 마을 레벨은 VillageLevelSystem(TASK-037) 전까지 시작 레벨로 읽는다 */
+  readonly crafting: CraftingSystem;
   /** 플레이어. playerSpawn 이 없으면 null 이다 */
   readonly player: Player | null;
   /** 조준·파괴·설치. 플레이어가 없으면 null 이다 */
@@ -77,6 +81,8 @@ export class GameWorld {
     this.storage = new VillageStorage(this.events, init.storage);
     this.voxels = new VoxelWorld(init.worldSize, this.events);
     this.inventory = new InventorySystem(this.events, this.input);
+    const startLevel = balance.village.levels[0].level;
+    this.crafting = new CraftingSystem(this.inventory, () => startLevel);
     this.attach('input', this.input);
     this.attach('input', this.inventory);
     this.player = init.playerSpawn ? createPlayer(init.playerSpawn) : null;
