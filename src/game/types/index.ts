@@ -47,8 +47,11 @@ export function chunkKey(c: ChunkCoord): string {
 /** 초기 생성에서 블록 한 칸을 쓰는 콜백. data 계층이 voxel 을 import 하지 않도록 주입한다. */
 export type WriteBlock = (x: number, y: number, z: number, id: number) => void;
 
-/** 블록을 바꾼 주체 (ARCHITECTURE 5.2). 섬 생성·로드는 편집 API 를 거치지 않는다. */
-export type BlockChangeSource = 'player' | 'monster' | 'npc';
+/**
+ * 블록을 바꾼 주체 (ARCHITECTURE 5.2). 섬 생성·로드는 편집 API 를 거치지 않는다.
+ * world 는 채석장 재생(MVP_SPEC 14.3) 같은 환경 변화다. 드롭·DamageLog·수리 대상이 아니다.
+ */
+export type BlockChangeSource = 'player' | 'monster' | 'npc' | 'world';
 
 /** 다중 칸 객체의 수평 방향. */
 export type Facing = 'north' | 'east' | 'south' | 'west';
@@ -281,3 +284,22 @@ export interface Room {
 
 /** 통행 판정의 주체. door 가 NPC 에게만 비고체이므로 호출부가 항상 명시한다 (ARCHITECTURE 11.2). */
 export type ActorKind = 'npc' | 'monster';
+
+// ── 시간 (MVP_SPEC 20, ARCHITECTURE 15) ────────────────────────────────────────
+
+/** 하루의 시간대 (MVP_SPEC 20.1). */
+export type DayPhase = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'evening' | 'night';
+
+/**
+ * 게임 시계의 읽기 전용 조회. 시계는 GameClockSystem 만 진행시킨다.
+ * gameMinutes=0 은 Day 1 07:00 이며 모든 값은 이 단일 누적값에서 파생한다 (MVP_SPEC 20).
+ */
+export interface GameClockReader {
+  /** 시작 시각부터의 누적 게임분. 줄어들지 않는다 (MVP_SPEC 20.3) */
+  readonly gameMinutes: number;
+  /** 1 부터 시작하는 날 번호 */
+  readonly day: number;
+  /** 그날 00:00 부터의 분 (0 이상 1440 미만, 소수 포함) */
+  readonly minuteOfDay: number;
+  readonly phase: DayPhase;
+}

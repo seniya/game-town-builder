@@ -42,7 +42,9 @@ describe('DebugSystem (TASK-016)', () => {
     w.update(1 / 60);
     const s = w.debug.snapshot();
     expect(s.playerPos).toEqual({ x: 5.5, y: 5, z: 5.5 });
-    expect(s.timeScaleAvailable).toBe(false);
+    expect(s.timeScaleAvailable).toBe(true);
+    expect(s.clockText).toBe('Day 1 07:00');
+    expect(s.phase).toBe('morning');
     expect(s.unlimitedBlocks).toBe(false);
   });
 });

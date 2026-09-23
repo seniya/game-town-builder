@@ -2,6 +2,7 @@
 import type {
   BlockChangeSource,
   BlockPos,
+  DayPhase,
   PlacedObjectSnapshot,
   RoomFailure,
   RoomType,
@@ -35,6 +36,10 @@ export interface GameEventMap {
   STORAGE_CHANGED: VillageStorageData;
   /** 정본의 void payload. lint 규칙(no-invalid-void-type) 때문에 undefined 로 표기한다. */
   INVENTORY_CHANGED: undefined;
+  /** NPC 의 현재 Action 이 바뀌었다. label 은 Action 이 제공하는 표시용 이름이다 (MVP_SPEC 19.3) */
+  NPC_ACTION_CHANGED: { npcId: string; label: string };
+  /** 시간대가 바뀌었다. 바뀔 때만 발행한다 (MVP_SPEC 20.1) */
+  DAY_PHASE_CHANGED: { phase: DayPhase };
 }
 
 export type GameEventName = keyof GameEventMap;

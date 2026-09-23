@@ -829,14 +829,14 @@ QuarryRespawnSystem — 05:00 경계에서 selectQuarryRespawnCells 8 칸 (READY
 
 Acceptance Criteria:
 
-- [ ] 1 게임일이 실시간 600 초다
-- [ ] DayPhase 가 MVP_SPEC 20.1 대로 전이한다
-- [ ] 전이할 때만 `DAY_PHASE_CHANGED` 가 발행된다
-- [ ] 디버그 배속이 동작한다
-- [ ] `gameMinutes` 단일 누적값으로 시간을 표현한다
-- [ ] 채석장은 05:00 경계를 넘을 때 하루 한 번 최대 8 칸 복구한다. 같은 날 다시 넘거나 배속·강제 설정으로 여러 경계를 넘어도 중복되지 않는다 (MVP_SPEC 14.3)
-- [ ] 캐릭터가 선 후보 칸은 건너뛰고, 후보가 모자라면 있는 만큼만 복구한다. BLOCK_CHANGED 의 by 는 `'world'` 다
-- [ ] respawnedThroughDay 를 snapshot / restore 할 수 있고 복원 뒤 같은 날을 다시 처리하지 않는다 (실제 저장 왕복은 TASK-051)
+- [x] 1 게임일이 실시간 600 초다
+- [x] DayPhase 가 MVP_SPEC 20.1 대로 전이한다
+- [x] 전이할 때만 `DAY_PHASE_CHANGED` 가 발행된다
+- [x] 디버그 배속이 동작한다
+- [x] `gameMinutes` 단일 누적값으로 시간을 표현한다
+- [x] 채석장은 05:00 경계를 넘을 때 하루 한 번 최대 8 칸 복구한다. 같은 날 다시 넘거나 배속·강제 설정으로 여러 경계를 넘어도 중복되지 않는다 (MVP_SPEC 14.3)
+- [x] 캐릭터가 선 후보 칸은 건너뛰고, 후보가 모자라면 있는 만큼만 복구한다. BLOCK_CHANGED 의 by 는 `'world'` 다
+- [x] respawnedThroughDay 를 snapshot / restore 할 수 있고 복원 뒤 같은 날을 다시 처리하지 않는다 (실제 저장 왕복은 TASK-051)
 
 ---
 

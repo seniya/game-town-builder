@@ -12,6 +12,7 @@ import {
 import { BLOCKS, BlockId } from './game/data/blocks';
 import { GameWorld } from './game/GameWorld';
 import { buildIsland, ISLAND_REGIONS, islandPlayerSpawn } from './game/data/island';
+import { formatClock, MINUTES_PER_DAY } from './game/systems/GameClockSystem';
 import { CameraController, HIDE_PLAYER_BELOW } from './render/CameraController';
 import { PlayerView } from './render/EntityView';
 import { Highlight } from './render/Highlight';
@@ -21,6 +22,7 @@ import { RoomLabelView } from './render/RoomLabelView';
 import { RoomOverlayView } from './render/RoomOverlayView';
 import { blockItem } from './game/systems/InventorySystem';
 import type { BlockPos } from './game/types';
+import { ClockHud } from './ui/ClockHud';
 import { Crosshair } from './ui/Crosshair';
 import { DebugPanel } from './ui/DebugPanel';
 import { itemLabel } from './ui/itemLabels';
@@ -120,6 +122,12 @@ const ISLAND_VIEWS: VisualFixture['views'] = [
   },
 ];
 
+/**
+ * 섬의 좌표 정보(종·주민 시작 칸·채석장 후보). buildIsland 는 결정적이므로(ARCHITECTURE 24)
+ * 쓰기 없이 한 번 더 불러 월드를 만들기 전에 얻는다.
+ */
+const islandData = buildIsland(() => undefined);
+
 /** 고정 섬 장면. 블록은 buildIsland 가 쓰고 크기는 balance.world 다. */
 const islandScene: VisualFixture = {
   size: balance.world,
@@ -127,7 +135,21 @@ const islandScene: VisualFixture = {
   objects: [],
   playerSpawn: islandPlayerSpawn(),
   views: ISLAND_VIEWS,
+  quarryCandidates: islandData.quarryRespawnCandidates,
 };
+
+/**
+ * ?time=시(소수 가능, 19.5 = 19:30) 를 시작 gameMinutes 로 바꾼다. 07:00 이후면 Day 1, 이전이면 Day 2 의 그 시각이다.
+ * 관찰 장면용 시작 조건이며 게임 규칙이 아니다.
+ */
+function startMinutesFromParam(value: string | null): number {
+  if (value === null) return 0;
+  const hours = Number(value);
+  if (!(hours >= 0 && hours < 24)) return 0;
+  const target = Math.round(hours * 60);
+  const start = balance.clock.startHour * 60;
+  return (((target - start) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+}
 
 /** 장면 이름 → 장면. */
 function pickFixture(name: string | null): VisualFixture {
@@ -145,10 +167,12 @@ function pickView(fixture: VisualFixture, index: number): VisualFixture['views']
 }
 
 /** 고정 장면으로 GameWorld 를 만든다. 다중 칸 객체는 editObject 로 놓는다. */
-function createWorld(fixture: VisualFixture, play: boolean): GameWorld {
+function createWorld(fixture: VisualFixture, play: boolean, startGameMinutes: number): GameWorld {
   const world = new GameWorld({
     storage: balance.storage,
     worldSize: fixture.size,
+    startGameMinutes,
+    ...(fixture.quarryCandidates ? { quarryCandidates: fixture.quarryCandidates } : {}),
     ...(play && fixture.playerSpawn ? { playerSpawn: fixture.playerSpawn } : {}),
   });
   const t0 = performance.now();
@@ -271,7 +295,7 @@ function start(): void {
   const fixture = pickFixture(sceneName);
   // ?view= 가 있으면 고정 시점 관찰(측정) 모드, 없고 시작 칸이 있으면 조작 모드다
   const play = fixture.playerSpawn !== undefined && !params.has('view');
-  const world = createWorld(fixture, play);
+  const world = createWorld(fixture, play, startMinutesFromParam(params.get('time')));
   const renderer = new Renderer(getCanvas(), world.voxels, {
     workerCount: Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1)),
     chunkUploadsPerFrame: balance.performance.chunkUploadsPerFrame,
@@ -283,6 +307,7 @@ function start(): void {
   renderer.scene.add(roomOverlay.object3d);
   const roomLabels = new RoomLabelView(document.body, world.rooms, world.events, renderer.camera);
   new RoomSound(world.events);
+  const clockHud = new ClockHud(document.body, world.clock, formatClock);
   if (params.get('bounds') === '1') world.debug.showRoomBounds = true;
   const orbit = params.get('orbit') !== '0';
   const editDriver =
@@ -324,6 +349,9 @@ function start(): void {
     placeableBlocks: BLOCKS.filter((b) => b.breakSeconds !== null && b.id !== BlockId.crop).map(
       (b) => [b.id, itemLabel({ kind: 'block', blockId: b.id })] as const,
     ),
+    setTimeScale: (scale) => void world.debug.setTimeScale(scale),
+    advanceClockTo: (hour, minute) => world.debug.advanceClockTo(hour, minute),
+    timeScales: balance.clock.debugTimeScales,
   });
   if (params.get('debug') === '1') debugPanel.toggle();
   const measureSeconds = Number(params.get('measure') ?? 0);
@@ -368,6 +396,7 @@ function start(): void {
       diagnosing ? world.rooms.getDiagnosis().result : null,
     );
     roomLabels.update(frameMs / 1000, diagnosing);
+    clockHud.update();
     renderer.render();
     debugPanel.update(now);
     if (measureSeconds > 0 && probe.settledAtMs !== null && probe.measure?.done !== true) {

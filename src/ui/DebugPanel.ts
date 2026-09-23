@@ -26,6 +26,12 @@ export interface DebugPanelPort {
   setShowRoomBounds(on: boolean): void;
   /** 무제한 모드에서 고를 수 있는 블록 [id, 이름] */
   readonly placeableBlocks: readonly (readonly [number, string])[];
+  /** 디버그 시간 배속 (MVP_SPEC 20.2) */
+  setTimeScale(scale: number): void;
+  /** 시각 강제 설정: 다음 도래하는 hour:minute 로 앞당긴다 (MVP_SPEC 20.3) */
+  advanceClockTo(hour: number, minute: number): void;
+  /** 고를 수 있는 배속 */
+  readonly timeScales: readonly number[];
 }
 
 /** 표시 갱신 간격(ms). 매 프레임 DOM 을 고치지 않는다. */
@@ -55,6 +61,9 @@ export class DebugPanel {
   private readonly unlimited: HTMLInputElement;
   private readonly blockSelect: HTMLSelectElement;
   private readonly roomBounds: HTMLInputElement;
+  private readonly scaleButtons = new Map<number, HTMLButtonElement>();
+  private readonly extraRows: HTMLElement;
+  private extraLines: (() => string[]) | null = null;
   private open = false;
   private lastRefresh = 0;
 
@@ -109,10 +118,28 @@ export class DebugPanel {
       port.setShowRoomBounds(this.roomBounds.checked),
     );
     roomControls.append(this.roomBounds, document.createTextNode('방 경계 상시 표시'));
-    const note = document.createElement('div');
-    note.textContent = '시간 배속: TASK-023 에서 연결 (비활성)';
-    note.style.opacity = '0.6';
-    this.root.append(this.text, controls, roomControls, note);
+    const timeControls = document.createElement('div');
+    Object.assign(timeControls.style, { display: 'flex', gap: '4px', alignItems: 'center' });
+    timeControls.append(document.createTextNode('시간'));
+    for (const scale of port.timeScales) {
+      const b = document.createElement('button');
+      b.textContent = `${scale}×`;
+      b.addEventListener('click', () => port.setTimeScale(scale));
+      this.scaleButtons.set(scale, b);
+      timeControls.append(b);
+    }
+    const hourInput = document.createElement('input');
+    Object.assign(hourInput, { type: 'number', min: '0', max: '23', step: '1', value: '20' });
+    hourInput.style.width = '3.5em';
+    const jump = document.createElement('button');
+    jump.textContent = '시로 앞당기기';
+    jump.addEventListener('click', () => {
+      const h = Math.floor(Number(hourInput.value));
+      if (h >= 0 && h <= 23) port.advanceClockTo(h, 0);
+    });
+    timeControls.append(hourInput, jump);
+    this.extraRows = document.createElement('div');
+    this.root.append(this.text, controls, roomControls, timeControls, this.extraRows);
     // 패널 조작 클릭이 뒤의 메뉴(클릭하면 계속)로 전달되지 않게 한다
     this.root.addEventListener('mousedown', (e) => e.stopPropagation());
     parent.append(this.root);
@@ -121,6 +148,13 @@ export class DebugPanel {
       e.preventDefault();
       this.toggle();
     });
+  }
+
+  /** 후속 Task 의 추가 표시 줄(NPC·통행 등)과 조작 요소를 붙인다. */
+  addSection(lines: () => string[], controls: readonly HTMLElement[] = []): void {
+    const prev = this.extraLines;
+    this.extraLines = () => [...(prev ? prev() : []), ...lines()];
+    this.extraRows.append(...controls);
   }
 
   /** 열려 있는가. */
@@ -155,7 +189,11 @@ export class DebugPanel {
       `조준 ${fmtVec(g.aimTarget, 0)}  면 ${fmtVec(g.aimFace, 0)}  파괴 ${(g.breakProgress * 100).toFixed(0)}%`,
       `마지막 편집 실패 ${g.lastEditFailure ?? '—'}`,
       ...roomLines(g),
-      `NPC / 몬스터 / 감사 / 레벨 / WorldState / 시간: 해당 Task 에서 추가`,
+      `시간 ${g.clockText ?? '—'} (${g.phase ?? '—'}) · 배속 ${g.timeScale}× · gameMinutes ${g.gameMinutes?.toFixed(1) ?? '—'}`,
+      ...(this.extraLines ? this.extraLines() : []),
+      `몬스터 / 감사 / 레벨 / WorldState: 해당 Task 에서 추가`,
     ].join('\n');
+    for (const [scale, b] of this.scaleButtons)
+      b.style.fontWeight = scale === g.timeScale ? 'bold' : 'normal';
   }
 }

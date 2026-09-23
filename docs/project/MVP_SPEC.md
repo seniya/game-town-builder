@@ -1967,6 +1967,9 @@ export const balance = {
     lunchStartHour: 12, lunchEndHour: 13,
     dinnerStartHour: 18, dinnerEndHour: 19,
     sleepStartHour: 20, wakeHour: 5,
+    workStartHour: 7, freeTimeStartHour: 19,   // 19.5 / 20.1 의 07:00·19:00 경계
+    quarryRespawnHour: 5,                      // 14.3
+    debugTimeScales: [1, 4, 16],               // 20.2
   },
 
   farm: {

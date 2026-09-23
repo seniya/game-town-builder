@@ -57,6 +57,14 @@ export const balance = {
     dinnerEndHour: 19,
     sleepStartHour: 20,
     wakeHour: 5,
+    /** 역할 작업 시작 = morning 시작 (MVP_SPEC 19.5 / 20.1) */
+    workStartHour: 7,
+    /** 자유 행동 시작 (MVP_SPEC 19.5) */
+    freeTimeStartHour: 19,
+    /** 채석장 재생 경계 (MVP_SPEC 14.3) */
+    quarryRespawnHour: 5,
+    /** 디버그 시간 배속 (MVP_SPEC 20.2) */
+    debugTimeScales: [1, 4, 16],
   },
 
   farm: {

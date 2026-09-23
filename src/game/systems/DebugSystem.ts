@@ -1,10 +1,10 @@
 // F3 패널의 게임 쪽 계측 수집과 디버그 명령 (ARCHITECTURE 26, TASK-016). 순수 TypeScript 다.
 // 렌더 계측(FPS·드로우콜·청크)은 main 이 render 에서 읽어 패널에 따로 넘긴다.
-// 시간 배속은 GameClockSystem(TASK-023) 이 생기기 전까지 비활성이다.
 import type { Player } from '../entities/Player';
 import type { RoomRegistry, RoomRegistryStats } from '../room/RoomRegistry';
-import type { BlockPos, Vec3 } from '../types';
+import type { BlockPos, DayPhase, Vec3 } from '../types';
 import type { BlockEditSystem } from './BlockEditSystem';
+import { formatClock, type GameClockSystem } from './GameClockSystem';
 import type { RoomSystem } from './RoomSystem';
 
 /** 게임 쪽 디버그 표시값. */
@@ -19,8 +19,15 @@ export interface GameDebugSnapshot {
   readonly unlimitedBlocks: boolean;
   /** 무제한 모드에서 빈 핫바 칸으로 놓을 블록 */
   readonly unlimitedBlockId: number | null;
-  /** 아직 연결되지 않은 명령. 해당 Task 에서 활성화한다 */
+  /** 시간 배속 명령을 쓸 수 있는가(시계가 있는가) */
   readonly timeScaleAvailable: boolean;
+  /** 현재 배속 (1 / 4 / 16) */
+  readonly timeScale: number;
+  /** "Day N HH:MM" 와 시간대 (ARCHITECTURE 26) */
+  readonly clockText: string | null;
+  readonly phase: DayPhase | null;
+  /** 누적 gameMinutes */
+  readonly gameMinutes: number | null;
   /** 방: 인식 수 / 타입별 / 재판정 큐 길이 / 마지막 판정 소요 ms (ARCHITECTURE 26) */
   readonly rooms: RoomRegistryStats | null;
   /** "방 경계 상시 표시" 디버그 명령 */
@@ -39,7 +46,18 @@ export class DebugSystem {
     private readonly blockEdit: BlockEditSystem | null,
     private readonly rooms: RoomRegistry | null = null,
     private readonly roomSystem: RoomSystem | null = null,
+    private readonly clock: GameClockSystem | null = null,
   ) {}
+
+  /** 디버그 시간 배속 1× / 4× / 16× (MVP_SPEC 20.2). 허용 밖이면 false. */
+  setTimeScale(scale: number): boolean {
+    return this.clock?.setTimeScale(scale) ?? false;
+  }
+
+  /** 디버그 시각 강제 설정. 다음 도래하는 hour:minute 로 앞당긴다 (MVP_SPEC 20.3). */
+  advanceClockTo(hour: number, minute = 0): void {
+    this.clock?.advanceTo(hour, minute);
+  }
 
   /** 블록 무제한 모드: 설치해도 아이템을 쓰지 않고, 빈 칸이면 선택한 블록을 놓는다. */
   get unlimitedBlocks(): boolean {
@@ -75,7 +93,11 @@ export class DebugSystem {
       lastEditFailure: e?.lastFailure ?? null,
       unlimitedBlocks: this.unlimitedBlocks,
       unlimitedBlockId: this.unlimitedBlockId,
-      timeScaleAvailable: false,
+      timeScaleAvailable: this.clock !== null,
+      timeScale: this.clock?.timeScale ?? 1,
+      clockText: this.clock ? formatClock(this.clock.gameMinutes) : null,
+      phase: this.clock?.phase ?? null,
+      gameMinutes: this.clock?.gameMinutes ?? null,
       rooms: this.rooms ? this.rooms.stats : null,
       showRoomBounds: this.showRoomBounds,
       diagnosisActive: this.roomSystem?.diagnosisActive ?? false,

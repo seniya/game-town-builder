@@ -16,6 +16,8 @@ export interface VisualFixture {
   }[];
   /** 플레이어 시작 칸. 있으면 ?view= 없이 열 때 직접 걸어 다니는 조작 모드다 */
   readonly playerSpawn?: BlockPos;
+  /** 채석장 재생 후보 (MVP_SPEC 14.2). 고정 섬만 있다 */
+  readonly quarryCandidates?: readonly BlockPos[];
   /** 카메라 궤도 시점들. 첫 번째가 기본이며 ?view= 로 고른다 */
   readonly views: readonly {
     readonly target: BlockPos;

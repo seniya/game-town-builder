@@ -11,11 +11,13 @@ import { createRoomReader } from './room/roomReader';
 import { BlockEditSystem } from './systems/BlockEditSystem';
 import { CraftingSystem } from './systems/CraftingSystem';
 import { DebugSystem } from './systems/DebugSystem';
+import { GameClockSystem } from './systems/GameClockSystem';
 import { InputSystem } from './systems/InputSystem';
 import { InventorySystem } from './systems/InventorySystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
+import { QuarryRespawnSystem } from './systems/QuarryRespawnSystem';
 import { RoomSystem } from './systems/RoomSystem';
-import type { BlockPos } from './types';
+import type { AabbBody, BlockPos } from './types';
 import { VillageStorage, type VillageStorageInit } from './VillageStorage';
 import { VoxelWorld, type WorldSize } from './voxel/VoxelWorld';
 
@@ -59,12 +61,20 @@ export interface GameWorldInit {
   readonly worldSize: WorldSize;
   /** 플레이어 시작 칸(발이 놓이는 칸, MVP_SPEC 7.5). 없으면 플레이어 없는 관찰용 월드다 */
   readonly playerSpawn?: BlockPos;
+  /** 채석장 재생 후보 (MVP_SPEC 14.2). 없으면 재생하지 않는 시험 월드다 */
+  readonly quarryCandidates?: readonly BlockPos[];
+  /** 시작 gameMinutes. 기본 0 = Day 1 07:00 (MVP_SPEC 20) */
+  readonly startGameMinutes?: number;
 }
 
 /** 게임 상태의 루트. 순수 TypeScript 이며 three 를 모른다. */
 export class GameWorld {
   readonly events = new EventBus();
   readonly registry = new EntityRegistry();
+  /** 게임 시계 (update 1 번). 모든 판단의 기준이다 */
+  readonly clock: GameClockSystem;
+  /** 채석장 하루 재생 (MVP_SPEC 14.3). update 4 번의 편집 뒤 */
+  readonly quarry: QuarryRespawnSystem;
   readonly storage: VillageStorage;
   readonly voxels: VoxelWorld;
   /** 입력 수집 (update 2 번). DOM 어댑터가 원시 입력을 넣는다 */
@@ -92,6 +102,8 @@ export class GameWorld {
   constructor(init: GameWorldInit) {
     this.storage = new VillageStorage(this.events, init.storage);
     this.voxels = new VoxelWorld(init.worldSize, this.events);
+    this.clock = new GameClockSystem(this.events, init.startGameMinutes ?? 0);
+    this.attach('clock', this.clock);
     this.inventory = new InventorySystem(this.events, this.input);
     const startLevel = balance.village.levels[0].level;
     this.crafting = new CraftingSystem(this.inventory, () => startLevel);
@@ -123,12 +135,30 @@ export class GameWorld {
       balance.room.detectBudgetMs,
       player ? { input: this.input, player } : null,
     );
-    this.debug = new DebugSystem(this.player, this.blockEdit, this.rooms, this.roomSystem);
+    this.debug = new DebugSystem(
+      this.player,
+      this.blockEdit,
+      this.rooms,
+      this.roomSystem,
+      this.clock,
+    );
     if (this.player && this.blockEdit) {
       this.attach('playerMovement', new PlayerMovementSystem(this.voxels, this.player, this.input));
       this.attach('blockEdit', this.blockEdit);
     }
+    this.quarry = new QuarryRespawnSystem({
+      voxels: this.voxels,
+      clock: this.clock,
+      candidates: init.quarryCandidates ?? [],
+      bodies: () => this.characterBodies(),
+    });
+    this.attach('blockEdit', this.quarry);
     this.attach('room', this.roomSystem);
+  }
+
+  /** 플레이어·NPC·몬스터의 현재 충돌 몸체. 설치·재생 칸 점유 검사에 쓴다. */
+  *characterBodies(): Generator<AabbBody> {
+    if (this.player) yield this.player.body;
   }
 
   /** 시스템을 슬롯에 연결한다. 같은 슬롯 안에서는 연결한 순서대로 실행한다. */
