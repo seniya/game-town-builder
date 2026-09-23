@@ -198,12 +198,21 @@ export function greedyMesh(
               return p;
             };
             let corners = [corner(i, j), corner(i + w, j), corner(i + w, j + h), corner(i, j + h)];
-            let uv: [number, number][] = [
-              [0, 0],
-              [w, 0],
-              [w, h],
-              [0, h],
-            ];
+            // x 면(d = 0)은 u 축이 y 이므로 uv 를 바꿔 텍스처의 위쪽이 월드 +y 를 향하게 한다
+            let uv: [number, number][] =
+              d === 0
+                ? [
+                    [0, 0],
+                    [0, w],
+                    [h, w],
+                    [h, 0],
+                  ]
+                : [
+                    [0, 0],
+                    [w, 0],
+                    [w, h],
+                    [0, h],
+                  ];
             let aoOrdered = ao;
             if (s === -1) {
               // 뒷면은 감는 방향을 뒤집는다 (0,3,2,1)

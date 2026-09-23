@@ -121,3 +121,17 @@ export interface MeshData {
   /** 면 컬링 뒤 보이는 면 수와 병합 뒤 쿼드 수. 계측용이다 */
   readonly stats: { readonly visibleFaces: number; readonly quads: number };
 }
+
+/** 메인 → Worker 메싱 요청 (ARCHITECTURE 9.2). padded 는 전용 복사본이며 transferable 로 넘긴다. */
+export interface MeshRequest {
+  readonly coord: ChunkCoord;
+  readonly revision: number;
+  /** 경계 1 칸을 포함한 18 × 18 × 18 뷰. 5832 개. index = px + pz * 18 + py * 324 */
+  readonly padded: Uint16Array;
+}
+
+/** Worker → 메인 메싱 결과. revision 이 현재 meshRevision 과 같을 때만 업로드한다. */
+export interface MeshResult extends MeshData {
+  readonly coord: ChunkCoord;
+  readonly revision: number;
+}

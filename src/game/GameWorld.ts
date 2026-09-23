@@ -3,6 +3,7 @@
 import { EntityRegistry } from './EntityRegistry';
 import { EventBus } from './EventBus';
 import { VillageStorage, type VillageStorageInit } from './VillageStorage';
+import { VoxelWorld, type WorldSize } from './voxel/VoxelWorld';
 
 /**
  * ARCHITECTURE 4.1 의 16 슬롯. 배열 순서가 곧 update 순서다.
@@ -40,6 +41,8 @@ export interface SlotSystem {
 /** GameWorld 생성에 필요한 데이터. 후속 Task 에서 섬 데이터 등이 추가된다. */
 export interface GameWorldInit {
   readonly storage: VillageStorageInit;
+  /** 월드 크기. MVP 는 balance.world, 시험은 작은 fixture 크기를 쓴다 */
+  readonly worldSize: WorldSize;
 }
 
 /** 게임 상태의 루트. 순수 TypeScript 이며 three 를 모른다. */
@@ -47,6 +50,7 @@ export class GameWorld {
   readonly events = new EventBus();
   readonly registry = new EntityRegistry();
   readonly storage: VillageStorage;
+  readonly voxels: VoxelWorld;
 
   private readonly slots = new Map<UpdateSlot, SlotSystem[]>(
     UPDATE_SLOTS.map((slot) => [slot, []]),
@@ -55,6 +59,7 @@ export class GameWorld {
   /** 초기 데이터를 주입해 상태 소유자들을 만든다. */
   constructor(init: GameWorldInit) {
     this.storage = new VillageStorage(this.events, init.storage);
+    this.voxels = new VoxelWorld(init.worldSize, this.events);
   }
 
   /** 시스템을 슬롯에 연결한다. 같은 슬롯 안에서는 연결한 순서대로 실행한다. */

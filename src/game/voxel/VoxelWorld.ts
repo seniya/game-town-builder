@@ -139,6 +139,29 @@ export class VoxelWorld {
     return this.revisions[this.chunkIndex(coord.cx, coord.cy, coord.cz)] ?? 0;
   }
 
+  /**
+   * 청크의 18³ padded 뷰를 새 배열로 복사한다 (ARCHITECTURE 9.2).
+   * 경계 1 칸은 이웃 청크의 블록이며 월드 밖은 air 다. 월드 원본 배열을 공유하지 않는다.
+   * padded 인덱스 = px + pz * 18 + py * 324, 청크 로컬 l 은 p = l + 1 이다.
+   */
+  copyPadded(coord: ChunkCoord): Uint16Array {
+    const p = Chunk.SIZE + 2;
+    const out = new Uint16Array(p * p * p);
+    const ox = coord.cx * Chunk.SIZE - 1;
+    const oy = coord.cy * Chunk.SIZE - 1;
+    const oz = coord.cz * Chunk.SIZE - 1;
+    let i = 0;
+    for (let py = 0; py < p; py++) {
+      for (let pz = 0; pz < p; pz++) {
+        for (let px = 0; px < p; px++) {
+          out[i] = this.getBlock(ox + px, oy + py, oz + pz);
+          i += 1;
+        }
+      }
+    }
+    return out;
+  }
+
   /** 마지막 호출 이후 dirty 가 된 청크 좌표. 중복 없이 반환하고 비운다. 렌더 전용이다. */
   takeDirtyChunks(): ChunkCoord[] {
     const out: ChunkCoord[] = [];

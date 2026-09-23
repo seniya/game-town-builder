@@ -6,7 +6,10 @@ import type { VillageStorageData } from '../src/game/types';
 
 /** 테스트용 GameWorld. balance 의 초기 저장소 값을 쓴다. */
 function makeWorld(): GameWorld {
-  return new GameWorld({ storage: balance.storage });
+  return new GameWorld({
+    storage: balance.storage,
+    worldSize: { sizeX: 16, sizeY: 16, sizeZ: 16 },
+  });
 }
 
 describe('EventBus (ARCHITECTURE 5)', () => {
