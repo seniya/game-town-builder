@@ -1,6 +1,8 @@
 // F3 패널의 게임 쪽 계측 수집과 디버그 명령 (ARCHITECTURE 26, TASK-016). 순수 TypeScript 다.
 // 렌더 계측(FPS·드로우콜·청크)은 main 이 render 에서 읽어 패널에 따로 넘긴다.
 import type { Player } from '../entities/Player';
+import type { NavigationGraph, NavigationStats } from '../nav/NavigationGraph';
+import type { PathScheduler, PathSchedulerStats } from '../nav/PathScheduler';
 import type { RoomRegistry, RoomRegistryStats } from '../room/RoomRegistry';
 import type { BlockPos, DayPhase, Vec3 } from '../types';
 import type { BlockEditSystem } from './BlockEditSystem';
@@ -28,6 +30,11 @@ export interface GameDebugSnapshot {
   readonly phase: DayPhase | null;
   /** 누적 gameMinutes */
   readonly gameMinutes: number | null;
+  /** "통행 가능 셀 표시" 디버그 명령 (ARCHITECTURE 26) */
+  readonly showNavCells: boolean;
+  /** 통행 캐시·경로 요청 계측 */
+  readonly nav: NavigationStats | null;
+  readonly paths: PathSchedulerStats | null;
   /** 방: 인식 수 / 타입별 / 재판정 큐 길이 / 마지막 판정 소요 ms (ARCHITECTURE 26) */
   readonly rooms: RoomRegistryStats | null;
   /** "방 경계 상시 표시" 디버그 명령 */
@@ -39,6 +46,10 @@ export interface GameDebugSnapshot {
 export class DebugSystem {
   /** "방 경계 상시 표시" 명령 상태. 렌더가 읽는다 */
   showRoomBounds = false;
+  /** "통행 가능 셀 표시" 명령 상태. 렌더가 읽는다 */
+  showNavCells = false;
+  /** 통행 계측 대상. GameWorld 가 연결한다 */
+  navSources: { readonly nav: NavigationGraph; readonly paths: PathScheduler } | null = null;
 
   /** 플레이어와 블록 편집 시스템을 받는다(없으면 관찰용 장면). 방 계측은 선택이다. */
   constructor(
@@ -98,6 +109,9 @@ export class DebugSystem {
       clockText: this.clock ? formatClock(this.clock.gameMinutes) : null,
       phase: this.clock?.phase ?? null,
       gameMinutes: this.clock?.gameMinutes ?? null,
+      showNavCells: this.showNavCells,
+      nav: this.navSources ? this.navSources.nav.stats : null,
+      paths: this.navSources ? this.navSources.paths.stats : null,
       rooms: this.rooms ? this.rooms.stats : null,
       showRoomBounds: this.showRoomBounds,
       diagnosisActive: this.roomSystem?.diagnosisActive ?? false,

@@ -912,7 +912,15 @@ export class NavigationGraph {
 export type ActorKind = 'npc' | 'monster';
 ```
 
-## 11.2 ActorKind 가 남은 이유
+구현 계약(TASK-024, ADR 025):
+
+- `isStandable` = 공통 `isStandableCell` + 발·머리 칸이 water 가 아님(MVP_SPEC 9.5). 방 판정은 공통 함수만 쓴다.
+- `neighbors`의 한 걸음 = 수평 4 방향 × 같은 높이 / +1 / −1. +1 은 출발 칸의 y+2(오르는 동안 머리),
+  −1 은 도착 열의 출발 높이 +1 칸(내려서기 전 머리)이 통행 가능해야 한다. 2 칸 턱·2 칸 낙차는 이웃이 아니다.
+- 캐시는 (칸, actor) 별 이웃 목록이며 목록을 만들 때 읽은 모든 칸을 역참조로 기록한다.
+  `invalidate(pos)`는 pos 를 읽은 캐시만 지우고, pos 를 지켜보는 경로 감시자(`watch`)와 전역 청취자를
+  동기로 부른다. GameWorld 는 BLOCK_CHANGED 를 받는 즉시 `invalidate`를 부른다(28.1).
+- 경로 감시 칸 = 경로 각 칸의 아래·발·머리 칸과 오르막의 출발 y+2·내리막의 도착 열 y+1. 이웃 판정이 읽는 칸과 같다. ActorKind 가 남은 이유
 
 ADR 015 는 통행 레이어 두 개를 없앴다.
 
@@ -953,7 +961,7 @@ export interface PathSearchState {
   readonly parents: ReadonlyMap<string, BlockPos>;
   readonly boundary: PathResult['reachableBoundary'];
 }
-/** 명시적 탐색 상태를 받아 결과와 다음 상태를 반환한다. 게임 상태는 바꾸지 않는다. */
+/** 탐색 상태를 받아 결과와 다음 상태를 반환한다. 게임 상태는 바꾸지 않는다. */
 export function findPath(
   graph: NavigationGraph,
   from: BlockPos,
@@ -976,11 +984,17 @@ radius는 standCellToWorldFeet가 반경 안이면 성공한다. 고체 종은 c
 reachableBoundary에는 실제 접근 경로가 있는 장애물만 기록한다.
 NODE_LIMIT의 경계 목록은 파괴 승인에 쓰지 않는다.
 maxNodes는 실행 예산이다. 호출자는 결과 continuation을 다음 호출의 search로 넘긴다.
-입력 search는 변경하지 않고 다음 상태를 반환한다. 탐색 상태는 저장 파일에 포함하지 않는다.
+continuation은 **한 번만 이어 쓸 수 있는 불투명 토큰**이다(ADR 025). 이어 쓰면 넘긴 토큰은 소비되어
+다시 쓸 수 없고 새 토큰이 반환된다. 매 호출마다 open/closed 전체를 복사하면 예산 안에서 탐색한 만큼의
+복사 비용이 매 프레임 붙기 때문이다. 토큰은 from/goal/actor/revision/확장 범위만 공개한다.
+탐색 상태는 저장 파일에 포함하지 않는다.
 Nav 스케줄러가 NPC별 continuation을 소유하며 pathfind의 숨은 전역 상태는 없다.
 모든 actor의 합계가 프레임당 4000 확장을 넘지 않게 Nav가 분배한다.
 따라서 4000개보다 큰 막힌 영역도 여러 프레임 후 NO_PATH를 확정할 수 있다.
 출발점·목표·읽은 월드가 바뀌면 세션을 취소한다. 예산 소진을 영구 재시작 루프로 만들지 않는다.
+구현(TASK-025): Nav 스케줄러는 `PathScheduler`(update 6 번)다. 요청 핸들을 반환하고 결과는 다음 nav 슬롯 뒤에 나온다.
+프레임 예산을 대기 요청 수로 나눠 차례로 주고 남은 몫은 뒤 요청에 넘기며, 끝나지 않은 요청은 큐 뒤로 보낸다.
+변경 칸이 진행 중 세션의 확장 범위(±2) 안이면 그 세션만 처음부터 다시 한다. 범위 밖 변경으로는 재시작하지 않는다.
 이웃 이동은 출발·도착·step-up 중 머리 여유까지 검사하고 읽은 셀을 캐시 의존에 기록한다.
 
 ## 11.4 MovementController

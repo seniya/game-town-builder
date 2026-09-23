@@ -19,6 +19,7 @@ import { Highlight } from './render/Highlight';
 import { createItemIconProvider } from './render/itemIcons';
 import { Renderer } from './render/Renderer';
 import { RoomLabelView } from './render/RoomLabelView';
+import { NavOverlayView } from './render/NavOverlayView';
 import { RoomOverlayView } from './render/RoomOverlayView';
 import { blockItem } from './game/systems/InventorySystem';
 import type { BlockPos } from './game/types';
@@ -309,6 +310,9 @@ function start(): void {
   new RoomSound(world.events);
   const clockHud = new ClockHud(document.body, world.clock, formatClock);
   if (params.get('bounds') === '1') world.debug.showRoomBounds = true;
+  if (params.get('nav') === '1') world.debug.showNavCells = true;
+  const navOverlay = new NavOverlayView(world.nav);
+  renderer.scene.add(navOverlay.object3d);
   const orbit = params.get('orbit') !== '0';
   const editDriver =
     sceneName === 'mesh-edit' ? createEditDriver(world, Number(params.get('eps') ?? 20)) : null;
@@ -345,6 +349,9 @@ function start(): void {
     setUnlimitedBlockId: (id) => world.debug.setUnlimitedBlockId(id),
     setShowRoomBounds: (on) => {
       world.debug.showRoomBounds = on;
+    },
+    setShowNavCells: (on) => {
+      world.debug.showNavCells = on;
     },
     placeableBlocks: BLOCKS.filter((b) => b.breakSeconds !== null && b.id !== BlockId.crop).map(
       (b) => [b.id, itemLabel({ kind: 'block', blockId: b.id })] as const,
@@ -396,6 +403,12 @@ function start(): void {
       diagnosing ? world.rooms.getDiagnosis().result : null,
     );
     roomLabels.update(frameMs / 1000, diagnosing);
+    navOverlay.update(
+      frameMs / 1000,
+      world.debug.showNavCells,
+      world.player ? world.player.body.pos : view.target,
+      [],
+    );
     clockHud.update();
     renderer.render();
     debugPanel.update(now);

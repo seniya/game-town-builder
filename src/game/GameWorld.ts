@@ -6,6 +6,8 @@ import { EventBus } from './EventBus';
 import { balance } from './data/balance';
 import { BlockId } from './data/blocks';
 import { ROOM_RECIPES } from './data/roomRecipes';
+import { NavigationGraph } from './nav/NavigationGraph';
+import { PathScheduler } from './nav/PathScheduler';
 import { RoomRegistry } from './room/RoomRegistry';
 import { createRoomReader } from './room/roomReader';
 import { BlockEditSystem } from './systems/BlockEditSystem';
@@ -93,6 +95,10 @@ export class GameWorld {
   readonly rooms: RoomRegistry;
   /** 방 재판정 슬롯과 진단 모드(Tab) */
   readonly roomSystem: RoomSystem;
+  /** 통행 그래프 (ARCHITECTURE 11.1). 블록 변경을 받는 즉시 무효화한다 */
+  readonly nav: NavigationGraph;
+  /** 경로 요청 스케줄러 (update 6 번). 프레임당 확장 예산을 모든 요청이 나눠 쓴다 */
+  readonly paths: PathScheduler;
 
   private readonly slots = new Map<UpdateSlot, SlotSystem[]>(
     UPDATE_SLOTS.map((slot) => [slot, []]),
@@ -154,6 +160,11 @@ export class GameWorld {
     });
     this.attach('blockEdit', this.quarry);
     this.attach('room', this.roomSystem);
+    this.nav = new NavigationGraph(this.voxels);
+    this.events.on('BLOCK_CHANGED', (c) => this.nav.invalidate(c.pos));
+    this.paths = new PathScheduler(this.nav, balance.performance.pathfindMaxNodes);
+    this.attach('nav', this.paths);
+    this.debug.navSources = { nav: this.nav, paths: this.paths };
   }
 
   /** 플레이어·NPC·몬스터의 현재 충돌 몸체. 설치·재생 칸 점유 검사에 쓴다. */

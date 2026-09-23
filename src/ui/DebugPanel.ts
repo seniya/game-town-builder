@@ -24,6 +24,8 @@ export interface DebugPanelPort {
   setUnlimitedBlockId(blockId: number): void;
   /** "방 경계 상시 표시" 디버그 명령 (ARCHITECTURE 26) */
   setShowRoomBounds(on: boolean): void;
+  /** "통행 가능 셀 표시" 디버그 명령 (ARCHITECTURE 26) */
+  setShowNavCells(on: boolean): void;
   /** 무제한 모드에서 고를 수 있는 블록 [id, 이름] */
   readonly placeableBlocks: readonly (readonly [number, string])[];
   /** 디버그 시간 배속 (MVP_SPEC 20.2) */
@@ -61,6 +63,7 @@ export class DebugPanel {
   private readonly unlimited: HTMLInputElement;
   private readonly blockSelect: HTMLSelectElement;
   private readonly roomBounds: HTMLInputElement;
+  private readonly navCells: HTMLInputElement;
   private readonly scaleButtons = new Map<number, HTMLButtonElement>();
   private readonly extraRows: HTMLElement;
   private extraLines: (() => string[]) | null = null;
@@ -117,7 +120,15 @@ export class DebugPanel {
     this.roomBounds.addEventListener('change', () =>
       port.setShowRoomBounds(this.roomBounds.checked),
     );
-    roomControls.append(this.roomBounds, document.createTextNode('방 경계 상시 표시'));
+    this.navCells = document.createElement('input');
+    this.navCells.type = 'checkbox';
+    this.navCells.addEventListener('change', () => port.setShowNavCells(this.navCells.checked));
+    roomControls.append(
+      this.roomBounds,
+      document.createTextNode('방 경계 상시 표시'),
+      this.navCells,
+      document.createTextNode('통행 가능 셀 표시'),
+    );
     const timeControls = document.createElement('div');
     Object.assign(timeControls.style, { display: 'flex', gap: '4px', alignItems: 'center' });
     timeControls.append(document.createTextNode('시간'));
@@ -177,6 +188,7 @@ export class DebugPanel {
     const r = this.port.render();
     this.unlimited.checked = g.unlimitedBlocks;
     this.roomBounds.checked = g.showRoomBounds;
+    this.navCells.checked = g.showNavCells;
     if (g.unlimitedBlockId !== null && document.activeElement !== this.blockSelect) {
       this.blockSelect.value = String(g.unlimitedBlockId);
     }
@@ -190,6 +202,9 @@ export class DebugPanel {
       `마지막 편집 실패 ${g.lastEditFailure ?? '—'}`,
       ...roomLines(g),
       `시간 ${g.clockText ?? '—'} (${g.phase ?? '—'}) · 배속 ${g.timeScale}× · gameMinutes ${g.gameMinutes?.toFixed(1) ?? '—'}`,
+      g.nav && g.paths
+        ? `통행 캐시 ${g.nav.cachedCells} · 감시 칸 ${g.nav.watchedCells} · 경로 대기 ${g.paths.pending} · 이번 프레임 확장 ${g.paths.lastFrameNodes} · 완료 ${g.paths.completed}`
+        : '통행 —',
       ...(this.extraLines ? this.extraLines() : []),
       `몬스터 / 감사 / 레벨 / WorldState: 해당 Task 에서 추가`,
     ].join('\n');
