@@ -1,10 +1,7 @@
 // 브라우저 시각 검증용 고정 장면 (TASKS 2.7: TASK-006 / 007). 게임 콘텐츠가 아니다.
 // 기존 블록만 쓰며 새 블록·가구를 만들지 않는다. main.ts 가 ?scene= 로 고른다.
-import type { BlockPos } from '../types';
+import type { BlockPos, WriteBlock } from '../types';
 import { BlockId } from './blocks';
-
-/** 블록 한 칸을 쓰는 콜백. 월드 초기화에서 주입한다. */
-export type WriteBlock = (x: number, y: number, z: number, id: number) => void;
 
 /** 고정 장면 정의. */
 export interface VisualFixture {

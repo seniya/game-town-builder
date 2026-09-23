@@ -32,6 +32,9 @@ export function chunkKey(c: ChunkCoord): string {
   return `${c.cx},${c.cy},${c.cz}`;
 }
 
+/** 초기 생성에서 블록 한 칸을 쓰는 콜백. data 계층이 voxel 을 import 하지 않도록 주입한다. */
+export type WriteBlock = (x: number, y: number, z: number, id: number) => void;
+
 /** 블록을 바꾼 주체 (ARCHITECTURE 5.2). 섬 생성·로드는 편집 API 를 거치지 않는다. */
 export type BlockChangeSource = 'player' | 'monster' | 'npc';
 

@@ -399,9 +399,20 @@ export class VoxelWorld {
 
   /** 다중 칸 객체의 점유 배열과 메타데이터를 함께 커밋한다. */
   editObject(command: ObjectEditCommand, by: BlockChangeSource): boolean;
-  readonly placements: PlacementIndex;
+  readonly placements: PlacementIndex;   // 공개 타입은 읽기 조회 + allocateId 뿐이다
+
+  /** 렌더 준비. 청크의 18³ padded 전용 복사본 (9.2). */
+  copyPadded(coord: ChunkCoord): Uint16Array;
+  getRevision(coord: ChunkCoord): number;
+
+  /** 초기 생성·로드 전용. 이벤트·dirty 없이 쓰고, 끝나면 markAllDirty 로 첫 메싱을 요청한다. */
+  writeInitial(x: number, y: number, z: number, id: number): void;
+  markAllDirty(): void;
 }
 ```
+
+크기는 `{ sizeX, sizeY, sizeZ }`로 주입하며 16의 배수가 아니어도 된다(마지막 청크를 일부만 쓴다).
+블록이 한 번도 쓰이지 않은 청크는 배열을 만들지 않는다. 청크 크기 16은 `Chunk.SIZE`가 소유한다.
 
 ## 6.1 setBlock 이 하는 일
 
@@ -567,6 +578,10 @@ export class ChunkMeshManager {
 }
 ```
 
+대기·진행·업로드 순서의 규칙은 three 없는 `src/render/MeshJobQueue.ts`에 두고 단위 테스트한다.
+청크당 진행 중 작업은 하나이며, 진행 중 다시 dirty가 되면 대기열에 남겨 결과 도착 뒤 보낸다.
+버린 결과의 청크를 따로 재등록하지 않는다. revision이 오를 때 VoxelWorld가 dirty로 표시하기 때문이다.
+
 ```text
 update()
   1  world.takeDirtyChunks() 를 받아 큐에 넣는다 (중복 제거)
@@ -590,10 +605,15 @@ interface MeshRequest {
 interface MeshResult {
   coord: ChunkCoord;
   revision: number;
-  opaque:      { positions: Float32Array; normals: Float32Array; uvs: Float32Array; ao: Float32Array; indices: Uint32Array };
+  opaque:      { positions: Float32Array; normals: Float32Array; uvs: Float32Array; ao: Float32Array; tiles: Float32Array; indices: Uint32Array };
   transparent: { ... } | null;
+  stats:       { visibleFaces: number; quads: number };   // 계측용
 }
 ```
+
+`uvs`는 병합 쿼드의 로컬 반복 좌표(0~w, 0~h)이고 `tiles`는 아틀라스 타일 인덱스
+(`blockId * 3 + 면 종류` — 윗면 0 / 아랫면 1 / 옆면 2)다. 셰이더가 타일 안에서 `fract`로 반복한다.
+공통 타입(MeshBuffers / MeshData / MeshRequest / MeshResult)은 `src/game/types/index.ts`에 둔다.
 
 **경계 1 칸을 포함한 18³ 뷰를 넘기는 것이 규칙이다.**
 
@@ -617,6 +637,12 @@ export function greedyMesh(
 
 Worker 파일에는 알고리즘을 두지 않는다. 메시지 배선만 한다.
 그래야 Vitest 에서 Worker 없이 테스트할 수 있다.
+
+병합은 같은 블록이면서 네 모서리 AO가 모두 같은 면끼리만 한다. AO가 다른 면을 합치면
+보간으로 음영이 번지기 때문이다. 불투명 블록만 컬링·AO를 가리며, 같은 종류의 비불투명
+블록끼리(water–water, window–window)는 맞닿은 면을 컬링한다. `BlockDefinition.translucent`
+(water / window)는 반투명 메시로 분리한다. 계측용 옵션 `{ ao, greedy }`로 면 컬링·병합·AO의
+감소량을 따로 측정한다.
 
 ## 9.4 materials.ts
 
@@ -1716,6 +1742,36 @@ src/game/data/
   island.ts        섬 지형 생성 데이터
 ```
 
+`BlockDefinition`은 MVP_SPEC 8.1의 열에 다음 두 필드를 더한다. 게임 규칙이 아니라 구조 정보다.
+
+```text
+cells        다중 칸 객체의 점유 칸 수. bed / door = 2, 나머지 1. setBlock 거부 판정에 쓴다
+translucent  반투명 메시 분리. water / window 만 true
+```
+
+`drops`의 항목은 `ItemRef`(블록 또는 재료 seed / crop / food)를 가리킨다. seed는 블록이 아니다.
+
+### island.ts 계약 (TASK-008)
+
+`buildIsland(write: WriteBlock): IslandData`는 고정 섬을 콜백으로 쓰고 좌표 정보를 반환한다.
+data 계층이므로 VoxelWorld를 import하지 않는다. 난수·노이즈 없이 손으로 정한 해안 조화 계수·
+언덕·나무·폐허 좌표로 계산하며 두 번 호출해도 같다(MVP_SPEC 7.1의 "고정 데이터").
+
+```ts
+interface IslandData {
+  bellPos: BlockPos;                    // (64, surfaceY + 1, 64)
+  playerSpawn: BlockPos;                // MVP_SPEC 7.5, 발이 놓이는 칸
+  npcSpawns: { farmer; cook; carpenter };
+  monsterSpawns: BlockPos[];            // 어두운 외곽 2 곳
+  treeBases: BlockPos[];                // 24 그루
+  quarryRespawnCandidates: BlockPos[];  // MVP_SPEC 14.2, y → z → x 고정 순서
+}
+```
+
+채석장 재생 칸 선택은 순수 함수 `src/game/voxel/quarryRespawn.ts`의
+`selectQuarryRespawnCells(candidates, { getBlock, isOccupiedByCharacter }, limit)`다.
+호출 시각·소유 시스템·저장은 READY-04에서 정한다.
+
 ## 24.1 로직에 상수를 쓰지 않는다
 
 ```text
@@ -2033,6 +2089,7 @@ DI 컨테이너
 018  사건 기반 작업·다중 주기·LOD·계층 경로       Accepted (장기 계약)
 019  Web-first, not Browser-only / 에셋 경계    Accepted (장기 계약)
 020  진행 안내·블록 편집·저장 실행 계약          Accepted
+021  Phase A 복셀 렌더·메싱·고정 섬 구현 방식      Accepted
 ```
 
 ---

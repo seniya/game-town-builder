@@ -1,8 +1,8 @@
 # 문서 안내
 
-현재는 **v1.3 게임 명세와 개발 로드맵 준비 검토 완료, 구현·플레이 검증 미착수** 상태다.
-다음 구현 작업은 TASK-001이며 전체 순서는 TASKS 2.3을 따른다.
-TASK-001은 착수 가능하지만 후속 미결정 정책은 TASKS 2.5의 기한 전에 확정해야 한다.
+현재는 **Phase A(복셀 기반, TASK-001~008·027) 구현 완료, 재미 검증 미착수** 상태다.
+다음 구현 작업은 TASK-009이며 그 전에 READY-06을 확정한다. 전체 순서는 TASKS 2.3을 따른다.
+결과와 측정은 [Phase A 기록](state/2026-09-23_1036-phase-a-voxel-foundation.md)에 있다.
 
 ## 읽는 순서와 정본
 
@@ -32,7 +32,7 @@ TASK-022와 TASK-033의 시스템·감성 검증은 생략하지 않는다.
   판단하지 않는다. 과거 Task 번호·수치·다음 할 일이 현재 Task 목록을 덮어쓰지 않는다.
 - 저장소의 `graft/INDEX.md`는 도구용 탐색 안내다. 게임 규칙이나 구현 상태의 정본이 아니다.
 
-현재 핵심 결정은 ADR 011~020이다. [ADR 목록](project/ARCHITECTURE.md#31-adr-목록)에서
+현재 핵심 결정은 ADR 011~021이다. [ADR 목록](project/ARCHITECTURE.md#31-adr-목록)에서
 폐기·보완 관계를 확인한다. v1.3의 실행 계약 보완은
 [ADR 020](adr/020-consistent-progression-edit-save-contracts.md)에 기록했다.
 

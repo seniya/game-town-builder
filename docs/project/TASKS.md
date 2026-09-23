@@ -3,7 +3,7 @@
 # Small Village Restoration Game — Task Breakdown
 
 Version: 1.4 (게임 명세 v1.3 유지, 개발 준비·로드맵 보완)
-Status: TASK-001 Ready — Later Tasks Have Readiness Conditions
+Status: Phase A 완료 (TASK-001~008·027) — 다음 TASK-009, READY-06 선행
 Date: 2026-09-22
 
 ---
@@ -15,7 +15,7 @@ Date: 2026-09-22
 **Acceptance Criteria 의 정본은 이 문서다.**
 
 전체 이정표와 MVP 이후의 조건부 계획은 [ROADMAP](ROADMAP.md)을 참고한다.
-현재 일반 Task 53개 + PERF 2개 모두 미착수다. 세부 정책을 구현 전에 확정할 시점은
+현재 일반 Task 53개 + PERF 2개 중 Phase A의 9개(001~008·027)가 완료되었다. 세부 정책을 구현 전에 확정할 시점은
 2.5, 통합 검증 연결은 2.6, 첫 실행 묶음은 2.7에 정리한다.
 
 ## 1.1 Task 하나의 크기 기준
@@ -149,8 +149,8 @@ Task 착수에는 선행 의존 완료와 아래 준비 항목의 해당 기한 
 
 | ID | 현재 상태 | 확정 기한 | 확정할 내용·반영 위치 | 검증 계획 |
 | --- | --- | --- | --- | --- |
-| READY-00 | 설치·실행 미검증 | TASK-001 안에서, 002 전 | MVP_SPEC 5의 계열로 실제 설치, 타입 정의·lint 도구 호환 확인, package.json/lockfile 고정. 기존 버전 조사만으로 통과하지 않음 | dev/build/test/lint/typecheck와 브라우저 캔버스, 금지 import 실패 확인 |
-| READY-01 | 미정 | TASK-008 구현 전 | 채석장 고정 재생 후보·선택 순서·점유 보호. MVP_SPEC 7/14, ARCHITECTURE의 소유자, island 데이터 계약 | 고정 후보 재현, 플레이어 건축물·캐릭터를 덮지 않는 사례. 시간 연결은 READY-04 |
+| READY-00 | **확정** (2026-09-23) | TASK-001 안에서, 002 전 | Node 24.16.0 / pnpm 11.2.2 / TypeScript 5.9.3 / Vite 8.3.0 / Vitest 4.1.11 / three·@types/three 0.186.0 / ESLint 10.11.0 + typescript-eslint 8.70.1 / Prettier 3.9.8. package.json·pnpm-lock.yaml에 정확한 버전으로 고정 | dev/build/test/lint/typecheck 통과, Chrome 148 캔버스, 금지 import 6건 lint 에러 확인. 기록: [Phase A state](../state/2026-09-23_1036-phase-a-voxel-foundation.md) |
+| READY-01 | **확정** (2026-09-23) | TASK-008 구현 전 | 채석장 후보 = 노출 돌 지대(반지름 10)의 평지 위 원래 stone 칸, y→z→x 고정 순서. 하루 최대 8칸, air·캐릭터 비점유·면 인접 비지형 블록 없음만 복구, 부족분 이월 없음. [MVP_SPEC 14.2](MVP_SPEC.md#142-채석장-재생-후보와-점유-보호-ready-01), [ARCHITECTURE 24 island.ts 계약](ARCHITECTURE.md#islandts-계약-task-008) | island 테스트: 후보 재현·순서, 캐릭터 칸·플레이어 블록·건축물 인접 칸 제외, 후보 부족. 시간 연결은 READY-04 |
 | READY-02 | 미정 | TASK-013 구현 전 | 가구·장식의 지지면 제거 후 유지/제거 정책, 다중 칸 객체·드롭·피해 기록의 관계. MVP_SPEC 10, ARCHITECTURE 6/18/19 | 침대·문·torch 지지면 제거와 원자성, 재료 중복/유실 여부. 물리·복셀 중력 추가 금지 |
 | READY-03 | 미정 | TASK-015 구현 전 | 인벤토리·종·대사·메뉴의 시간/입력/위협 처리, 포인터 락 해제·복귀. MVP_SPEC 20/29, ARCHITECTURE 3/15 | 모달 중 입력·시간, 닫을 때 클릭 관통·눌린 키 잔류. 메뉴는 015, 종·대사는 036/040, 저장 UI는 051에서 연결 |
 | READY-04 | 미정 | TASK-023 구현 전 | READY-01 후보의 하루 8블록 재생 시각·소유 시스템·당일 처리 키와 저장/로드. MVP_SPEC 14/32, ARCHITECTURE 15/23 | 시간 경계 통과·후보 부족·점유 시 처리·배속 중복 방지. 실제 저장 왕복은 051 |
@@ -418,13 +418,13 @@ MVP_SPEC 7.4 의 5 개 영역 + 바다
 
 Acceptance Criteria:
 
-- [ ] 섬이 생성되어 화면에 보인다
-- [ ] 숲 / 채석장 / 물가 / 마을 터를 눈으로 구분할 수 있다
-- [ ] 마을의 종이 `(64, 지표면, 64)` 에 있다
-- [ ] 나무가 24 그루다. 그루당 `log` 4 / `leaves` 20 (MVP_SPEC 7.4)이며 실제 총량을 기록한다
-- [ ] 생성이 결정적이다. 두 번 실행해도 같은 섬이 나온다
-- [ ] 생성 시간이 1 초 이하다
-- [ ] MVP_SPEC 36장의 기준 장치·브라우저·DPR·시험 장면을 docs/state에 기록한다
+- [x] 섬이 생성되어 화면에 보인다
+- [x] 숲 / 채석장 / 물가 / 마을 터를 눈으로 구분할 수 있다
+- [x] 마을의 종이 `(64, 지표면, 64)` 에 있다 — 지표면 기준은 MVP_SPEC 7.4 (`surfaceY + 1`, 광장 지면 위)
+- [x] 나무가 24 그루다. 그루당 `log` 4 / `leaves` 20 (MVP_SPEC 7.4)이며 실제 총량을 기록한다
+- [x] 생성이 결정적이다. 두 번 실행해도 같은 섬이 나온다
+- [x] 생성 시간이 1 초 이하다
+- [x] MVP_SPEC 36장의 기준 장치·브라우저·DPR·시험 장면을 docs/state에 기록한다
 
 ---
 
