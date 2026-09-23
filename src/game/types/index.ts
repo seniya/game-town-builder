@@ -59,6 +59,13 @@ export type BlockKind =
 /** 블록이 아닌 재료. VillageStorage 의 세 자원과 같은 이름이다 (MVP_SPEC 13). */
 export type MaterialId = 'seed' | 'crop' | 'food';
 
+/** VillageStorage 의 세 자원 스냅샷 (MVP_SPEC 13.2). */
+export interface VillageStorageData {
+  readonly seed: number;
+  readonly crop: number;
+  readonly food: number;
+}
+
 /** 인벤토리에 들어가는 것. 블록이거나 재료다 (MVP_SPEC 13.1). */
 export type ItemRef =
   | { readonly kind: 'block'; readonly blockId: number }

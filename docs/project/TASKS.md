@@ -923,12 +923,12 @@ GameWorld와 update 16슬롯. 아직 없는 시스템은 빈 슬롯이며 후속
 
 Acceptance Criteria:
 
-- [ ] `EventBus.emit` 에 잘못된 payload 를 넣으면 컴파일 에러다
-- [ ] `on` 이 구독 해제 함수를 반환한다
-- [ ] `GameWorld.update` 슬롯 순서가 ARCHITECTURE 4.1과 일치하고 추가 시스템도 그 자리에 연결된다
-- [ ] `VillageStorage` 변경 시 `STORAGE_CHANGED` 가 발행된다
-- [ ] 초기 `seed` 가 3 이다
-- [ ] update 슬롯은 순서를 규정한다. NPC 판단·Action 실행·렌더의 호출 책임이 분리되어 후속 갱신 주기를 바꿀 수 있다 (ARCHITECTURE 3.2)
+- [x] `EventBus.emit` 에 잘못된 payload 를 넣으면 컴파일 에러다
+- [x] `on` 이 구독 해제 함수를 반환한다
+- [x] `GameWorld.update` 슬롯 순서가 ARCHITECTURE 4.1과 일치하고 추가 시스템도 그 자리에 연결된다
+- [x] `VillageStorage` 변경 시 `STORAGE_CHANGED` 가 발행된다
+- [x] 초기 `seed` 가 3 이다
+- [x] update 슬롯은 순서를 규정한다. NPC 판단·Action 실행·렌더의 호출 책임이 분리되어 후속 갱신 주기를 바꿀 수 있다 (ARCHITECTURE 3.2)
 
 ---
 
