@@ -1,9 +1,9 @@
 # 문서 안내
 
-현재는 **Phase D(시간과 이동) 완료, TASK-033 취침 구현 완료 — 재미 검증(분기점 2, G2) 사람 관찰 대기** 상태다.
-G2 결과 전에는 Phase E 의 PERF-001·TASK-030 으로 넘어가지 않는다. 전체 순서는 TASKS 2.3을 따른다.
+현재는 **Phase D(시간과 이동) 완료, TASK-033 재미 검증(분기점 2, G2) 통과** 상태다.
+다음은 Phase E 의 PERF-001 이다. 전체 순서는 TASKS 2.3을 따른다.
 게이트 결과는 [G1 기록](state/2026-09-23_1400-task-022-gate-g1-passed.md), Phase D 는
-[Phase D 기록](state/2026-09-23_2241-phase-d-time-movement-and-sleep-gate.md)에 있다.
+[Phase D 기록](state/2026-09-23_2241-phase-d-time-movement-and-sleep-gate.md), [G2 기록](state/2026-09-23_2309-task-033-gate-g2-passed.md)에 있다.
 결과는 [Phase A 기록](state/2026-09-23_1036-phase-a-voxel-foundation.md),
 [Phase B 기록](state/2026-09-23_1130-phase-b-player.md),
 [Phase C 기록](state/2026-09-23_1208-phase-c-room-recognition.md)에 있다.
