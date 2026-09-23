@@ -284,15 +284,15 @@ PlacementIndex + 원자적 editObject. meshRevision 추적
 
 Acceptance Criteria:
 
-- [ ] `getBlock` 이 월드 밖 좌표에 대해 0 을 반환한다
-- [ ] `setBlock` 이 같은 id 면 `false` 를 반환하고 dirty 를 만들지 않는다
-- [ ] 청크 경계(x % 16 === 0)의 블록을 바꾸면 **인접 청크도 dirty** 가 된다
-- [ ] `takeDirtyChunks()` 가 중복 없이 반환하고, 호출 후 비워진다
-- [ ] 위 전부에 대한 테스트가 있다
-- [ ] 침대·문의 점유 칸과 메타데이터가 함께 변경된다. 일부만 실패하면 모두 롤백한다
-- [ ] AO를 위해 padded에 변경점을 포함하는 모서리·꼭짓점 이웃도 dirty/revision이 갱신된다
-- [ ] 다중 칸 객체에 단일 setBlock을 직접 적용하면 거부한다
-- [ ] 월드 크기를 데이터로 주입한다. MVP와 다른 크기의 작은 fixture에서도 경계·청크 좌표 검사가 통과한다
+- [x] `getBlock` 이 월드 밖 좌표에 대해 0 을 반환한다
+- [x] `setBlock` 이 같은 id 면 `false` 를 반환하고 dirty 를 만들지 않는다
+- [x] 청크 경계(x % 16 === 0)의 블록을 바꾸면 **인접 청크도 dirty** 가 된다
+- [x] `takeDirtyChunks()` 가 중복 없이 반환하고, 호출 후 비워진다
+- [x] 위 전부에 대한 테스트가 있다
+- [x] 침대·문의 점유 칸과 메타데이터가 함께 변경된다. 일부만 실패하면 모두 롤백한다
+- [x] AO를 위해 padded에 변경점을 포함하는 모서리·꼭짓점 이웃도 dirty/revision이 갱신된다
+- [x] 다중 칸 객체에 단일 setBlock을 직접 적용하면 거부한다
+- [x] 월드 크기를 데이터로 주입한다. MVP와 다른 크기의 작은 fixture에서도 경계·청크 좌표 검사가 통과한다
 
 ---
 
