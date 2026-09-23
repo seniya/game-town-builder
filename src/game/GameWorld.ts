@@ -6,6 +6,7 @@ import { EventBus } from './EventBus';
 import { balance } from './data/balance';
 import { BlockEditSystem } from './systems/BlockEditSystem';
 import { CraftingSystem } from './systems/CraftingSystem';
+import { DebugSystem } from './systems/DebugSystem';
 import { InputSystem } from './systems/InputSystem';
 import { InventorySystem } from './systems/InventorySystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
@@ -67,6 +68,8 @@ export class GameWorld {
   readonly inventory: InventorySystem;
   /** 제작. 마을 레벨은 VillageLevelSystem(TASK-037) 전까지 시작 레벨로 읽는다 */
   readonly crafting: CraftingSystem;
+  /** F3 계측과 디버그 명령 (ARCHITECTURE 26) */
+  readonly debug: DebugSystem;
   /** 플레이어. playerSpawn 이 없으면 null 이다 */
   readonly player: Player | null;
   /** 조준·파괴·설치. 플레이어가 없으면 null 이다 */
@@ -93,6 +96,7 @@ export class GameWorld {
           occupants: () => [player.body],
         })
       : null;
+    this.debug = new DebugSystem(this.player, this.blockEdit);
     if (this.player && this.blockEdit) {
       this.attach('playerMovement', new PlayerMovementSystem(this.voxels, this.player, this.input));
       this.attach('blockEdit', this.blockEdit);

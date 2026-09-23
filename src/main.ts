@@ -7,7 +7,7 @@ import {
   smallHouseFixture,
   type VisualFixture,
 } from './game/data/visualFixtures';
-import { BlockId } from './game/data/blocks';
+import { BLOCKS, BlockId } from './game/data/blocks';
 import { GameWorld } from './game/GameWorld';
 import { buildIsland, ISLAND_REGIONS, islandPlayerSpawn } from './game/data/island';
 import { CameraController, HIDE_PLAYER_BELOW } from './render/CameraController';
@@ -17,6 +17,8 @@ import { createItemIconProvider } from './render/itemIcons';
 import { Renderer } from './render/Renderer';
 import type { BlockPos } from './game/types';
 import { Crosshair } from './ui/Crosshair';
+import { DebugPanel } from './ui/DebugPanel';
+import { itemLabel } from './ui/itemLabels';
 import { Hotbar } from './ui/Hotbar';
 import { bindDomInput } from './ui/domInput';
 import { InventoryPanel } from './ui/InventoryPanel';
@@ -271,6 +273,32 @@ function start(): void {
     spikes: [],
     measure: null,
   };
+  if (params.get('unlimited') === '1') world.debug.setUnlimitedBlocks(true);
+  const fpsWindow: number[] = [];
+  const debugPanel = new DebugPanel(document.body, {
+    game: () => world.debug.snapshot(),
+    render: () => {
+      const total = fpsWindow.reduce((a, b) => a + b, 0);
+      const s = renderer.chunks.stats;
+      return {
+        fps: fpsWindow.length > 0 ? (fpsWindow.length * 1000) / total : 0,
+        frameMs: fpsWindow.at(-1) ?? 0,
+        maxFrameMs: fpsWindow.length > 0 ? Math.max(...fpsWindow) : 0,
+        drawCalls: renderer.drawCalls,
+        chunksTotal: s.totalChunks,
+        chunksMeshed: s.meshedChunks,
+        chunksPending: s.pending,
+        chunksInFlight: s.inFlight,
+        uploadsThisFrame: s.uploadsThisFrame,
+      };
+    },
+    setUnlimitedBlocks: (on) => world.debug.setUnlimitedBlocks(on),
+    setUnlimitedBlockId: (id) => world.debug.setUnlimitedBlockId(id),
+    placeableBlocks: BLOCKS.filter((b) => b.breakSeconds !== null && b.id !== BlockId.crop).map(
+      (b) => [b.id, itemLabel({ kind: 'block', blockId: b.id })] as const,
+    ),
+  });
+  if (params.get('debug') === '1') debugPanel.toggle();
   const measureSeconds = Number(params.get('measure') ?? 0);
   const measured: number[] = [];
   let maxDraws = 0;
@@ -284,6 +312,8 @@ function start(): void {
     const frameMs = now - last;
     const dt = Math.min(frameMs / 1000, balance.player.maxFrameSeconds);
     last = now;
+    fpsWindow.push(frameMs);
+    if (fpsWindow.length > 60) fpsWindow.shift();
     if (probe.settledAtMs !== null) {
       probe.frames += 1;
       probe.maxFrameMs = Math.max(probe.maxFrameMs, frameMs);
@@ -305,6 +335,7 @@ function start(): void {
       });
     }
     renderer.render();
+    debugPanel.update(now);
     if (measureSeconds > 0 && probe.settledAtMs !== null && probe.measure?.done !== true) {
       const since = now - startedAt - probe.settledAtMs;
       if (since > MEASURE_WARMUP_MS) {

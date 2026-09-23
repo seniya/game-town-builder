@@ -120,13 +120,13 @@ describe('CraftingSystem (TASK-015)', () => {
         for (let y = 0; y <= 4; y++) world.writeInitial(x, y, z, BlockId.stone);
     // 나무 한 그루: log 2 + leaves 4
     for (const y of [5, 6]) world.writeInitial(10, y, 10, BlockId.log);
-    for (const [x, z] of [
+    const leaves: [number, number][] = [
       [9, 10],
       [11, 10],
       [10, 9],
       [10, 11],
-    ])
-      world.writeInitial(x, 7, z, BlockId.leaves);
+    ];
+    for (const [x, z] of leaves) world.writeInitial(x, 7, z, BlockId.leaves);
     const input = new InputSystem();
     const inv = new InventorySystem(events, input);
     const player = createPlayer({ x: 5, y: 5, z: 5 });
