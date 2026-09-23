@@ -1,7 +1,7 @@
 # Phase C 방 인식 구현 — TASK-017~022
 
 Date: 2026-09-23
-Status: TASK-017~021 완료. TASK-022 구현 완료·**재미 검증(사람 플레이 관찰) 대기 — Phase D 진행 불가**
+Status: TASK-017~021 완료. TASK-022 구현 완료·재미 검증 대기(작성 당시). → 2026-09-23 G1 통과, [기록](2026-09-23_1400-task-022-gate-g1-passed.md)
 구현 기준 커밋: e67d759 (시작) → 이 기록과 같은 push 의 커밋들
 관련 정본: MVP_SPEC 8.4 / 11 / 12 / 29 / 29.2 / 30 / 31 / 39 Test 2·3, ARCHITECTURE 4.1 / 5 / 10 / 25 / 26, TASKS 2.1 / 4.1
 해결한 READY: 없음 (Phase C 에 선행 READY 없음)

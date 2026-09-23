@@ -1,8 +1,8 @@
 # 문서 안내
 
-현재는 **Phase C(방 인식, TASK-017~022) 구현 완료, TASK-022 재미 검증(분기점 1) 대기** 상태다.
-사람의 플레이 관찰([HUMAN_REVIEW 4장 G1](project/HUMAN_REVIEW.md#4-재미-검증-게이트--이-목록으로-미루지-않는다))을
-받기 전에는 Phase D(TASK-023~)를 시작하지 않는다. 전체 순서는 TASKS 2.3을 따른다.
+현재는 **Phase C(방 인식, TASK-017~022) 완료, TASK-022 재미 검증(분기점 1) 통과** 상태다.
+다음은 READY-04 확정 후 Phase D(TASK-023~)다. 전체 순서는 TASKS 2.3을 따른다.
+게이트 결과는 [G1 기록](state/2026-09-23_1400-task-022-gate-g1-passed.md)에 있다.
 결과는 [Phase A 기록](state/2026-09-23_1036-phase-a-voxel-foundation.md),
 [Phase B 기록](state/2026-09-23_1130-phase-b-player.md),
 [Phase C 기록](state/2026-09-23_1208-phase-c-room-recognition.md)에 있다.
