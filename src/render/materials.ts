@@ -123,3 +123,15 @@ export function createCharacterMaterial(color: number): THREE.Material {
 export function createHighlightMaterial(): THREE.LineBasicMaterial {
   return new THREE.LineBasicMaterial({ color: 0x1b1f24, transparent: true, opacity: 0.85 });
 }
+
+/** 파괴 균열 오버레이 재질 (TASK-013). 블록 면 앞에 그리도록 polygonOffset 을 준다. */
+export function createCrackMaterial(texture: THREE.Texture): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  });
+}

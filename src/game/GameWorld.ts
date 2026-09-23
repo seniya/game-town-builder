@@ -80,7 +80,13 @@ export class GameWorld {
     this.attach('input', this.input);
     this.attach('input', this.inventory);
     this.player = init.playerSpawn ? createPlayer(init.playerSpawn) : null;
-    this.blockEdit = this.player ? new BlockEditSystem(this.voxels, this.player) : null;
+    const player = this.player;
+    // 설치 칸 점유 검사 대상. NPC·몬스터 몸체는 해당 엔티티가 생기는 TASK-028 / 045 에서 더한다
+    this.blockEdit = player
+      ? new BlockEditSystem(this.voxels, player, this.inventory, this.input, this.events, {
+          occupants: () => [player.body],
+        })
+      : null;
     if (this.player && this.blockEdit) {
       this.attach('playerMovement', new PlayerMovementSystem(this.voxels, this.player, this.input));
       this.attach('blockEdit', this.blockEdit);

@@ -203,7 +203,7 @@ function createPlayView(world: GameWorld, renderer: Renderer): () => void {
     camera.update();
     body.syncFrom(player, camera.distance >= HIDE_PLAYER_BELOW);
     const target = blockEdit.target;
-    highlight.show(target ? target.pos : null, world.voxels.placements);
+    highlight.show(target ? target.pos : null, world.voxels.placements, blockEdit.breakProgress);
     crosshair.update(target !== null, world.input.frame.pointerLocked);
   };
 }
