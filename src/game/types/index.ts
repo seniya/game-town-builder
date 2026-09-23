@@ -32,8 +32,8 @@ export function chunkKey(c: ChunkCoord): string {
   return `${c.cx},${c.cy},${c.cz}`;
 }
 
-/** 블록을 바꾼 주체 (ARCHITECTURE 5.2). world 는 섬 생성·로드처럼 게임 밖의 초기화다. */
-export type BlockChangeSource = 'player' | 'monster' | 'npc' | 'world';
+/** 블록을 바꾼 주체 (ARCHITECTURE 5.2). 섬 생성·로드는 편집 API 를 거치지 않는다. */
+export type BlockChangeSource = 'player' | 'monster' | 'npc';
 
 /** 다중 칸 객체의 수평 방향. */
 export type Facing = 'north' | 'east' | 'south' | 'west';

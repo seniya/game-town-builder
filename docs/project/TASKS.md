@@ -311,11 +311,11 @@ BlockDefinition { id, name, kind, solid, opaque, terrain, breakSeconds, drops }
 
 Acceptance Criteria:
 
-- [ ] 공기 제외 22종, 공기 포함 23개가 id 0~22로 연속이다
-- [ ] `isWallBlock` 이 plank / stone_brick / window / door 만 true 를 반환한다
-- [ ] `isWallBlock(dirt)` 가 false 다 — MVP_SPEC 8.4
-- [ ] bedrock / water / bell 의 `breakSeconds` 가 `null` 이다
-- [ ] leaves 회수 1개와 씨앗 25% 추가 드롭, 다중 칸 객체의 단일 아이템 드롭이 정의된다
+- [x] 공기 제외 22종, 공기 포함 23개가 id 0~22로 연속이다
+- [x] `isWallBlock` 이 plank / stone_brick / window / door 만 true 를 반환한다
+- [x] `isWallBlock(dirt)` 가 false 다 — MVP_SPEC 8.4
+- [x] bedrock / water / bell 의 `breakSeconds` 가 `null` 이다
+- [x] leaves 회수 1개와 씨앗 25% 추가 드롭, 다중 칸 객체의 단일 아이템 드롭이 정의된다
 
 ---
 
