@@ -37,6 +37,13 @@ function pickFixture(name: string | null): VisualFixture {
   return name === 'mesh-edit' ? meshEditFixture : smallHouseFixture;
 }
 
+/** 고정 장면의 index 번째 시점. 없으면 첫 시점이다. */
+function pickView(fixture: VisualFixture, index: number): VisualFixture['views'][number] {
+  const view = fixture.views[index] ?? fixture.views[0];
+  if (!view) throw new Error('고정 장면에 시점이 없다');
+  return view;
+}
+
 /** 고정 장면으로 GameWorld 를 만든다. 다중 칸 객체는 editObject 로 놓는다. */
 function createWorld(fixture: VisualFixture): GameWorld {
   const world = new GameWorld({ storage: balance.storage, worldSize: fixture.size });
@@ -88,7 +95,7 @@ function start(): void {
     chunkUploadsPerFrame: balance.performance.chunkUploadsPerFrame,
     maxPixelRatio: Number(params.get('dpr') ?? 2),
   });
-  const view = fixture.view;
+  const view = pickView(fixture, Number(params.get('view') ?? 0));
   const orbit = params.get('orbit') !== '0';
   const editDriver =
     sceneName === 'mesh-edit' ? createEditDriver(world, Number(params.get('eps') ?? 20)) : null;

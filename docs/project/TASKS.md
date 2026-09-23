@@ -390,12 +390,12 @@ src/render/materials.ts — 재질 생성은 여기 한 곳에만
 
 Acceptance Criteria:
 
-- [ ] 청크 메시가 화면에 보인다
-- [ ] 블록 종류가 색으로 구분된다
-- [ ] 반투명 블록(water / window)이 뒤가 비쳐 보인다
-- [ ] `ShaderMaterial` / `MeshStandardMaterial` 생성이 `materials.ts` 밖에 없다
-- [ ] 정점 AO 가 적용되어 모서리가 어둡다
-- [ ] 단색 플레이스홀더라도 함께 놓인 블록의 팔레트가 어울린다. 작은 집 fixture에서 벽·바닥·문·창문과 기존 블록 지붕의 형태가 읽히는지 기록한다. 지붕은 선택이며 새 블록을 만들지 않는다
+- [x] 청크 메시가 화면에 보인다
+- [x] 블록 종류가 색으로 구분된다
+- [x] 반투명 블록(water / window)이 뒤가 비쳐 보인다
+- [x] `ShaderMaterial` / `MeshStandardMaterial` 생성이 `materials.ts` 밖에 없다
+- [x] 정점 AO 가 적용되어 모서리가 어둡다
+- [x] 단색 플레이스홀더라도 함께 놓인 블록의 팔레트가 어울린다. 작은 집 fixture에서 벽·바닥·문·창문과 기존 블록 지붕의 형태가 읽히는지 기록한다. 지붕은 선택이며 새 블록을 만들지 않는다
 
 ---
 

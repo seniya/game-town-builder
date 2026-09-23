@@ -60,12 +60,14 @@ void main() {
   vec2 local = clamp(fract(vUv), 0.001, 0.999);
   vec4 texel = texture2D(atlas, (vec2(column, row) + local) / atlasGrid);
   if (texel.a < alphaCut) discard;
+  // 면 방향별 기본 음영. 해가 없는 면도 형태가 읽히게 한다 (위 1.0 / 옆 0.8~0.9 / 아래 0.6)
   vec3 n = normalize(vNormal);
   float sun = max(dot(n, normalize(sunDirection)), 0.0);
   vec3 ambient = mix(groundAmbient, skyAmbient, n.y * 0.5 + 0.5);
-  // 정점 AO 0~1 을 부드러운 곡선으로 바꾼다. 모서리가 어두워진다
-  float occlusion = mix(0.42, 1.0, vAo * vAo * (3.0 - 2.0 * vAo));
-  vec3 color = texel.rgb * (ambient + sunColor * sun) * occlusion;
+  // 정점 AO 0~1 을 곡선으로 바꾼다. 한 면만 가려도 눈에 띄게 모서리가 어두워진다
+  float occlusion = mix(0.2, 1.0, pow(vAo, 1.6));
+  float faceShade = n.y > 0.5 ? 1.0 : (n.y < -0.5 ? 0.6 : (abs(n.x) > 0.5 ? 0.82 : 0.9));
+  vec3 color = texel.rgb * (ambient + sunColor * sun) * occlusion * faceShade;
   gl_FragColor = vec4(color, texel.a);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>

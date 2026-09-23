@@ -34,7 +34,7 @@ function tilePixel(
   const base = rgb(style.color);
   const accent = rgb(style.accent ?? style.color);
   let useAccent = false;
-  let alpha = style.alpha ?? 1;
+  const alpha = style.alpha ?? 1;
   let shade = 1;
   const edge = x === 0 || y === 0 || x === TILE_PX - 1 || y === TILE_PX - 1;
   switch (style.pattern) {
@@ -88,9 +88,24 @@ function tilePixel(
       useAccent = edge || y === 5;
       break;
     case 'torch':
-      useAccent = x < 6 || x > 9 || y > 9;
-      if (useAccent) alpha = 1;
+      // 컷아웃: 가운데 막대(강조색)와 위쪽 불꽃(기본색)만 보이고 나머지는 투명하다
+      if (x < 7 || x > 8) return [0, 0, 0, 0];
+      if (y < 3) return [0, 0, 0, 0];
+      useAccent = y > 5;
       break;
+    case 'torchTop':
+      if (x < 7 || x > 8 || y < 7 || y > 8) return [0, 0, 0, 0];
+      break;
+    case 'sprout': {
+      // 컷아웃: 세 줄기의 새싹. 줄기 높이는 결정적 난수
+      const stems = [3, 7, 12];
+      const stem = stems.find((sx) => Math.abs(x - sx) <= 0);
+      if (stem === undefined) return [0, 0, 0, 0];
+      const top = 4 + Math.floor(hash(stem, 0, seed) * 6);
+      if (y < top) return [0, 0, 0, 0];
+      useAccent = y > 12;
+      break;
+    }
   }
   const c = useAccent ? accent : base;
   const n = style.noise ?? 0;

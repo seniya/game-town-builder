@@ -17,13 +17,13 @@ export interface VisualFixture {
     readonly anchor: BlockPos;
     readonly facing: 'north' | 'east' | 'south' | 'west';
   }[];
-  /** 카메라 궤도 시점 */
-  readonly view: {
+  /** 카메라 궤도 시점들. 첫 번째가 기본이며 ?view= 로 고른다 */
+  readonly views: readonly {
     readonly target: BlockPos;
     readonly distance: number;
     readonly yaw: number;
     readonly pitch: number;
-  };
+  }[];
 }
 
 /** 직육면체 범위를 한 블록으로 채운다. */
@@ -54,7 +54,7 @@ export const meshEditFixture: VisualFixture = {
     fill(write, 20, 14, 20, 30, 14, 30, BlockId.plank);
   },
   objects: [],
-  view: { target: { x: 16, y: 15, z: 16 }, distance: 34, yaw: 0.6, pitch: 0.55 },
+  views: [{ target: { x: 16, y: 15, z: 16 }, distance: 34, yaw: 0.6, pitch: 0.55 }],
 };
 
 /** TASK-006: 편집 구동기가 순환하며 바꿀 칸. 청크 경계·모서리·꼭짓점을 포함한다. */
@@ -67,8 +67,9 @@ export function meshEditCells(): BlockPos[] {
 }
 
 /**
- * TASK-007: 작은 집 하나. 판자 바닥·벽, 문, 창문, 돌벽돌 모서리 기둥, 계단식 판자 지붕,
- * 침대·테이블·의자·횃불, 물가와 나무. 크기 48 × 32 × 48.
+ * TASK-007: 작은 집 하나. 돌벽돌 기초, 판자 바닥·벽, 통나무 모서리 기둥, 문, 창문,
+ * 기존 블록(돌벽돌)으로 쌓은 박공지붕, 침대·테이블·의자·상자·횃불, 물가·나무·밭. 크기 48 × 32 × 48.
+ * 지붕은 선택적 건축이며 새 블록이나 천장 조건을 뜻하지 않는다 (GAME_DESIGN 14).
  */
 export const smallHouseFixture: VisualFixture = {
   size: { sizeX: 48, sizeY: 32, sizeZ: 48 },
@@ -78,15 +79,17 @@ export const smallHouseFixture: VisualFixture = {
     fill(write, 0, 1, 0, 47, g - 3, 47, BlockId.stone);
     fill(write, 0, g - 2, 0, 47, g - 1, 47, BlockId.dirt);
     fill(write, 0, g, 0, 47, g, 47, BlockId.grass);
-    // 물가: 모래 테두리의 연못
-    fill(write, 30, g, 26, 40, g, 36, BlockId.sand);
-    fill(write, 32, g - 1, 28, 38, g, 34, BlockId.water);
-    // 집: 바닥 x 16~22, z 16~22 (내부 5 × 5)
+    // 물가: 모래 테두리의 연못 (깊이 2)
+    fill(write, 29, g, 25, 41, g, 37, BlockId.sand);
+    fill(write, 31, g - 1, 27, 39, g, 35, BlockId.water);
+    fill(write, 31, g - 2, 27, 39, g - 2, 35, BlockId.sand);
+    // 집: 외곽 x 16~22, z 16~22 (내부 5 × 5), 앞면은 +z
     const x0 = 16;
     const z0 = 16;
     const x1 = 22;
     const z1 = 22;
-    fill(write, x0, g, z0, x1, g, z1, BlockId.plank);
+    fill(write, x0, g, z0, x1, g, z1, BlockId.stone_brick);
+    fill(write, x0 + 1, g, z0 + 1, x1 - 1, g, z1 - 1, BlockId.plank);
     for (let y = g + 1; y <= g + 3; y++) {
       for (let x = x0; x <= x1; x++) {
         write(x, y, z0, BlockId.plank);
@@ -102,37 +105,39 @@ export const smallHouseFixture: VisualFixture = {
         [x0, z1],
         [x1, z1],
       ] as const) {
-        write(x, y, z, BlockId.stone_brick);
+        write(x, y, z, BlockId.log);
       }
     }
-    // 창문: 앞(z1)과 옆(x1) 벽
-    write(18, g + 2, z1, BlockId.window);
+    // 창문: 앞(z1) 두 개와 옆(x1) 한 개
+    write(17, g + 2, z1, BlockId.window);
     write(21, g + 2, z1, BlockId.window);
     write(x1, g + 2, 19, BlockId.window);
-    // 문 자리 비우기 (앞벽 x = 19, 두 칸)
+    // 문 자리 비우기 (앞벽 x = 19, 두 칸). 문은 objects 로 놓는다
     write(19, g + 1, z1, BlockId.air);
     write(19, g + 2, z1, BlockId.air);
-    // 계단식 지붕: 판자 층을 한 칸씩 좁힌다 (새 지붕 블록 없음)
+    // 박공지붕: 용마루가 z 방향. 층마다 x 로 한 칸씩 좁히고 앞뒤로 한 칸 내민다
     for (let k = 0; k < 4; k++) {
-      fill(
-        write,
-        x0 - 1 + k,
-        g + 4 + k,
-        z0 - 1,
-        x1 + 1 - k,
-        g + 4 + k,
-        z1 + 1,
-        k % 2 === 0 ? BlockId.plank : BlockId.stone_brick,
-      );
+      const y = g + 4 + k;
+      for (let z = z0 - 1; z <= z1 + 1; z++) {
+        write(x0 - 1 + k, y, z, BlockId.stone_brick);
+        write(x1 + 1 - k, y, z, BlockId.stone_brick);
+      }
+      // 박공벽: 앞뒤 삼각형을 판자로 채운다
+      for (let x = x0 + k; x <= x1 - k; x++) {
+        write(x, y, z0, BlockId.plank);
+        write(x, y, z1, BlockId.plank);
+      }
     }
+    fill(write, x0 + 3, g + 7, z0 - 1, x0 + 3, g + 7, z1 + 1, BlockId.stone_brick);
     // 가구 (단일 칸)
     write(21, g + 1, 17, BlockId.table);
     write(20, g + 1, 17, BlockId.chair);
     write(17, g + 1, 21, BlockId.chest);
     write(21, g + 1, 21, BlockId.torch);
+    write(20, g + 1, z1 + 1, BlockId.torch);
     // 나무 한 그루: log 4 + leaves
-    const tx = 10;
-    const tz = 30;
+    const tx = 9;
+    const tz = 28;
     for (let y = g + 1; y <= g + 4; y++) write(tx, y, tz, BlockId.log);
     for (let y = g + 3; y <= g + 5; y++) {
       for (let dz = -2; dz <= 2; dz++) {
@@ -143,13 +148,20 @@ export const smallHouseFixture: VisualFixture = {
         }
       }
     }
-    // 밭 한 줄
-    fill(write, 26, g, 16, 29, g, 16, BlockId.farmland);
-    write(27, g + 1, 16, BlockId.crop);
+    // 밭 네 칸과 작물
+    fill(write, 25, g, 17, 28, g, 17, BlockId.farmland);
+    write(26, g + 1, 17, BlockId.crop);
+    write(27, g + 1, 17, BlockId.crop);
   },
   objects: [
     { blockId: BlockId.door, anchor: { x: 19, y: 11, z: 22 }, facing: 'south' },
     { blockId: BlockId.bed, anchor: { x: 17, y: 11, z: 17 }, facing: 'south' },
   ],
-  view: { target: { x: 20, y: 12, z: 22 }, distance: 22, yaw: 0.55, pitch: 0.42 },
+  views: [
+    { target: { x: 19, y: 13, z: 20 }, distance: 24, yaw: 0.55, pitch: 0.38 },
+    // 창문 너머 실내와 물속 모래가 비쳐 보이는지
+    { target: { x: 20, y: 12, z: 24 }, distance: 9, yaw: 0.35, pitch: 0.2 },
+    // 벽·바닥 모서리의 정점 AO
+    { target: { x: 23, y: 11, z: 20 }, distance: 7, yaw: 1.2, pitch: 0.35 },
+  ],
 };

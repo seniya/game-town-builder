@@ -17,7 +17,9 @@ export type TilePattern =
   | 'blanket'
   | 'grate'
   | 'band'
-  | 'torch';
+  | 'torch'
+  | 'torchTop'
+  | 'sprout';
 
 /** 한 면의 타일 설명. color 는 sRGB 16 진수, alpha 는 0~1. */
 export interface TileStyle {
@@ -71,7 +73,11 @@ const STYLES: Partial<Record<BlockName, BlockStyle>> = {
     side: { color: 0x9c6c40, accent: 0x5e3f24, pattern: 'door' },
   },
   window: uniform({ color: 0xcfeaf3, accent: WOOD, pattern: 'window', alpha: 0.32 }),
-  torch: uniform({ color: 0xf6c453, accent: 0x7a5534, pattern: 'torch' }),
+  torch: {
+    top: { color: 0xffd466, pattern: 'torchTop' },
+    bottom: { color: 0x7a5534, pattern: 'torchTop' },
+    side: { color: 0xffc94d, accent: 0x7a5534, pattern: 'torch' },
+  },
   bed: {
     top: { color: 0xc8574d, accent: 0xf2ece0, pattern: 'blanket' },
     bottom: { color: WOOD_DARK, pattern: 'plain' },
@@ -103,7 +109,11 @@ const STYLES: Partial<Record<BlockName, BlockStyle>> = {
     bottom: { color: DIRT, pattern: 'noise', noise: 0.18 },
     side: { color: DIRT, pattern: 'noise', noise: 0.18 },
   },
-  crop: uniform({ color: 0x9ccf4f, accent: 0x6d9a33, pattern: 'noise', noise: 0.25 }),
+  crop: {
+    top: { color: 0x9ccf4f, accent: 0x6d9a33, pattern: 'sprout' },
+    bottom: { color: 0x9ccf4f, pattern: 'sprout' },
+    side: { color: 0x9ccf4f, accent: 0x6d9a33, pattern: 'sprout', noise: 0.1 },
+  },
   bell: uniform({ color: 0xdcb448, accent: 0xa27f25, pattern: 'band' }),
 };
 
