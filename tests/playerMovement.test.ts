@@ -130,11 +130,38 @@ describe('물·경계·발판 상실 (READY-06, MVP_SPEC 9.5)', () => {
     return w;
   }
 
-  it('바다에 들어가면 마지막 안전 지면으로 복귀하고 체력은 그대로다', () => {
+  it('걸어서 물가에 가면 가장자리에서 멈춘다: 튕겨 돌아오지 않는다 (HR-006)', () => {
+    const w = withSea();
+    const input = scripted({ moveRight: 1 });
+    const { player, sys } = setup(w, input, { x: 15, y: 5, z: 10 });
+    let maxX = 0;
+    let jumpedBack = false;
+    for (let t = 0; t < 3; t += 1 / 60) {
+      const x0 = player.body.pos.x;
+      sys.update(1 / 60);
+      maxX = Math.max(maxX, player.body.pos.x);
+      if (player.body.pos.x < x0 - 0.5) jumpedBack = true;
+    }
+    expect(jumpedBack).toBe(false);
+    expect(maxX).toBeLessThan(20.01); // 몸 가운데가 물 위로 넘어가지 않는다
+    expect(maxX).toBeGreaterThan(19.9);
+    expect(player.body.pos.y).toBe(5);
+    // 물가를 따라서는 계속 걸을 수 있다(z 축은 막히지 않는다)
+    input.frame = { ...EMPTY_INPUT_FRAME, moveRight: 1, moveForward: 1 };
+    const z0 = player.body.pos.z;
+    run(sys, 0.5);
+    expect(Math.abs(player.body.pos.z - z0)).toBeGreaterThan(1);
+    expect(player.body.pos.x).toBeLessThan(20.01);
+  });
+
+  it('점프·추락으로 바다에 들어가면 마지막 안전 지면으로 복귀하고 체력은 그대로다', () => {
     const w = withSea();
     const input = scripted({ moveRight: 1 });
     const { player, sys } = setup(w, input, { x: 15, y: 5, z: 10 });
     run(sys, 3);
+    // 가장자리 멈춤을 넘어 물 위로 옮겨 떨어뜨린다(점프로 넘어간 경우와 같다)
+    player.body.pos = { x: 22.5, y: 6, z: 10.5 };
+    player.body.onGround = false;
     input.frame = EMPTY_INPUT_FRAME;
     run(sys, 1);
     expect(player.body.pos.x).toBeLessThan(20);

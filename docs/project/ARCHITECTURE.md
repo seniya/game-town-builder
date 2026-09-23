@@ -673,6 +673,9 @@ Worker 파일에는 알고리즘을 두지 않는다. 메시지 배선만 한다
 범위 계산은 게임 쪽 순수 함수 `ceilingCutFor`(systems/aim.ts)이고 카메라 충돌도 같은 범위를 뺀다. 지붕에 가려 메시에 없던 벽 윗면은
 render/CeilingCapView 가 단면 판으로 그린다. door / bed 는 메시에서 빠지고 render/PropView 가 그린다(문 여닫힘 포함).
 
+면 컬링(ADR 027): 이웃이 불투명이면 면을 지운다. 같은 종류끼리 맞닿은 면은 반투명(water / window)일 때만 지운다.
+잎처럼 불투명하지 않은 알파 컷 블록은 맞닿은 안쪽 면도 그린다.
+
 ## 9.4 materials.ts
 
 **재질 생성은 이 파일 한 곳에만 있다.**
@@ -2202,6 +2205,7 @@ DI 컨테이너
 024  채석장 재생 시각·소유자·당일 처리 키 (READY-04)  Accepted
 025  Phase D 통행·경로·NPC 판단·취침 배정·낮밤        Accepted
 026  G2 이후 표현: 침대·문 모형, 천장 걷어 내기, 밤 밝기  Accepted
+027  물 가장자리 멈춤, 잎 안쪽 면 (HR 결과 반영)       Accepted
 ```
 
 ---

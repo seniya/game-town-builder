@@ -86,12 +86,51 @@ export class PlayerMovementSystem implements SlotSystem {
     this.applyLook(frame);
     this.resolveEmbedded();
     this.applyVelocity(frame, step);
+    const before = this.player.body.pos;
+    const grounded = this.player.body.onGround;
     moveWithCollision(this.world, this.player.body, step, P.stepUpHeight);
+    if (grounded) this.stopAtWaterEdge(before);
     if (isInWater(this.world, this.player.body.pos)) {
       this.returnToSafeGround();
       return;
     }
     this.recordSafeGround();
+  }
+
+  /**
+   * 물 가장자리 멈춤 (MVP_SPEC 9.5, HR-006). 지면에서 걷다가 몸 가운데 아래가 물이 되는 이동을 막는다.
+   * x·z 한 축씩 다시 시도해 되는 축만 남긴다. 걸어서 물에 들어갔다 튕겨 돌아오는 장면을 없앤다.
+   */
+  private stopAtWaterEdge(before: Vec3): void {
+    const body = this.player.body;
+    const after = body.pos;
+    if (!this.overWater(after)) return;
+    const onlyX = { ...before, x: after.x, y: after.y };
+    const onlyZ = { ...before, z: after.z, y: after.y };
+    const fits = (p: Vec3): boolean =>
+      !this.overWater(p) && isAabbFree(this.world, p, body.width, body.height);
+    if (fits(onlyX)) body.pos = onlyX;
+    else if (fits(onlyZ)) body.pos = onlyZ;
+    else body.pos = { ...before, y: after.y };
+    body.velocity = {
+      x: body.pos.x === before.x ? 0 : body.velocity.x,
+      y: body.velocity.y,
+      z: body.pos.z === before.z ? 0 : body.velocity.z,
+    };
+  }
+
+  /** 몸 가운데 아래로 4 칸 안의 첫 블록이 물인가(발 칸·머리 칸이 이미 물인 경우 포함). */
+  private overWater(feet: Vec3): boolean {
+    if (isInWater(this.world, feet)) return true;
+    const x = Math.floor(feet.x);
+    const z = Math.floor(feet.z);
+    const top = Math.floor(feet.y - 0.01);
+    for (let y = top; y >= top - 3; y--) {
+      const id = this.world.getBlock(x, y, z);
+      if (id === BlockId.water) return true;
+      if (id !== BlockId.air) return false;
+    }
+    return false;
   }
 
   /** 마우스 이동으로 yaw / pitch 를 바꾼다. 피치는 제한 각도에서 멈춘다 (MVP_SPEC 9.3). */

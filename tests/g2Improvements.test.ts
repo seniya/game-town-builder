@@ -63,3 +63,18 @@ describe('천장 걷어 내기 (MVP_SPEC 9.3)', () => {
     expect(f.world.getBlock(10, FEET_Y + 3, 10)).toBe(BlockId.plank);
   });
 });
+
+describe('잎은 안쪽 면도 그린다 (HR 기타 의견 2)', () => {
+  it('맞닿은 두 잎은 12 면, 맞닿은 두 물은 10 면이다', () => {
+    const pair = (id: number): number => {
+      const p = new Uint16Array(PADDED_VOLUME);
+      p[paddedIndex(6, 6, 6)] = id;
+      p[paddedIndex(7, 6, 6)] = id;
+      return greedyMesh(p, BLOCKS, { greedy: false }).stats.visibleFaces;
+    };
+    expect(pair(BlockId.leaves)).toBe(12);
+    expect(pair(BlockId.water)).toBe(10);
+    expect(pair(BlockId.window)).toBe(10);
+    expect(pair(BlockId.stone)).toBe(10);
+  });
+});

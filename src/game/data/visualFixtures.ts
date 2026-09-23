@@ -124,12 +124,14 @@ export const smallHouseFixture: VisualFixture = {
     // 문 자리 비우기 (앞벽 x = 19, 두 칸). 문은 objects 로 놓는다
     write(19, g + 1, z1, BlockId.air);
     write(19, g + 2, z1, BlockId.air);
-    // 박공지붕: 용마루가 z 방향. 층마다 x 로 한 칸씩 좁히고 앞뒤로 한 칸 내민다
+    // 박공지붕: 용마루가 z 방향. 층마다 x 로 한 칸씩 좁히고 앞뒤로 한 칸 내민다.
+    // 지붕면은 판자, 처마 끝줄과 용마루는 통나무다(HR-001: 돌벽돌 지붕이 돌처럼 보여 어색했다)
     for (let k = 0; k < 4; k++) {
       const y = g + 4 + k;
       for (let z = z0 - 1; z <= z1 + 1; z++) {
-        write(x0 - 1 + k, y, z, BlockId.stone_brick);
-        write(x1 + 1 - k, y, z, BlockId.stone_brick);
+        const eave = k === 0 ? BlockId.log : BlockId.plank;
+        write(x0 - 1 + k, y, z, eave);
+        write(x1 + 1 - k, y, z, eave);
       }
       // 박공벽: 앞뒤 삼각형을 판자로 채운다
       for (let x = x0 + k; x <= x1 - k; x++) {
@@ -137,7 +139,7 @@ export const smallHouseFixture: VisualFixture = {
         write(x, y, z1, BlockId.plank);
       }
     }
-    fill(write, x0 + 3, g + 7, z0 - 1, x0 + 3, g + 7, z1 + 1, BlockId.stone_brick);
+    fill(write, x0 + 3, g + 7, z0 - 1, x0 + 3, g + 7, z1 + 1, BlockId.log);
     // 가구 (단일 칸)
     write(21, g + 1, 17, BlockId.table);
     write(20, g + 1, 17, BlockId.chair);

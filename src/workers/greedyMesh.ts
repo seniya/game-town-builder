@@ -141,7 +141,9 @@ export function greedyMesh(
             const ni = bi + s * sd;
             const nd = defAtIndex(ni);
             if (nd?.opaque) continue;
-            if (!bd.opaque && nd?.id === bd.id) continue;
+            // 같은 종류끼리 맞닿은 면은 반투명(water / window)만 지운다. 잎처럼 구멍 뚫린 블록은 안쪽 면도 그려
+            // 나무 속에서 봐도 잎이 차 있어 보이게 한다 (HR 기타 의견 2, ADR 027)
+            if (bd.translucent && nd?.id === bd.id) continue;
             visibleFaces += 1;
             const m = i + j * S;
             maskBlock[m] = bd.id;
