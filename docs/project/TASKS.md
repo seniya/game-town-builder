@@ -262,10 +262,10 @@ src/game/data/balance.ts 에 MVP_SPEC 34 장을 그대로 옮긴다
 
 Acceptance Criteria:
 
-- [ ] 모든 폴더에 최소 1 개의 파일 또는 `.gitkeep` 이 있다
-- [ ] `balance.ts` 가 `as const` 로 선언되어 있다
-- [ ] 좌표 변환 4함수의 기준점·왕복 테스트가 통과한다
-- [ ] `blockToWorld` 라는 이름의 함수가 존재하지 않는다
+- [x] 모든 폴더에 최소 1 개의 파일 또는 `.gitkeep` 이 있다
+- [x] `balance.ts` 가 `as const` 로 선언되어 있다
+- [x] 좌표 변환 4함수의 기준점·왕복 테스트가 통과한다
+- [x] `blockToWorld` 라는 이름의 함수가 존재하지 않는다
 
 ---
 
