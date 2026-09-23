@@ -28,9 +28,39 @@ export interface GameEventMap {
 export type GameEventName = keyof GameEventMap;
 type Listener<K extends GameEventName> = (payload: GameEventMap[K]) => void;
 
+/** 트랜잭션 중 미뤄 둔 발행 하나. */
+interface Deferred {
+  readonly name: GameEventName;
+  readonly payload: GameEventMap[GameEventName];
+}
+
 /** 이벤트 구독·발행. 구독자 목록은 이벤트 이름별로 따로 둔다. */
 export class EventBus {
   private readonly listeners = new Map<GameEventName, Set<Listener<GameEventName>>>();
+  private depth = 0;
+  private deferred: Deferred[] = [];
+
+  /**
+   * fn 안의 발행을 모아 두었다가 fn 이 끝난 뒤 순서대로 발행한다 (ARCHITECTURE 6.1).
+   * 인벤토리와 블록을 함께 바꾸는 편집에서 구독자가 한쪽만 바뀐 중간 상태를 읽지 않게 한다.
+   * fn 이 예외를 던지면 모아 둔 발행을 버린다(호출자는 커밋 전에 검증을 끝내야 한다). 중첩할 수 있다.
+   */
+  transaction<T>(fn: () => T): T {
+    this.depth += 1;
+    let ok = false;
+    try {
+      const result = fn();
+      ok = true;
+      return result;
+    } finally {
+      this.depth -= 1;
+      if (this.depth === 0) {
+        const queued = this.deferred;
+        this.deferred = [];
+        if (ok) for (const d of queued) this.dispatch(d.name, d.payload);
+      }
+    }
+  }
 
   /** 구독한다. 반환된 함수를 호출하면 구독이 해제된다. */
   on<K extends GameEventName>(name: K, fn: Listener<K>): () => void {
@@ -47,8 +77,17 @@ export class EventBus {
     };
   }
 
-  /** 발행한다. 발행 중 구독 해제가 일어나도 현재 목록의 복사본을 순회한다. */
+  /** 발행한다. 트랜잭션 중이면 끝날 때까지 미룬다. 발행 중 구독 해제가 일어나도 목록의 복사본을 순회한다. */
   emit<K extends GameEventName>(name: K, payload: GameEventMap[K]): void {
+    if (this.depth > 0) {
+      this.deferred.push({ name, payload });
+      return;
+    }
+    this.dispatch(name, payload);
+  }
+
+  /** 구독자에게 바로 전달한다. */
+  private dispatch<K extends GameEventName>(name: K, payload: GameEventMap[K]): void {
     const set = this.listeners.get(name);
     if (!set) return;
     for (const fn of [...set]) fn(payload);

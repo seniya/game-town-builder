@@ -5,6 +5,7 @@ import { EntityRegistry } from './EntityRegistry';
 import { EventBus } from './EventBus';
 import { BlockEditSystem } from './systems/BlockEditSystem';
 import { InputSystem } from './systems/InputSystem';
+import { InventorySystem } from './systems/InventorySystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
 import type { BlockPos } from './types';
 import { VillageStorage, type VillageStorageInit } from './VillageStorage';
@@ -60,6 +61,8 @@ export class GameWorld {
   readonly voxels: VoxelWorld;
   /** 입력 수집 (update 2 번). DOM 어댑터가 원시 입력을 넣는다 */
   readonly input = new InputSystem();
+  /** 플레이어 인벤토리 / 핫바. 핫바 선택은 입력 슬롯에서 InputSystem 뒤에 반영한다 */
+  readonly inventory: InventorySystem;
   /** 플레이어. playerSpawn 이 없으면 null 이다 */
   readonly player: Player | null;
   /** 조준·파괴·설치. 플레이어가 없으면 null 이다 */
@@ -73,7 +76,9 @@ export class GameWorld {
   constructor(init: GameWorldInit) {
     this.storage = new VillageStorage(this.events, init.storage);
     this.voxels = new VoxelWorld(init.worldSize, this.events);
+    this.inventory = new InventorySystem(this.events, this.input);
     this.attach('input', this.input);
+    this.attach('input', this.inventory);
     this.player = init.playerSpawn ? createPlayer(init.playerSpawn) : null;
     this.blockEdit = this.player ? new BlockEditSystem(this.voxels, this.player) : null;
     if (this.player && this.blockEdit) {

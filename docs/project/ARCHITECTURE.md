@@ -362,6 +362,10 @@ export class EventBus {
 }
 ```
 
+`transaction(fn)`은 fn 안의 발행을 모아 fn이 끝난 뒤 순서대로 전달한다. 인벤토리와 블록을
+함께 바꾸는 편집(6.1, 28.1)은 이 안에서 커밋해 구독자가 한쪽만 바뀐 상태를 읽지 않게 한다.
+fn이 예외를 던지면 모은 발행을 버린다. 검증은 커밋 전에 끝낸다.
+
 ## 5.1 사용 원칙
 
 ```text
@@ -1238,7 +1242,7 @@ VillageStorage(seed/crop/food) 필드나 수자원 시스템을 늘리지 않는
 InputSystem           키보드 / 마우스 입력 수집. update 2 번 자리. DOM 연결은 ui/domInput.ts
 PlayerMovementSystem  플레이어 이동·점프·중력·충돌, 물 복귀·안전 지면(MVP_SPEC 9.5). update 3 번 자리
 GameClockSystem       게임 시간 진행. DayPhase 전이 이벤트
-InventorySystem       플레이어 인벤토리 / 핫바
+InventorySystem       플레이어 인벤토리 / 핫바. 핫바 선택은 update 2 번에서 InputSystem 뒤
 CraftingSystem        제작 레시피 판정. 해금 확인
 BlockEditSystem       레이캐스트 / 파괴 진행도 / 설치 규칙. 조준 광선은 systems/aim.ts 를 카메라와 공유
 RoomSystem            RoomRegistry.processQueue 호출. 예산 관리

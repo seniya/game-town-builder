@@ -119,26 +119,40 @@ function tilePixel(
   ];
 }
 
+/**
+ * 블록 한 면의 타일 픽셀 (TILE_PX × TILE_PX RGBA, 위쪽 행부터). 스타일이 없으면 null.
+ * face: 0 윗면 / 1 아랫면 / 2 옆면. 아틀라스와 아이템 아이콘이 같은 픽셀을 쓴다.
+ */
+export function blockTilePixels(blockId: number, face: 0 | 1 | 2): Uint8ClampedArray | null {
+  const style = blockStyle(blockId);
+  if (!style) return null;
+  const tile = [style.top, style.bottom, style.side][face];
+  if (!tile) return null;
+  const out = new Uint8ClampedArray(TILE_PX * TILE_PX * 4);
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 0; x < TILE_PX; x++) {
+      out.set(tilePixel(tile, x, y, blockId * 3 + face), (y * TILE_PX + x) * 4);
+    }
+  }
+  return out;
+}
+
 /** 아틀라스 텍스처를 만든다. sRGB 색공간, 최근접 필터, 밉맵 없음(타일 경계 번짐 방지). */
 export function createBlockAtlas(): THREE.DataTexture {
   const width = ATLAS_COLUMNS * TILE_PX;
   const height = ATLAS_ROWS * TILE_PX;
   const data = new Uint8Array(width * height * 4);
   for (const def of BLOCKS) {
-    const style = blockStyle(def.id);
-    if (!style) continue;
-    const faces = [style.top, style.bottom, style.side];
-    faces.forEach((tile, column) => {
+    for (const column of [0, 1, 2] as const) {
+      const pixels = blockTilePixels(def.id, column);
+      if (!pixels) continue;
       for (let y = 0; y < TILE_PX; y++) {
-        for (let x = 0; x < TILE_PX; x++) {
-          const px = tilePixel(tile, x, y, def.id * 3 + column);
-          // DataTexture 의 첫 행이 v = 0(아래)이다. 타일 위쪽(y = 0)을 v 가 큰 쪽에 둔다
-          const gx = column * TILE_PX + x;
-          const gy = def.id * TILE_PX + (TILE_PX - 1 - y);
-          data.set(px, (gy * width + gx) * 4);
-        }
+        // DataTexture 의 첫 행이 v = 0(아래)이다. 타일 위쪽(y = 0)을 v 가 큰 쪽에 둔다
+        const gy = def.id * TILE_PX + (TILE_PX - 1 - y);
+        const row = pixels.subarray(y * TILE_PX * 4, (y + 1) * TILE_PX * 4);
+        data.set(row, (gy * width + column * TILE_PX) * 4);
       }
-    });
+    }
   }
   const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
   texture.colorSpace = THREE.SRGBColorSpace;

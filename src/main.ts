@@ -13,9 +13,11 @@ import { buildIsland, ISLAND_REGIONS, islandPlayerSpawn } from './game/data/isla
 import { CameraController, HIDE_PLAYER_BELOW } from './render/CameraController';
 import { PlayerView } from './render/EntityView';
 import { Highlight } from './render/Highlight';
+import { createItemIconProvider } from './render/itemIcons';
 import { Renderer } from './render/Renderer';
 import type { BlockPos } from './game/types';
 import { Crosshair } from './ui/Crosshair';
+import { Hotbar } from './ui/Hotbar';
 import { bindDomInput } from './ui/domInput';
 
 /** 브라우저 검증에서 읽는 계측값. 콘솔과 window.__gtb 로 공개한다. */
@@ -189,6 +191,13 @@ function createPlayView(world: GameWorld, renderer: Renderer): () => void {
   const body = new PlayerView();
   const highlight = new Highlight();
   const crosshair = new Crosshair(document.body);
+  new Hotbar(
+    document.body,
+    world.events,
+    world.inventory,
+    createItemIconProvider(),
+    balance.inventory.hotbarSlots,
+  );
   renderer.scene.add(body.object3d, highlight.object3d);
   return () => {
     camera.update();
