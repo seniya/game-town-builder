@@ -341,7 +341,7 @@ export type GameEventMap = {
   ROOM_REGISTERED:     { roomId: string; type: RoomType };
   ROOM_FACILITIES_CHANGED: { roomId: string };
   ROOM_TYPE_CHANGED:   { roomId: string; from: RoomType; to: RoomType };
-  ROOM_UNREGISTERED:   { roomId: string; reason: RoomFailure };
+  ROOM_UNREGISTERED:   { roomId: string; reason: RoomFailure | { reason: 'MERGED' } };
   GRATITUDE_GAINED:    { amount: number; source: GratitudeSource; at: Vec3 };
   VILLAGE_LEVEL_UP:    { level: number; unlocked: number[] };
   STORAGE_CHANGED:     { seed: number; crop: number; food: number };
@@ -370,6 +370,9 @@ export class EventBus {
 `transaction(fn)`은 fn 안의 발행을 모아 fn이 끝난 뒤 순서대로 전달한다. 인벤토리와 블록을
 함께 바꾸는 편집(6.1, 28.1)은 이 안에서 커밋해 구독자가 한쪽만 바뀐 상태를 읽지 않게 한다.
 fn이 예외를 던지면 모은 발행을 버린다. 검증은 커밋 전에 끝낸다.
+
+ROOM_UNREGISTERED의 `MERGED`는 두 방 이상의 내부가 하나로 이어져 이전 방들을 해제한 경우다
+(10.4, ADR 023). 판정 실패가 아니므로 경고 연출·경고음을 내지 않는다.
 
 ## 5.1 사용 원칙
 
@@ -748,9 +751,12 @@ export type RoomDetection =
   | { ok: true; shape: RoomShape }
   | { ok: false; failure: RoomFailure };
 export interface RoomDiagnostic {
+  start: BlockPos;
   detection: RoomDetection;
   explored: BlockPos[];
   escapeTrace: BlockPos[]; // 실제 탐색 경로. 구멍의 정답이라는 뜻이 아니다
+  failureDetail: 'outside' | 'notWall' | null; // NOT_ENCLOSED: 월드 밖 도달 / 벽이 아닌 블록
+  roomType: RoomType | null;
   facilityIssues: { at: BlockPos; message: string }[];
 }
 /** MVP_SPEC 11.2~11.3의 형태를 판정한다. */
@@ -760,6 +766,11 @@ export function detectRoom(read: RoomBlockReader, start: BlockPos, limits: RoomL
 순수 탐색 kernel은 한 셀씩 진행하는 상태를 갖고 detectRoom은 테스트에서 끝까지 실행한다.
 런타임은 같은 kernel을 프레임 예산 내에서 이어서 수행한다.
 문·벽 검사는 비고체 검사보다 먼저다. 가구는 영역에 포함하지만 보행에서는 막는다.
+
+구현(TASK-018, ADR 023): kernel은 `room/detectRoom.ts`의 `RoomSearch`다. `step(n)`으로 진행하고
+`touches(pos)`로 읽은 범위(방문 xz 경계 +1, y는 바닥 y-1 ~ 벽 최소 높이)를 알려 준다.
+NO_FLOOR의 `at`은 비어 있는 바닥 칸(y-1)이다. 시작 칸이 벽 블록이면 TOO_SMALL이다.
+문은 아래 anchor가 이 평면에 있을 때만 문으로 센다. VoxelWorld 어댑터는 `room/roomReader.ts`다.
 
 ## 10.2 matchRecipe.ts — 순수 함수
 
@@ -809,8 +820,14 @@ export class RoomRegistry {
   processQueue(budgetMs: number): void;
   /** 자동 큐보다 먼저 진단을 시작한다. */
   beginDiagnosis(start: BlockPos): void;
-  /** 진단 결과 또는 계산 중 상태를 조회한다. */
+  /** 진단 결과 또는 계산 중 상태를 조회한다. pending 중에는 이전 결과를 계속 준다. */
   getDiagnosis(): { pending: boolean; result: RoomDiagnostic | null };
+  /** 진단을 끝낸다. */
+  cancelDiagnosis(): void;
+  /** BLOCK_CHANGED 하나를 반영한다: 문 인덱스 갱신 후 markDirty. RoomSystem이 부른다. */
+  handleBlockChanged(change: GameEventMap['BLOCK_CHANGED']): void;
+  /** F3 계측: 방 수·타입별·큐 길이·마지막 판정 ms·프레임 처리 ms. */
+  readonly stats: RoomRegistryStats;
   /** 로드 직후 문 인덱스로 재구축한다. 보상 이벤트는 발행하지 않는다. */
   rebuildAll(): void;
 }
@@ -832,6 +849,11 @@ export interface Room {
 같은 interior의 재판정에서 id를 유지한다. 합병·분할은 이전 방 해제 후 새 등록이다.
 최초 타입 보상은 방 id와 무관하다.
 
+구현 규칙(ADR 023): 성공한 interior가 **기존 방 하나와만** 겹치면 그 방의 id를 유지하고 형태·타입·
+시설을 갱신한다(기둥·가구·벽 이동). 둘 이상과 겹치면 합병이다: 이전 방들을 `MERGED`로 해제하고
+새로 등록한다. 분할은 먼저 확인된 쪽이 id를 잇고 나머지는 새 방이다. 그래서 침대 배정 등은
+방 id가 아니라 objectId와 시설 목록으로 재검증한다(10.6).
+
 ## 10.5 재판정 큐
 
 MVP_SPEC 11.6의 거리 상한과 y 범위로 문 인덱스를 조회한다.
@@ -843,6 +865,14 @@ MVP_SPEC 11.6의 거리 상한과 y 범위로 문 인덱스를 조회한다.
 진행 중 작업은 읽은 좌표와 revision을 기록하고 결과 발행 전에 최신인지 검사한다.
 오래된 작업은 재시작한다. 진단과 자동 탐색을 합쳐 프레임당 3ms이며 셀 사이에서 양보한다.
 큐가 비면 최신 상태와 일치해야 한다. 매 변경마다 월드 전체를 스캔하지 않는다.
+
+구현(TASK-020, ADR 023): 작업은 문 작업 `(anchor, 면)`과 방 확인 작업 `room:(id)` 두 종류다.
+영향 칸에 걸린 방은 dirty가 되고 확인 작업이 벽이 아닌 첫 내부 칸에서 다시 판정한다(문이 사라졌거나
+문 앞 칸이 막힌 방도 해제되게). 문 작업은 시작 칸이 벽·월드 밖·유효한 방 안이면 건너뛴다.
+두 키 모두 대기 중 중복을 넣지 않는다. 문 공간 인덱스는 32 × 32 xz 버킷이다. 예산 확인은
+탐색 32 단계마다 한다. 방 이벤트의 표현 구독자(라벨·빛남·효과음)는 이벤트 안에서 기록만 하고
+메시·DOM·오디오 작업은 렌더 단계에서 한다. 그렇지 않으면 그 비용이 방 예산 안에 섞인다.
+로드·관찰 장면 초기화는 rebuildAll로 조용히 재구축한다.
 
 대규모 마을에서도 `Block Changed → 영향 받은 Room/문 후보 dirty → Room Detection
 Queue → frame budget 내 처리`를 유지한다. 방 수가 늘었다는 이유로 전역 flood fill로
@@ -1915,6 +1945,10 @@ TASK-016 구현 범위: FPS / 프레임 시간 / 드로우콜 / 청크 상태, �
 나머지 항목과 명령은 해당 시스템의 Task 에서 더한다. 패널은 모달이 아니며 메뉴 위에 떠서
 커서가 있을 때 조작할 수 있다. `?debug=1` 로 열린 채 시작하고 `?unlimited=1` 로 무제한 모드를 켠다.
 
+TASK-020 / 022 구현 범위: 방 줄(인식 수 / 타입별 / 재판정 큐 길이 / 마지막 판정 ms / 이번·최대
+프레임 처리 ms / 재시작 수 / 진단 중 표시)과 "방 경계 상시 표시" 체크박스(`?bounds=1`로 켠 채 시작).
+"통행 가능 셀 표시"는 NavigationGraph(TASK-024)에서 더한다.
+
 **"방 경계 상시 표시" 와 "통행 가능 셀 표시" 는 필수다.**
 이 둘 없이 방 인식과 경로 버그를 잡는 것은 불가능하다.
 
@@ -2117,6 +2151,7 @@ DI 컨테이너
 020  진행 안내·블록 편집·저장 실행 계약          Accepted
 021  Phase A 복셀 렌더·메싱·고정 섬 구현 방식      Accepted
 022  Phase B 플레이어 이동·편집 원자성·화면 상태     Accepted
+023  Phase C 방 판정 kernel·재판정 큐·방 식별·진단    Accepted
 ```
 
 ---

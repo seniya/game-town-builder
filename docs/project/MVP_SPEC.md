@@ -642,6 +642,8 @@ type RoomFailure =
 ```
 
 `at` 이 있는 실패는 진단 모드에서 그 좌표를 빨갛게 표시한다.
+NO_FLOOR 의 `at` 은 비어 있는 바닥 칸(내부 칸의 y-1)이다. WALL_TOO_LOW 의 `at` 은 벽 블록이 아닌
+둘째 층 칸이다. NOT_ENCLOSED 의 `at` 은 탐색이 닿은 월드 밖 칸 또는 벽이 아닌 블록이다.
 
 ## 11.5 진단 모드 (Tab)
 
@@ -1821,6 +1823,7 @@ src/
       detectRoom.ts          ★ 순수 함수. 방 판정
       matchRecipe.ts         ★ 순수 함수. 방 타입 결정
       RoomRegistry.ts        인식된 방 목록 + 재판정 큐
+      roomReader.ts          VoxelWorld → RoomBlockReader 어댑터
 
     nav/
       NavigationGraph.ts     통행 판정 + 국소 캐시
@@ -1856,7 +1859,8 @@ src/
     ChunkMeshManager.ts      메싱 큐 / GPU 업로드 예산
     materials.ts             ★ 재질 생성은 여기 한 곳에만 (WebGPU 전환 대비)
     EntityView.ts
-    RoomLabelView.ts
+    RoomLabelView.ts         방 이름 라벨 (DOM, 카메라 투영)
+    RoomOverlayView.ts       인식 빛남·해제 깜빡임·진단 하이라이트
     DayNightVisual.ts
     CameraController.ts
     Highlight.ts             조준 블록 / 진단 표시
@@ -1869,6 +1873,7 @@ src/
     Hotbar.ts  InventoryPanel.ts  BellPanel.ts  StoragePanel.ts
     DialogueBox.ts  ObjectivePanel.ts  GratitudeHud.ts
     RoomDiagnosticPanel.ts  DamageReportPanel.ts  DebugPanel.ts
+    RoomSound.ts           방 인식·해제 최소 효과음 (TASK-050 에서 완성)
 
   save/
     SaveSystem.ts  SaveData.ts  migrate.ts
