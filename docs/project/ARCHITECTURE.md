@@ -563,6 +563,14 @@ export function moveWithCollision(
 순수 함수에 가깝게 유지한다. `body` 를 변형하지만 월드는 읽기만 한다.
 테스트에서 가짜 `VoxelWorld` 를 넣어 검증한다.
 
+`world` 인자는 `CollisionWorld = Pick<VoxelWorld, 'getBlock' | 'sizeX' | 'sizeY' | 'sizeZ'>`다.
+충돌 고체는 `isSolid(id)`이며, 수평 범위 밖과 y < 0 은 고체, y ≥ sizeY 는 air 다 (MVP_SPEC 9.5).
+한 번에 움직이는 거리가 0.4 를 넘으면 0.4 이하로 나눈다(3.1). step-up 은 해당 substep 시작에
+onGround 일 때만 한다. `isAabbFree(world, feet, width, height)`로 겹침을 검사한다.
+
+물 복귀·안전 지면·블록에 낀 경우의 해소(MVP_SPEC 9.5)는 collision.ts 가 아니라
+PlayerMovementSystem(update 3 번)이 소유한다. 안전 지면 칸은 Player 엔티티의 상태다.
+
 ---
 
 # 9. 렌더 — 청크 메싱

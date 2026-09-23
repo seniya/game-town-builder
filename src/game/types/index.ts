@@ -15,6 +15,18 @@ export interface Vec3 {
   readonly z: number;
 }
 
+/**
+ * 캐릭터 충돌 몸체 (ARCHITECTURE 8.2). pos 는 발밑 중심이다.
+ * 플레이어·NPC·몬스터 엔티티가 공유하므로 여기에 둔다. 이동 함수가 pos / velocity / onGround 를 바꾼다.
+ */
+export interface AabbBody {
+  pos: Vec3;
+  velocity: Vec3;
+  readonly width: number;
+  readonly height: number;
+  onGround: boolean;
+}
+
 /** 청크 좌표. 블록 좌표를 청크 크기로 나눈 몫이다. */
 export interface ChunkCoord {
   readonly cx: number;
