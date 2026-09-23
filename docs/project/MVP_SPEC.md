@@ -1039,6 +1039,7 @@ Villager    (레벨업으로 도착하는 주민) 역할 없음. 생활만 한�
 
 ```text
 높이         1.8
+폭           0.6 (플레이어와 같다. 1 칸 문을 지난다)
 이동 속도     3.2 / 초
 도피 속도     5.0 / 초
 체력         10
@@ -2018,6 +2019,7 @@ export const balance = {
 
   npc: {
     height: 1.8,
+    width: 0.6,
     moveSpeed: 3.2,
     fleeSpeed: 5.0,
     maxHealth: 10,

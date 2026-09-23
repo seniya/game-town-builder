@@ -1009,6 +1009,11 @@ export class MovementController {
 }
 ```
 
+구현(TASK-026): `src/game/nav/MovementController.ts`. 플레이어와 같은 복셀 충돌·중력·1 칸 step-up 으로 움직인다.
+중간 칸은 가운데 0.12 안, 마지막 칸은 0.01 안에 들면 지난 것으로 본다. 한 프레임에 칸 가운데를 넘지 않게
+속도를 줄인다. 재계산 판단(`invalidate` / 연속 blocked / `takeRepath`의 최소 간격)만 하고 경로 요청은 MoveAction 이 한다.
+캐릭터끼리는 충돌하지 않는다(겹쳐도 서로 막지 않는다).
+
 ## 11.5 재계산 규칙
 
 ```text

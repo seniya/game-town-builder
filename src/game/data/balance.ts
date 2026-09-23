@@ -114,6 +114,7 @@ export const balance = {
 
   npc: {
     height: 1.8,
+    width: 0.6,
     moveSpeed: 3.2,
     fleeSpeed: 5.0,
     maxHealth: 10,
