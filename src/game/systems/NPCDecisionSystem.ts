@@ -7,6 +7,7 @@ import type { SlotSystem } from '../GameWorld';
 import type { NavigationGraph } from '../nav/NavigationGraph';
 import type { PathGoal } from '../nav/pathfind';
 import type { CookCandidate } from './CookingSystem';
+import type { RepairCandidate } from './RepairSystem';
 import type { FarmCandidate } from './FarmSystem';
 import {
   posKey,
@@ -43,7 +44,7 @@ export interface NPCCandidates {
   readonly diningSeat: DiningSeat | null;
   readonly farm: FarmCandidate | null;
   readonly cooking: CookCandidate | null;
-  readonly repair: Readonly<{ damageId: string; cells: readonly BlockPos[] }> | null;
+  readonly repair: RepairCandidate | null;
 }
 
 /** 위협 snapshot (FleeAction, TASK-047). */
@@ -101,7 +102,12 @@ export type ActionPlan =
   | { readonly kind: 'sleep'; readonly key: string; readonly bed: Readonly<Facility> }
   | { readonly kind: 'rest'; readonly key: string; readonly spot: BlockPos }
   | { readonly kind: 'eat'; readonly key: string; readonly seat: DiningSeat | null }
-  | { readonly kind: 'role'; readonly key: string; readonly work: 'repair' }
+  | {
+      readonly kind: 'repair';
+      readonly key: string;
+      readonly damageId: string;
+      readonly cells: readonly BlockPos[];
+    }
   | { readonly kind: 'cook'; readonly key: string; readonly stove: Readonly<Facility> }
   | { readonly kind: 'plant' | 'harvest'; readonly key: string; readonly target: BlockPos }
   | {
@@ -119,6 +125,7 @@ export type MovePurpose =
   | { readonly kind: 'farm'; readonly target: BlockPos }
   | { readonly kind: 'cook'; readonly stoveObjectId: string }
   | { readonly kind: 'seat'; readonly seatObjectId: string }
+  | { readonly kind: 'repair'; readonly damageId: string }
   | { readonly kind: 'plaza' };
 
 const C = balance.clock;
@@ -272,7 +279,20 @@ function roleWork(ctx: NPCContext): ActionPlan | null {
     };
   }
   if (ctx.npc.role === 'carpenter' && c.repair) {
-    return { kind: 'role', key: `role:repair:${c.repair.damageId}`, work: 'repair' };
+    // 수리: 작업 칸까지 걸어간 뒤(MoveAction) 고친다(RepairAction) (MVP_SPEC 25.2)
+    const r = c.repair;
+    const moveKey = `move:repair:${r.damageId}`;
+    if (arrivedAt(ctx, r.approachCells, moveKey)) {
+      return { kind: 'repair', key: `repair:${r.damageId}`, damageId: r.damageId, cells: r.cells };
+    }
+    return {
+      kind: 'move',
+      key: moveKey,
+      label: '고치러 가는 중',
+      goal: { kind: 'cells', cells: r.approachCells },
+      destination: r.cells[0] ?? r.approachCells[0] ?? ctx.npc.cell,
+      purpose: { kind: 'repair', damageId: r.damageId },
+    };
   }
   return null;
 }
@@ -362,6 +382,8 @@ export interface NPCDecisionDeps {
   ) => { threat: ThreatView; spot: BlockPos | null } | null;
   /** 이 주민과 대화 중인 상대의 위치 (DialogueSystem). 대화 중이 아니면 null */
   readonly talkingTo?: (npcId: string) => Vec3 | null;
+  /** RepairSystem 의 수리 후보(목수에게만, 역할 작업 시간에만 묻는다) */
+  readonly repairCandidate?: (npcId: string, cell: BlockPos) => RepairCandidate | null;
   /** 식사 구간인가 (MealSystem). 없으면 식사가 없는 월드다 */
   readonly mealActive?: () => boolean;
   /** MealSystem 의 의자 후보(식사 구간에 아직 먹지 않은 주민에게만 묻는다) */
@@ -409,6 +431,10 @@ export class NPCDecisionSystem implements SlotSystem {
         work && npc.role === 'cook' && this.deps.cookCandidate
           ? this.deps.cookCandidate(npc.id, cell)
           : null;
+      const repair =
+        work && npc.role === 'carpenter' && this.deps.repairCandidate
+          ? this.deps.repairCandidate(npc.id, cell)
+          : null;
       const talkPartner = this.deps.talkingTo?.(npc.id) ?? null;
       const danger = this.deps.threat?.(npc.id, cell) ?? null;
       const diningSeat =
@@ -438,8 +464,8 @@ export class NPCDecisionSystem implements SlotSystem {
         worldState,
         plazaSpot: spots.length > 0 ? (spots[i % spots.length] ?? null) : null,
         candidates:
-          farm || cooking || diningSeat
-            ? { ...NO_CANDIDATES, farm, cooking, diningSeat }
+          farm || cooking || diningSeat || repair
+            ? { ...NO_CANDIDATES, farm, cooking, diningSeat, repair }
             : NO_CANDIDATES,
       };
       const plan = decideAction(ctx);

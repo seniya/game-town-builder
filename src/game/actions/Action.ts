@@ -17,7 +17,7 @@ import type { CollisionWorld } from '../voxel/collision';
 
 /**
  * Action 이 결과를 확정하거나 소유자 상태를 확인하는 좁은 변경 포트 (ARCHITECTURE 13.4).
- * 전체 시스템 객체를 노출하지 않는다. 수리 포트는 TASK-048 에서 더한다.
+ * 전체 시스템 객체를 노출하지 않는다.
  */
 export interface ActionServices {
   /** 감사 포인트 (GratitudeSystem, TASK-035). at 은 +N 연출 좌표다. 중복이면 false */
@@ -41,6 +41,12 @@ export interface ActionServices {
     isCooking(npcId: string, stoveId: string): boolean;
     /** crop −2, food +3, 감사 +3(at 위에)을 한 번에 확정한다. 조리 중이 아니거나 모자라면 false */
     complete(npcId: string, stoveId: string, at: Vec3): boolean;
+  };
+  /** 수리 확정 (RepairSystem, TASK-048) */
+  readonly repair: {
+    isPending(damageId: string): boolean;
+    /** 시간·예산·빈 칸·비점유를 확인하고 원래 블록을 복원한다. 못 하면 false */
+    complete(damageId: string): boolean;
   };
   /** 식사 확정 (MealSystem, TASK-032) */
   readonly meal: {

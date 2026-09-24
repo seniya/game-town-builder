@@ -1564,6 +1564,10 @@ export class RepairSystem {
 }
 ```
 
+구현(TASK-048): `systems/RepairSystem.ts`(판단 전 10 번 슬롯에서 날짜 갱신). 기록은 BLOCK_CHANGED by 'monster' 를 batchId(+objectId / 좌표)로 한 번,
+플레이어 해결은 by 'player' 로 모든 칸이 채워졌을 때만. 후보는 역할 작업 시간에 목수에게만, 예약은 NPCSystem 시설 예약 키 `repair:<id>`.
+RepairAction 은 칸 수 × 15 게임분 뒤 complete(시간·예산·빈 칸·비점유 재확인, 객체는 새 id 로 원래 배치)를 부른다. DAMAGE_LOGGED / BLOCK_REPAIRED 를 낸다.
+
 by=npc는 농사에도 쓰이므로 곧바로 수리 완료로 간주하지 않는다.
 당일 day / repairedCells는 저장하며 완료 시에만 점유 복셀 수를 차감한다.
 중단·로드 시 수리 시간은 다시 시작하지만 이미 완료한 당일 수리량은 유지한다.

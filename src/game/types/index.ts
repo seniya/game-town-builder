@@ -468,3 +468,15 @@ export interface GameEventDefinition {
   canTrigger(ctx: EventContext): boolean;
   execute(ctx: EventContext): readonly GameCommand[];
 }
+
+// ── 피해 기록 (MVP_SPEC 25, ARCHITECTURE 19) ─────────────────────────────────
+
+/** 피해 한 건 (ARCHITECTURE 19). */
+export interface DamageEntry {
+  readonly id: string;
+  readonly batchId: number;
+  readonly blockId: number;
+  readonly cells: readonly BlockPos[];
+  readonly object: PlacedObjectSnapshot | null;
+  readonly gameMinutes: number;
+}

@@ -2,6 +2,7 @@
 import type {
   BlockChangeSource,
   BlockPos,
+  DamageEntry,
   DayPhase,
   PlacedObjectSnapshot,
   RaidResult,
@@ -47,6 +48,9 @@ export interface GameEventMap {
   MONSTER_DEFEATED: { monsterId: string; at: Vec3 };
   /** 정본의 void payload. lint 규칙 때문에 undefined 로 표기한다 */
   PLAYER_DOWN: undefined;
+  /** 몬스터가 부순 피해가 기록됐다 / 피해 칸이 복원됐다 (MVP_SPEC 25) */
+  DAMAGE_LOGGED: DamageEntry;
+  BLOCK_REPAIRED: { pos: BlockPos };
   /** 습격이 시작됐다 / 끝났다 (MVP_SPEC 24.5) */
   RAID_STARTED: { raidId: number; count: number };
   RAID_ENDED: RaidResult;

@@ -36,6 +36,7 @@ import { SleepSystem } from './systems/SleepSystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
 import { QuarryRespawnSystem } from './systems/QuarryRespawnSystem';
 import { RaidSystem } from './systems/RaidSystem';
+import { RepairSystem } from './systems/RepairSystem';
 import { ResidentArrivalSystem } from './systems/ResidentArrivalSystem';
 import { RoomSystem } from './systems/RoomSystem';
 import { VillageLevelSystem } from './systems/VillageLevelSystem';
@@ -144,6 +145,8 @@ export class GameWorld {
   readonly gameEvents: GameEventSystem;
   /** 현재 목표 (update 16 번) */
   readonly objectives: ObjectiveSystem;
+  /** 피해 기록·수리 후보·복원 (판단 전 10 번 슬롯에서 날짜 갱신) */
+  readonly repair: RepairSystem;
   /** 감사 포인트의 유일한 소유자 (update 13 번) */
   readonly gratitude: GratitudeSystem;
   /** 조리: 화덕 목록·화덕/재료 예약·결과 확정 (update 10 번, 판단 전에 목록 갱신) */
@@ -257,6 +260,14 @@ export class GameWorld {
     this.debug.farmSources = { farm: () => this.farm.stats, storage: this.storage };
     const npcs = (): Iterable<NPC<Action>> => this.registry.npcs.values();
     this.dialogue = new DialogueSystem(this.events);
+    this.repair = new RepairSystem({
+      events: this.events,
+      clock: this.clock,
+      world: this.voxels,
+      nav: this.nav,
+      bodies: () => this.characterBodies(),
+      claimed: (k, n) => this.npcSystem.facilityTaken(k, n),
+    });
     this.objectives = new ObjectiveSystem(this.events, {
       farmland: () => this.farm.stats.farmland,
     });
@@ -312,6 +323,10 @@ export class GameWorld {
           isCooking: (n, s) => this.cooking.isCooking(n, s),
           complete: (n, s, at) => this.cooking.complete(n, s, at),
         },
+        repair: {
+          isPending: (id) => this.repair.isPending(id),
+          complete: (id) => this.repair.complete(id),
+        },
         meal: {
           eat: (n, s, at) => this.meal.eat(n, s, at),
           isSeatUsable: (s) => this.meal.isSeatUsable(s),
@@ -339,10 +354,11 @@ export class GameWorld {
         assign: (id, plan) => this.npcSystem.assign(id, plan),
         farmCandidate: (id, cell) => this.farm.candidateFor(id, cell),
         cookCandidate: (id, cell) => this.cooking.candidateFor(id, cell),
+        repairCandidate: (id, cell) => this.repair.candidateFor(id, cell),
         mealActive: () => this.meal.active,
         diningSeat: (id, cell) => this.meal.seatFor(id, cell),
       },
-      [this.meal, this.sleep, this.cooking],
+      [this.meal, this.sleep, this.cooking, this.repair],
     );
     this.attach('npcDecision', this.npcDecision);
     this.attach('npc', this.npcSystem);
