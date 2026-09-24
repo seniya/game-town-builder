@@ -9,7 +9,7 @@ import type { CollisionWorld } from '../voxel/collision';
 
 /**
  * Action 이 결과를 확정하거나 소유자 상태를 확인하는 좁은 변경 포트 (ARCHITECTURE 13.4).
- * 전체 시스템 객체를 노출하지 않는다. 감사·조리·식사·수리 포트는 해당 Task(030~035·048)에서 더한다.
+ * 전체 시스템 객체를 노출하지 않는다. 감사·식사·수리 포트는 해당 Task(032~035·048)에서 더한다.
  */
 export interface ActionServices {
   readonly sleep: {
@@ -20,6 +20,15 @@ export interface ActionServices {
   readonly farm: {
     plant(target: BlockPos): boolean;
     harvest(target: BlockPos): boolean;
+  };
+  /** 조리 재료 예약·결과 확정 (CookingSystem, TASK-031). 시작 때 예약하고 완료 때 소비한다 */
+  readonly cooking: {
+    /** 화덕을 잡고 crop 을 예약한다. 소비하지 않는다. 쓸 수 없거나 모자라면 false */
+    begin(npcId: string, stoveId: string): boolean;
+    /** 예약이 살아 있는가(주방 해제·화덕 파괴·재료 부족이면 false) */
+    isCooking(npcId: string, stoveId: string): boolean;
+    /** crop −2, food +3 을 한 번에 확정한다. 조리 중이 아니거나 모자라면 false */
+    complete(npcId: string, stoveId: string): boolean;
   };
 }
 
@@ -46,6 +55,8 @@ export interface ActionContext {
 export interface Action extends ActionView {
   /** 이 Action 이 잡고 있는 밭 칸(farmland). NPCSystem 이 바뀔 때 FarmSystem 예약을 잡고 푼다 */
   readonly farmTarget?: BlockPos;
+  /** 이 Action 이 잡고 있는 화덕 objectId. NPCSystem 이 바뀔 때 CookingSystem 예약을 잡고 푼다 */
+  readonly cookStove?: string;
   /** 시작. 이 Action 이 NPC 의 현재 Action 이 된 직후 한 번 */
   start(ctx: ActionContext): void;
   /** 한 프레임 진행 */

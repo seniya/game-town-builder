@@ -9,6 +9,7 @@ import type { ActionView, BlockPos, DayPhase, Vec3 } from '../types';
 import type { BlockEditSystem } from './BlockEditSystem';
 import { formatClock, type GameClockSystem } from './GameClockSystem';
 import type { SleepStats, SleepSystem } from './SleepSystem';
+import type { CookingStats } from './CookingSystem';
 import type { FarmStats } from './FarmSystem';
 import type { VillageStorage } from '../VillageStorage';
 
@@ -54,6 +55,10 @@ export interface GameDebugSnapshot {
   /** 농사 계측 (TASK-030) */
   readonly farm: FarmStats | null;
   readonly seed: number | null;
+  /** 요리 계측 (TASK-031) */
+  readonly cooking: CookingStats | null;
+  readonly crop: number | null;
+  readonly food: number | null;
   /** 방: 인식 수 / 타입별 / 재판정 큐 길이 / 마지막 판정 소요 ms (ARCHITECTURE 26) */
   readonly rooms: RoomRegistryStats | null;
   /** "방 경계 상시 표시" 디버그 명령 */
@@ -71,6 +76,11 @@ export class DebugSystem {
   navSources: { readonly nav: NavigationGraph; readonly paths: PathScheduler } | null = null;
   /** 농사 계측·씨앗 투입 대상. GameWorld 가 연결한다 */
   farmSources: { readonly farm: () => FarmStats; readonly storage: VillageStorage } | null = null;
+  /** 요리 계측·작물 투입 대상. GameWorld 가 연결한다 */
+  cookingSources: {
+    readonly cooking: () => CookingStats;
+    readonly storage: VillageStorage;
+  } | null = null;
   /** NPC 계측 대상. GameWorld 가 연결한다 */
   npcSources: {
     readonly npcs: () => Iterable<NPC<ActionView>>;
@@ -94,6 +104,11 @@ export class DebugSystem {
   /** 디버그 씨앗 투입 (TASK-030 AC). 기부 경로(TASK-036) 전의 시험용이다. */
   addSeeds(count: number): void {
     if (count > 0) this.farmSources?.storage.add('seed', count);
+  }
+
+  /** 디버그 작물 투입 (TASK-031 검증). 수확(12 게임시간)을 기다리지 않고 조리를 확인하는 시험용이다. */
+  addCrops(count: number): void {
+    if (count > 0) this.cookingSources?.storage.add('crop', count);
   }
 
   /** 디버그 시각 강제 설정. 다음 도래하는 hour:minute 로 앞당긴다 (MVP_SPEC 20.3). */
@@ -147,6 +162,9 @@ export class DebugSystem {
       sleep: this.npcSources ? this.npcSources.sleep.stats : null,
       farm: this.farmSources ? this.farmSources.farm() : null,
       seed: this.farmSources ? this.farmSources.storage.get('seed') : null,
+      cooking: this.cookingSources ? this.cookingSources.cooking() : null,
+      crop: this.cookingSources ? this.cookingSources.storage.get('crop') : null,
+      food: this.cookingSources ? this.cookingSources.storage.get('food') : null,
       rooms: this.rooms ? this.rooms.stats : null,
       showRoomBounds: this.showRoomBounds,
       diagnosisActive: this.roomSystem?.diagnosisActive ?? false,

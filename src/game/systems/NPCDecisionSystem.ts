@@ -6,6 +6,7 @@ import type { NPC } from '../entities/NPC';
 import type { SlotSystem } from '../GameWorld';
 import type { NavigationGraph } from '../nav/NavigationGraph';
 import type { PathGoal } from '../nav/pathfind';
+import type { CookCandidate } from './CookingSystem';
 import type { FarmCandidate } from './FarmSystem';
 import {
   posKey,
@@ -34,11 +35,11 @@ export interface NPCDecisionView {
   readonly stunned: boolean;
 }
 
-/** 역할 작업 후보. 소유 시스템(Farm / Cooking / Repair)이 좁혀 준다. 이 단계에서는 전부 null 이다. */
+/** 역할 작업 후보. 소유 시스템(Farm / Cooking / Repair)이 좁혀 준다. 없으면 null 이다. */
 export interface NPCCandidates {
   readonly diningSeat: Readonly<Facility> | null;
   readonly farm: FarmCandidate | null;
-  readonly cooking: Readonly<{ facility: Facility; ingredientsReady: boolean }> | null;
+  readonly cooking: CookCandidate | null;
   readonly repair: Readonly<{ damageId: string; cells: readonly BlockPos[] }> | null;
 }
 
@@ -85,7 +86,8 @@ export type ActionPlan =
   | { readonly kind: 'sleep'; readonly key: string; readonly bed: Readonly<Facility> }
   | { readonly kind: 'rest'; readonly key: string; readonly spot: BlockPos }
   | { readonly kind: 'eat'; readonly key: string; readonly seat: Readonly<Facility> | null }
-  | { readonly kind: 'role'; readonly key: string; readonly work: 'cook' | 'repair' }
+  | { readonly kind: 'role'; readonly key: string; readonly work: 'repair' }
+  | { readonly kind: 'cook'; readonly key: string; readonly stove: Readonly<Facility> }
   | { readonly kind: 'plant' | 'harvest'; readonly key: string; readonly target: BlockPos }
   | { readonly kind: 'flee'; readonly key: string; readonly from: Vec3 }
   | { readonly kind: 'talk'; readonly key: string };
@@ -94,6 +96,7 @@ export type ActionPlan =
 export type MovePurpose =
   | { readonly kind: 'bed'; readonly bedObjectId: string }
   | { readonly kind: 'farm'; readonly target: BlockPos }
+  | { readonly kind: 'cook'; readonly stoveObjectId: string }
   | { readonly kind: 'plaza' };
 
 const C = balance.clock;
@@ -182,7 +185,7 @@ function physiological(ctx: NPCContext): ActionPlan | null {
   return toPlaza(spot, '광장으로 쉬러 가는 중');
 }
 
-/** 4 단계 역할 작업. 소유 시스템이 준 후보가 있을 때만. 이 단계에서는 후보가 없어 null 이다. */
+/** 4 단계 역할 작업. 역할 작업 시간이고 소유 시스템이 준 후보가 있을 때만. 없으면 null 이다. */
 function roleWork(ctx: NPCContext): ActionPlan | null {
   if (!isWorkTime(ctx.minuteOfDay)) return null;
   const c = ctx.candidates;
@@ -204,7 +207,20 @@ function roleWork(ctx: NPCContext): ActionPlan | null {
     };
   }
   if (ctx.npc.role === 'cook' && c.cooking?.ingredientsReady) {
-    return { kind: 'role', key: 'role:cook', work: 'cook' };
+    // 조리: 화덕 앞까지 걸어간 뒤(MoveAction) 조리(CookAction). 식사 여부는 보지 않는다 (MVP_SPEC 16)
+    const stove = c.cooking.facility;
+    const moveKey = `move:cook:${stove.objectId}`;
+    if (arrivedAt(ctx, stove.approachCells, moveKey)) {
+      return { kind: 'cook', key: `cook:${stove.objectId}`, stove };
+    }
+    return {
+      kind: 'move',
+      key: moveKey,
+      label: '주방으로 가는 중',
+      goal: { kind: 'cells', cells: stove.approachCells },
+      destination: stove.anchor,
+      purpose: { kind: 'cook', stoveObjectId: stove.objectId },
+    };
   }
   if (ctx.npc.role === 'carpenter' && c.repair) {
     return { kind: 'role', key: `role:repair:${c.repair.damageId}`, work: 'repair' };
@@ -263,6 +279,8 @@ export interface NPCDecisionDeps {
   readonly assign: (npcId: string, plan: ActionPlan) => void;
   /** FarmSystem 의 후보(농부에게만, 역할 작업 시간에만 묻는다). 없으면 농사가 없는 월드다 */
   readonly farmCandidate?: (npcId: string, cell: BlockPos) => FarmCandidate | null;
+  /** CookingSystem 의 후보(요리사에게만, 역할 작업 시간에만 묻는다). 없으면 요리가 없는 월드다 */
+  readonly cookCandidate?: (npcId: string, cell: BlockPos) => CookCandidate | null;
 }
 
 /** 빈 후보. 역할·식사 시스템(030~032·048)이 생기면 소유자가 채운다. */
@@ -289,6 +307,10 @@ export class NPCDecisionSystem implements SlotSystem {
         work && npc.role === 'farmer' && this.deps.farmCandidate
           ? this.deps.farmCandidate(npc.id, cell)
           : null;
+      const cooking =
+        work && npc.role === 'cook' && this.deps.cookCandidate
+          ? this.deps.cookCandidate(npc.id, cell)
+          : null;
       const ctx: NPCContext = {
         npc: {
           id: npc.id,
@@ -308,7 +330,7 @@ export class NPCDecisionSystem implements SlotSystem {
         mealActive: false,
         storage,
         plazaSpot: spots.length > 0 ? (spots[i % spots.length] ?? null) : null,
-        candidates: farm ? { ...NO_CANDIDATES, farm } : NO_CANDIDATES,
+        candidates: farm || cooking ? { ...NO_CANDIDATES, farm, cooking } : NO_CANDIDATES,
       };
       const plan = decideAction(ctx);
       if (plan) this.deps.assign(npc.id, plan);

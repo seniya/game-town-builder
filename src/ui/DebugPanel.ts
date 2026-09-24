@@ -34,6 +34,8 @@ export interface DebugPanelPort {
   advanceClockTo(hour: number, minute: number): void;
   /** 디버그 씨앗 투입 (TASK-030) */
   addSeeds(count: number): void;
+  /** 디버그 작물 투입 (TASK-031) */
+  addCrops(count: number): void;
   /** 고를 수 있는 배속 */
   readonly timeScales: readonly number[];
 }
@@ -153,7 +155,10 @@ export class DebugPanel {
     const seeds = document.createElement('button');
     seeds.textContent = '씨앗 +5';
     seeds.addEventListener('click', () => port.addSeeds(5));
-    timeControls.append(hourInput, jump, seeds);
+    const crops = document.createElement('button');
+    crops.textContent = '작물 +2';
+    crops.addEventListener('click', () => port.addCrops(2));
+    timeControls.append(hourInput, jump, seeds, crops);
     this.extraRows = document.createElement('div');
     this.root.append(this.text, controls, roomControls, timeControls, this.extraRows);
     // 패널 조작 클릭이 뒤의 메뉴(클릭하면 계속)로 전달되지 않게 한다
@@ -213,6 +218,9 @@ export class DebugPanel {
       g.farm
         ? `농사: 밭 ${g.farm.farmland} · 작물 ${g.farm.crops} (성숙 ${g.farm.mature}) · 예약 ${g.farm.claims} · 씨앗 ${g.seed ?? '—'}`
         : '농사 —',
+      g.cooking
+        ? `요리: 화덕 ${g.cooking.stoves} · 예약 ${g.cooking.claims} · 조리 중 ${g.cooking.cooking} (재료 예약 ${g.cooking.reservedCrop}) · 작물 ${g.crop ?? '—'} · 음식 ${g.food ?? '—'}`
+        : '요리 —',
       `NPC ${g.npcs.length}${g.sleep ? ` · 침대 배정 ${g.sleep.assigned}/${g.sleep.beds} (확인 중 ${g.sleep.checking})` : ''}`,
       ...g.npcs.map(
         (n) =>

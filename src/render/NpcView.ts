@@ -80,6 +80,26 @@ function sleepTexture(): THREE.Texture {
   return zTexture;
 }
 
+/** 조리 중 화덕 위로 오르는 김 텍스처(한 번만 만든다). 부드러운 흰 원이다. */
+let puffTexture: THREE.Texture | null = null;
+function steamTexture(): THREE.Texture {
+  if (puffTexture) return puffTexture;
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 64;
+  const g = c.getContext('2d');
+  if (g) {
+    const grad = g.createRadialGradient(32, 32, 4, 32, 32, 30);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+  }
+  puffTexture = new THREE.CanvasTexture(c);
+  puffTexture.colorSpace = THREE.SRGBColorSpace;
+  return puffTexture;
+}
+
 /** 각도 차이를 −π~π 로. */
 function wrapAngle(a: number): number {
   return Math.atan2(Math.sin(a), Math.cos(a));
@@ -105,6 +125,8 @@ export class NpcView {
   private readonly hat = new THREE.Group();
   private readonly bedding = new THREE.Group();
   private readonly zs: THREE.Sprite[] = [];
+  /** 조리 중 화덕 위의 김 */
+  private readonly steam: THREE.Sprite[] = [];
   private yaw = 0;
   private walk = 0;
   private time: number;
@@ -176,6 +198,12 @@ export class NpcView {
       this.zs.push(s);
       this.object3d.add(s);
     }
+    for (let i = 0; i < 3; i++) {
+      const s = new THREE.Sprite(createCharacterSpriteMaterial(steamTexture()));
+      s.visible = false;
+      this.steam.push(s);
+      this.object3d.add(s);
+    }
     this.object3d.add(this.bedding);
   }
 
@@ -198,6 +226,7 @@ export class NpcView {
     if (use?.pose === 'lie' && placed) this.poseLying(placed);
     else if (a.pose === 'sit' || use?.pose === 'sit') this.poseSitting(p, world.plazaCenter, dt);
     else if (a.pose === 'work') this.poseWorking(p, a.lookAt ?? null, dt);
+    else if (a.pose === 'cook' || use?.pose === 'cook') this.poseCooking(p, a.lookAt ?? null, dt);
     else this.poseStanding(p, dt);
   }
 
@@ -221,6 +250,44 @@ export class NpcView {
     this.figure.position.set(0, -0.04, 0);
     this.figure.rotation.set(-0.42, 0, 0);
     this.head.rotation.set(-0.35, 0, 0);
+  }
+
+  /**
+   * 조리: 화덕을 바라보고 곧게 서서 한 팔로 냄비를 젓고 다른 팔은 앞으로 받친다. 화덕 위로 김이 오른다.
+   * 밭일(허리를 굽힘)·걷기·대기와 구별된다 (TASK-031). 몸체 위치는 접근 셀 그대로다.
+   */
+  private poseCooking(
+    p: { x: number; y: number; z: number },
+    lookAt: { x: number; y: number; z: number } | null,
+    dt: number,
+  ): void {
+    this.resetSpecial();
+    if (lookAt) this.turnToward(Math.atan2(-(lookAt.x - p.x), -(lookAt.z - p.z)), dt * 2);
+    const stir = this.time * 5;
+    this.legL.rotation.x = 0;
+    this.legR.rotation.x = 0;
+    this.armL.rotation.set(-0.9, 0, 0.15);
+    this.armR.rotation.set(-1.2 + Math.sin(stir) * 0.18, 0, -0.1 + Math.cos(stir) * 0.2);
+    this.object3d.position.set(p.x, p.y, p.z);
+    this.object3d.rotation.set(0, this.yaw, 0);
+    this.figure.position.set(0, Math.sin(this.time * 2.4) * 0.01, 0);
+    this.figure.rotation.set(-0.08, Math.sin(stir) * 0.04, 0);
+    this.head.rotation.set(-0.3, 0, 0);
+    if (!lookAt) return;
+    // 김: 화덕 윗면에서 천천히 오르며 퍼지고 사라진다. 모형 기준 좌표로 옮긴다(모형은 yaw 로 돌아 있다)
+    const dx = lookAt.x - p.x;
+    const dz = lookAt.z - p.z;
+    const c = Math.cos(-this.yaw);
+    const s = Math.sin(-this.yaw);
+    const lx = dx * c + dz * s;
+    const lz = -dx * s + dz * c;
+    this.steam.forEach((puff, i) => {
+      const t = (this.time * 0.35 + i / 3) % 1;
+      puff.visible = true;
+      puff.position.set(lx + Math.sin(t * 5 + i) * 0.08, lookAt.y - p.y + 0.1 + t * 0.9, lz);
+      puff.scale.setScalar(0.18 + t * 0.35);
+      (puff.material as THREE.SpriteMaterial).opacity = Math.sin(t * Math.PI) * 0.55;
+    });
   }
 
   /** 걸음 방향으로 부드럽게 돈다. */
@@ -312,6 +379,7 @@ export class NpcView {
     this.bedding.visible = false;
     this.hat.visible = true;
     for (const s of this.zs) s.visible = false;
+    for (const s of this.steam) s.visible = false;
   }
 }
 

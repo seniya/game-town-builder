@@ -5,6 +5,7 @@ import { balance } from './game/data/balance';
 import {
   meshEditCells,
   meshEditFixture,
+  kitchenLabFixture,
   ROOM_LAB_KIT,
   roomLabFixture,
   SLEEP_LAB_KIT,
@@ -173,6 +174,7 @@ function pickFixture(name: string | null): VisualFixture {
   if (name === 'house') return smallHouseFixture;
   if (name === 'room-lab') return roomLabFixture;
   if (name === 'sleep-lab') return sleepLabFixture;
+  if (name === 'kitchen-lab') return kitchenLabFixture;
   if (name === 'perf') return perfFixture;
   return islandScene;
 }
@@ -192,7 +194,10 @@ function createWorld(
   residentLimit: number,
 ): GameWorld {
   const world = new GameWorld({
-    storage: balance.storage,
+    storage:
+      fixture.startCrop !== undefined
+        ? { ...balance.storage, initialCrop: fixture.startCrop }
+        : balance.storage,
     worldSize: fixture.size,
     startGameMinutes,
     ...(fixture.plazaCenter ? { plazaCenter: fixture.plazaCenter } : {}),
@@ -213,7 +218,11 @@ function createWorld(
   // 장면에 미리 지어 둔 방은 로드처럼 조용히 인식한다(인식 연출·보상 이벤트 없음)
   world.rooms.rebuildAll();
   const kit =
-    fixture === roomLabFixture ? ROOM_LAB_KIT : fixture === sleepLabFixture ? SLEEP_LAB_KIT : [];
+    fixture === roomLabFixture
+      ? ROOM_LAB_KIT
+      : fixture === sleepLabFixture || fixture === kitchenLabFixture
+        ? SLEEP_LAB_KIT
+        : [];
   if (world.player) {
     for (const k of kit) world.inventory.add([{ item: blockItem(k.blockId), count: k.count }]);
   }
@@ -599,6 +608,7 @@ function start(): void {
     advanceClockTo: (hour, minute) => world.debug.advanceClockTo(hour, minute),
     timeScales: balance.clock.debugTimeScales,
     addSeeds: (n) => world.debug.addSeeds(n),
+    addCrops: (n) => world.debug.addCrops(n),
   });
   if (params.get('debug') === '1') debugPanel.toggle();
   const measureSeconds = Number(params.get('measure') ?? 0);

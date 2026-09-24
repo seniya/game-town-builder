@@ -158,6 +158,36 @@ describe('decideAction (TASK-029, MVP_SPEC 19.4)', () => {
     expect(kind(decideAction(lunch))).toBe('keep');
   });
 
+  it('4 역할(요리사): 재료가 준비된 화덕이면 걸어가서 조리하고, 식사 여부·음식 양은 보지 않는다', () => {
+    const stove: Facility = {
+      objectId: 'block:14,2,14',
+      anchor: { x: 14, y: 2, z: 14 },
+      approachCells: [{ x: 14, y: 2, z: 13 }],
+      usePosition: { x: 14.5, y: 2, z: 14.5 },
+    };
+    const cookNpc = { ...ctx().npc, id: 'cook-1', role: 'cook' as const };
+    const cooking = { facility: stove, ingredientsReady: true };
+    const cand = { diningSeat: null, farm: null, cooking, repair: null };
+    const toStove = decideAction(ctx({ hour: 9, npc: cookNpc, candidates: cand }));
+    expect(toStove?.kind).toBe('move');
+    if (toStove?.kind === 'move') {
+      expect(toStove.purpose).toEqual({ kind: 'cook', stoveObjectId: stove.objectId });
+      expect(toStove.label).toBe('주방으로 가는 중');
+    }
+    // 화덕 앞 칸에 서 있으면 조리한다. 끼니를 거르고 음식이 많아도 마찬가지다
+    const atStove = ctx({
+      hour: 14,
+      npc: { ...cookNpc, cell: { x: 14, y: 2, z: 13 }, hasEatenThisMeal: false },
+      storage: { seed: 0, crop: 2, food: 99 },
+      candidates: cand,
+    });
+    expect(kind(decideAction(atStove))).toBe('cook');
+    // 재료가 준비되지 않았거나 역할 시간 밖이면 조리하지 않는다
+    const notReady = { ...cand, cooking: { facility: stove, ingredientsReady: false } };
+    expect(kind(decideAction(ctx({ hour: 9, npc: cookNpc, candidates: notReady })))).toBe('keep');
+    expect(kind(decideAction(ctx({ hour: 12, npc: cookNpc, candidates: cand })))).toBe('keep');
+  });
+
   it('5 기본: 아무것도 아니면 대기다. 현재가 대기면 null(유지)이다', () => {
     expect(decideAction(ctx({ hour: 9 }))).toBeNull();
     const walking = ctx({

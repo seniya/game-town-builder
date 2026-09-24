@@ -1,7 +1,8 @@
 // NPC 실행 (ARCHITECTURE 4.1 의 11 번, 13, 15). 판단이 넘긴 계획을 Action 으로 만들어 시작하고 매 프레임 진행한다.
 // start / cancel 을 한 번씩 보장한다. Action 이 바뀌면 NPC_ACTION_CHANGED 를 발행한다.
-// 아직 구현하지 않은 계획(식사 032·역할 030/031/048·도피 047·대화 040)은 그 사실을 적은 대기로 대신 선다.
+// 아직 구현하지 않은 계획(식사 032·수리 048·도피 047·대화 040)은 그 사실을 적은 대기로 대신 선다.
 import { balance } from '../data/balance';
+import { CookAction } from '../actions/CookAction';
 import { HarvestAction, PlantAction } from '../actions/FarmWorkAction';
 import { IdleAction } from '../actions/IdleAction';
 import { MoveAction } from '../actions/MoveAction';
@@ -34,12 +35,17 @@ export interface NPCSystemDeps {
     claim(npcId: string, target: BlockPos): boolean;
     release(npcId: string, target: BlockPos): void;
   };
+  /** 화덕·재료 예약 (CookingSystem). 없으면 요리가 없는 월드다 */
+  readonly cookClaims?: {
+    claimStove(npcId: string, stoveId: string): boolean;
+    release(npcId: string): void;
+  };
 }
 
 /** 아직 구현하지 않은 계획의 대기 표시 이름. */
 const NOT_YET: Record<'eat' | 'role' | 'flee' | 'talk', string> = {
   eat: '식사 대기 (TASK-032)',
-  role: '역할 작업 대기 (TASK-031/048)',
+  role: '역할 작업 대기 (TASK-048)',
   flee: '도피 대기 (TASK-047)',
   talk: '대화 대기 (TASK-040)',
 };
@@ -59,6 +65,8 @@ export function createAction(plan: ActionPlan): Action {
       return new PlantAction(plan.target);
     case 'harvest':
       return new HarvestAction(plan.target);
+    case 'cook':
+      return new CookAction(plan.stove);
     case 'eat':
     case 'role':
     case 'flee':
@@ -83,6 +91,11 @@ class PlannedMove extends MoveAction {
   /** 밭으로 가는 이동이면 그 칸을 예약 대상으로 알린다. */
   get farmTarget(): BlockPos | undefined {
     return this.purpose.kind === 'farm' ? this.purpose.target : undefined;
+  }
+
+  /** 화덕으로 가는 이동이면 그 화덕을 예약 대상으로 알린다. */
+  get cookStove(): string | undefined {
+    return this.purpose.kind === 'cook' ? this.purpose.stoveObjectId : undefined;
   }
 }
 
@@ -148,6 +161,7 @@ export class NPCSystem implements SlotSystem {
     const current = npc.action;
     if (cancelCurrent && current !== next && this.started.has(current)) current.cancel(ctx);
     this.moveFarmClaim(npc.id, current, next);
+    this.moveCookClaim(npc.id, current, next);
     npc.action = next;
     this.started.add(next);
     next.start(ctx);
@@ -163,6 +177,20 @@ export class NPCSystem implements SlotSystem {
     const same = a !== undefined && b !== undefined && a.x === b.x && a.y === b.y && a.z === b.z;
     if (a && !same) claims.release(npcId, a);
     if (b && !same) claims.claim(npcId, b);
+  }
+
+  /**
+   * 화덕 예약을 옮긴다: 다른 화덕(또는 조리 아님)으로 바뀌면 이전 예약(화덕·재료)을 풀고 새 화덕을 잡는다.
+   * 같은 화덕으로 가는 이동 → 조리는 예약을 유지한다. 조리가 끝나거나 실패해 대기로 바뀌면 여기서 푼다.
+   */
+  private moveCookClaim(npcId: string, prev: Action, next: Action): void {
+    const claims = this.deps.cookClaims;
+    if (!claims) return;
+    const a = prev.cookStove;
+    const b = next.cookStove;
+    if (a === b && prev !== next && !(prev instanceof CookAction)) return;
+    if (a !== undefined) claims.release(npcId);
+    if (b !== undefined) claims.claimStove(npcId, b);
   }
 
   /**

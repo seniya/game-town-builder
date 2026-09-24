@@ -14,6 +14,7 @@ import { PathScheduler } from './nav/PathScheduler';
 import { RoomRegistry } from './room/RoomRegistry';
 import { createRoomReader } from './room/roomReader';
 import { BlockEditSystem } from './systems/BlockEditSystem';
+import { CookingSystem } from './systems/CookingSystem';
 import { CraftingSystem } from './systems/CraftingSystem';
 import { DebugSystem } from './systems/DebugSystem';
 import { FarmSystem } from './systems/FarmSystem';
@@ -111,6 +112,8 @@ export class GameWorld {
   readonly paths: PathScheduler;
   /** 농사: crop 성장 상태·밭 후보·예약 (update 7 번) */
   readonly farm: FarmSystem;
+  /** 조리: 화덕 목록·화덕/재료 예약·결과 확정 (update 10 번, 판단 전에 목록 갱신) */
+  readonly cooking: CookingSystem;
   /** 침대 배정의 유일한 소유자 (update 10 번, 판단 전) */
   readonly sleep: SleepSystem;
   /** NPC 판단 (update 10 번) */
@@ -202,6 +205,13 @@ export class GameWorld {
     this.attach('farm', this.farm);
     this.debug.farmSources = { farm: () => this.farm.stats, storage: this.storage };
     const npcs = (): Iterable<NPC<Action>> => this.registry.npcs.values();
+    this.cooking = new CookingSystem({
+      rooms: () => this.rooms.getAll(),
+      storage: this.storage,
+      events: this.events,
+      blockAt: (p) => this.voxels.getBlock(p.x, p.y, p.z),
+    });
+    this.debug.cookingSources = { cooking: () => this.cooking.stats, storage: this.storage };
     this.sleep = new SleepSystem({
       events: this.events,
       rooms: () => this.rooms.getAll(),
@@ -221,11 +231,20 @@ export class GameWorld {
       services: {
         sleep: { isAssigned: (n, b) => this.sleep.isAssigned(n, b) },
         farm: { plant: (t) => this.farm.plant(t), harvest: (t) => this.farm.harvest(t) },
+        cooking: {
+          begin: (n, s) => this.cooking.begin(n, s),
+          isCooking: (n, s) => this.cooking.isCooking(n, s),
+          complete: (n, s) => this.cooking.complete(n, s),
+        },
       },
       onBedUnreachable: (n, b) => this.sleep.reportUnreachable(n, b),
       farmClaims: {
         claim: (n, t) => this.farm.claim(n, t),
         release: (n, t) => this.farm.release(n, t),
+      },
+      cookClaims: {
+        claimStove: (n, s) => this.cooking.claimStove(n, s),
+        release: (n) => this.cooking.release(n),
       },
     });
     this.npcDecision = new NPCDecisionSystem(
@@ -237,8 +256,9 @@ export class GameWorld {
         plazaSpots: () => this.currentPlazaSpots(),
         assign: (id, plan) => this.npcSystem.assign(id, plan),
         farmCandidate: (id, cell) => this.farm.candidateFor(id, cell),
+        cookCandidate: (id, cell) => this.cooking.candidateFor(id, cell),
       },
-      [this.sleep],
+      [this.sleep, this.cooking],
     );
     this.attach('npcDecision', this.npcDecision);
     this.attach('npc', this.npcSystem);

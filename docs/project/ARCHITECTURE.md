@@ -1183,6 +1183,11 @@ Action 은 `GameWorld` 전체를 받지 않는다. 필요한 것만 받는다.
 
 ---
 
+구현(TASK-031, ADR 031): `ActionServices.cooking`(begin / isCooking / complete)을 더했다. Action 의 `cookStove` 가 바뀌면
+NPCSystem 이 CookingSystem 화덕 예약을 옮기고, 조리가 끝나거나 취소·실패해 다른 Action 이 되면 화덕·재료 예약을 푼다.
+CookAction 은 start 에서 재료를 예약하고 게임분 60 이 지나면 complete 로 crop −2·food +3 을 한 트랜잭션으로 확정한다.
+UsePose 에 'cook'(조리 자세)을 더했다.
+
 구현(TASK-030, ADR 030): `ActionServices.farm`(plant / harvest)을 더했다. Action 의 `farmTarget` 이 바뀌면 NPCSystem 이
 FarmSystem 예약을 옮긴다. PlantAction / HarvestAction 은 start 에서 결과를 확정하고 작업 자세(pose 'work', lookAt)만 잠깐 보인다.
 
@@ -1334,7 +1339,7 @@ RoomSystem            RoomRegistry.processQueue 호출. 예산 관리
 NPCDecisionSystem     Action 선택 (순수)
 NPCSystem             Action 실행. NPC 이동
 FarmSystem            crop 성장 단계. farmland 파괴 시 정리. farmland 칸 목록·농사 후보·칸 예약 (update 7 번)
-CookingSystem         조리 진행. crop → food
+CookingSystem         Kitchen 화덕 목록·조리 후보·화덕/재료 예약·결과 확정(crop → food). update 10 번에서 판단 전에 목록 갱신 (ADR 031)
 MealSystem            식사 시간 판정. hasEatenThisMeal 리셋
 SleepSystem           침대 배정 / 해제. 후보 침대까지 실제 경로가 나오면 확정한다 (update 10 번, 판단 전)
 GratitudeSystem       포인트 누적. 최초 인식 보너스 중복 방지
@@ -2213,6 +2218,7 @@ DI 컨테이너
 028  기존 블록의 비정육면체 모양 — 범위·시점          Accepted
 029  PERF-001 구조 수정: NO_PATH 영역 공유·침대 재시도  Accepted
 030  농사: 밭 목록·후보·예약, 작업 자세, 작물 모형        Accepted
+031  요리: 화덕 후보·예약, 재료 예약·완료 소비, 조리 자세   Accepted
 ```
 
 ---
