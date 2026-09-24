@@ -95,7 +95,21 @@ describe('decideAction (TASK-029, MVP_SPEC 19.4)', () => {
   });
 
   it('3 생리: 식사 구간이면 먹고, 취침 시간이면 침대로 가서 잔다', () => {
-    expect(kind(decideAction(ctx({ hour: 12, mealActive: true })))).toBe('eat');
+    const fed = { seed: 3, crop: 0, food: 2 };
+    // 식당 의자가 없으면 광장 칸으로 가서 먹는다
+    const toPlaza = decideAction(ctx({ hour: 12, mealActive: true, storage: fed }));
+    expect(toPlaza?.kind).toBe('move');
+    const atPlaza = ctx({
+      hour: 12,
+      mealActive: true,
+      storage: fed,
+      npc: { ...ctx().npc, cell: SPOT },
+    });
+    expect(decideAction(atPlaza)).toMatchObject({ kind: 'eat', seat: null });
+    // food 가 0 이면 먹지 않고 넘어간다
+    expect(
+      kind(decideAction(ctx({ hour: 12, mealActive: true, npc: { ...ctx().npc, cell: SPOT } }))),
+    ).toBe('keep');
     const toBed = decideAction(ctx({ hour: 21, assignedBed: BED }));
     expect(toBed?.kind).toBe('move');
     if (toBed?.kind === 'move')
@@ -109,6 +123,49 @@ describe('decideAction (TASK-029, MVP_SPEC 19.4)', () => {
     // 침대가 없으면 광장 칸에서 쉰다
     expect(decideAction(ctx({ hour: 21 }))?.kind).toBe('move');
     expect(kind(decideAction(ctx({ hour: 21, npc: { ...ctx().npc, cell: SPOT } })))).toBe('rest');
+  });
+
+  it('3 생리(식사): 식당 의자가 있으면 걸어가 앉고, 먹는 중에는 유지하며, 먹었으면 다시 먹지 않는다', () => {
+    const seat = {
+      objectId: '21,2,38',
+      anchor: { x: 21, y: 2, z: 38 },
+      approachCells: [{ x: 20, y: 2, z: 38 }],
+      usePosition: { x: 21.5, y: 3, z: 38.5 },
+      tableTop: { x: 22.5, y: 3, z: 38.5 },
+    };
+    const fed = { seed: 3, crop: 0, food: 2 };
+    const cand = { diningSeat: seat, farm: null, cooking: null, repair: null };
+    const toSeat = decideAction(
+      ctx({ hour: 12, mealActive: true, storage: fed, candidates: cand }),
+    );
+    expect(toSeat).toMatchObject({
+      kind: 'move',
+      purpose: { kind: 'seat', seatObjectId: seat.objectId },
+    });
+    const atSeat = ctx({
+      hour: 12,
+      mealActive: true,
+      storage: fed,
+      candidates: cand,
+      npc: { ...ctx().npc, cell: { x: 20, y: 2, z: 38 } },
+    });
+    expect(decideAction(atSeat)).toMatchObject({ kind: 'eat', seat: { objectId: seat.objectId } });
+    // 먹는 중(음식은 앉을 때 먹어 플래그가 이미 true)에는 구간 동안 유지한다
+    const eating = ctx({
+      hour: 12,
+      mealActive: true,
+      npc: { ...ctx().npc, actionKind: 'eat', actionKey: 'eat:21,2,38', hasEatenThisMeal: true },
+    });
+    expect(decideAction(eating)).toBeNull();
+    // 이미 먹었으면 다시 먹지 않는다
+    const done = ctx({
+      hour: 12,
+      mealActive: true,
+      storage: fed,
+      candidates: cand,
+      npc: { ...ctx().npc, hasEatenThisMeal: true },
+    });
+    expect(kind(decideAction(done))).toBe('keep');
   });
 
   it('침대로 가는 이동이 진행 중이면 접근 셀에 막 들어서도 이동이 끝날 때까지 유지한다', () => {

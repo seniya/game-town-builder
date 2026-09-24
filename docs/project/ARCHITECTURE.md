@@ -1074,6 +1074,7 @@ export interface NPC {
   body: AabbBody;
   health: number;
   action: Action;
+  mealId: string | null;      // "day:lunch|dinner". 저장 대상 (TASK-032)
   hasEatenThisMeal: boolean;
   stunUntilGameMinutes: number;
 }
@@ -1183,8 +1184,13 @@ Action 은 `GameWorld` 전체를 받지 않는다. 필요한 것만 받는다.
 
 ---
 
-구현(TASK-031, ADR 031): `ActionServices.cooking`(begin / isCooking / complete)을 더했다. Action 의 `cookStove` 가 바뀌면
-NPCSystem 이 CookingSystem 화덕 예약을 옮기고, 조리가 끝나거나 취소·실패해 다른 Action 이 되면 화덕·재료 예약을 푼다.
+구현(TASK-032, ADR 032): 임시 시설(화덕·의자) 예약은 NPCSystem 이 소유한다(MVP_SPEC 12.4). Action 의 `facilityClaim`(objectId)이
+바뀌면 NPCSystem 이 예약을 옮기고, 소유 시스템(Cooking / Meal)은 `facilityTaken` 조회로 후보에서 뺀다. `ActionServices.meal`
+(eat / isSeatUsable / active)을 더했다. EatAction 은 start 에서 food 1 을 소비하고 eatGameMinutes 동안 앉아 있는다.
+판단은 먹는 중(actionKind 'eat')이면 식사 구간 동안 유지한다.
+
+구현(TASK-031, ADR 031): `ActionServices.cooking`(begin / isCooking / complete)을 더했다. 화덕 예약은 TASK-032 에서
+NPCSystem 의 시설 예약으로 옮겼고, 조리가 끝나거나 취소·실패해 다른 Action 이 되면 NPCSystem 이 재료 예약(CookingSystem.release)도 푼다.
 CookAction 은 start 에서 재료를 예약하고 게임분 60 이 지나면 complete 로 crop −2·food +3 을 한 트랜잭션으로 확정한다.
 UsePose 에 'cook'(조리 자세)을 더했다.
 
@@ -1214,7 +1220,7 @@ export interface NPCContext {
 
 /** 각 항목은 "지금 이 NPC 가 쓸 수 있는 하나"다. null 이면 MVP_SPEC 12.5 의 대체 행동. */
 export interface NPCCandidates {
-  readonly diningSeat: DeepReadonly<Facility> | null;   // RoomRegistry → MealSystem
+  readonly diningSeat: DeepReadonly<DiningSeat> | null; // RoomRegistry → MealSystem (Facility + tableTop, TASK-032)
   readonly farm: DeepReadonly<FarmCandidate> | null;    // FarmSystem
   readonly cooking: DeepReadonly<CookCandidate> | null; // CookingSystem
   readonly repair: DeepReadonly<RepairCandidate> | null;// RepairSystem
@@ -1248,7 +1254,7 @@ eat / role / flee / talk + 판단 키 `key`)을 반환하고, NPCSystem(11 번)�
 만들거나 시작하지 않으므로 아직 없는 Action(식사·역할·도피·대화)의 판단도 테스트할 수 있다. 그런 계획은 실행 쪽에서
 그 사실을 적은 대기(IdleAction)로 선다. 계획의 key 가 현재 Action 의 key 와 같으면 null(유지)이다.
 이동 계획이 진행 중이면 목적 칸에 막 들어섰어도 이동이 칸 가운데에서 끝날 때까지 유지한다.
-Context 는 여기에 `minuteOfDay`, `mealActive`(MealSystem 전에는 false), `plazaSpot`(이 주민의 광장 칸)을 더하고,
+Context 는 여기에 `minuteOfDay`, `mealActive`(MealSystem), `plazaSpot`(이 주민의 광장 칸)을 더하고,
 worldState 는 WorldStateSystem(TASK-039) 에서 더한다. NPCDecisionSystem 은 같은 슬롯에서 SleepSystem 을 먼저 돌린다.
 기본 행동(5 단계)은 MVP_SPEC 19.5 를 따른다: 기상(05~07)·자유 행동(19~20)에는 광장 칸으로 가고 그 밖에는 대기다.
 실패한 계획은 재계산 최소 간격(0.5 초) 동안 같은 key 로 다시 시작하지 않는다.
@@ -1340,7 +1346,7 @@ NPCDecisionSystem     Action 선택 (순수)
 NPCSystem             Action 실행. NPC 이동
 FarmSystem            crop 성장 단계. farmland 파괴 시 정리. farmland 칸 목록·농사 후보·칸 예약 (update 7 번)
 CookingSystem         Kitchen 화덕 목록·조리 후보·화덕/재료 예약·결과 확정(crop → food). update 10 번에서 판단 전에 목록 갱신 (ADR 031)
-MealSystem            식사 시간 판정. hasEatenThisMeal 리셋
+MealSystem            식사 구간(mealId) 판정. hasEatenThisMeal 리셋·기록. DiningRoom 의자 후보. update 10 번에서 판단 전 (ADR 032)
 SleepSystem           침대 배정 / 해제. 후보 침대까지 실제 경로가 나오면 확정한다 (update 10 번, 판단 전)
 GratitudeSystem       포인트 누적. 최초 인식 보너스 중복 방지
 VillageLevelSystem    게이트 평가. 종 상호작용 처리. 해금 적용
@@ -2218,7 +2224,8 @@ DI 컨테이너
 028  기존 블록의 비정육면체 모양 — 범위·시점          Accepted
 029  PERF-001 구조 수정: NO_PATH 영역 공유·침대 재시도  Accepted
 030  농사: 밭 목록·후보·예약, 작업 자세, 작물 모형        Accepted
-031  요리: 화덕 후보·예약, 재료 예약·완료 소비, 조리 자세   Accepted
+031  요리: 화덕 후보·예약, 재료 예약·완료 소비, 조리 자세   Accepted (화덕 예약 소유자는 032 에서 보완)
+032  식사: mealId·의자 후보, NPCSystem 시설 예약, 식탁 음식 연출 Accepted
 ```
 
 ---

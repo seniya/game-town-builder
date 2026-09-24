@@ -29,6 +29,7 @@ import { NavOverlayView } from './render/NavOverlayView';
 import { NpcViews } from './render/NpcView';
 import { PropView } from './render/PropView';
 import { CropView } from './render/CropView';
+import { DishView } from './render/DishView';
 import { CeilingCapView } from './render/CeilingCapView';
 import { RoomOverlayView } from './render/RoomOverlayView';
 import { blockItem } from './game/systems/InventorySystem';
@@ -194,10 +195,7 @@ function createWorld(
   residentLimit: number,
 ): GameWorld {
   const world = new GameWorld({
-    storage:
-      fixture.startCrop !== undefined
-        ? { ...balance.storage, initialCrop: fixture.startCrop }
-        : balance.storage,
+    storage: { ...balance.storage, ...fixture.startStorage },
     worldSize: fixture.size,
     startGameMinutes,
     ...(fixture.plazaCenter ? { plazaCenter: fixture.plazaCenter } : {}),
@@ -554,6 +552,8 @@ function start(): void {
   renderer.scene.add(props.object3d);
   const crops = new CropView(() => world.farm.crops());
   renderer.scene.add(crops.object3d);
+  const dishes = new DishView(() => world.registry.npcs.values());
+  renderer.scene.add(dishes.object3d);
   const dayNight = new DayNightVisual(
     renderer,
     world.clock,
@@ -660,6 +660,7 @@ function start(): void {
     npcViews.update(frameMs / 1000);
     props.update(frameMs / 1000);
     crops.update(frameMs / 1000);
+    dishes.update();
     dayNight.update(frameMs / 1000);
     navOverlay.update(
       frameMs / 1000,

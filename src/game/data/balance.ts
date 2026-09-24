@@ -89,6 +89,8 @@ export const balance = {
   meal: {
     mealsPerDay: 2,
     foodPerMeal: 1,
+    /** 앉아서 먹는 게임분. 음식은 앉을 때 소비하고 이 시간은 먹는 모습이다 (MVP_SPEC 17.1) */
+    eatGameMinutes: 20,
   },
 
   worldState: {

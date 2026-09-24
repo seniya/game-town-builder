@@ -1,5 +1,6 @@
 // 요리 (MVP_SPEC 16, ARCHITECTURE 14 / 14.4 / 14.5 / 15, TASK-031).
-// 조리 시설(Kitchen 의 cookingSpots) 목록·화덕 예약·재료(crop) 예약의 소유자다. 결과 확정(crop −2, food +3)도 여기서만 한다.
+// 조리 시설(Kitchen 의 cookingSpots) 목록·재료(crop) 예약의 소유자다. 결과 확정(crop −2, food +3)도 여기서만 한다.
+// 화덕 자체의 예약(한 화덕 한 명)은 NPCSystem 이 소유하고(MVP_SPEC 12.4) 여기서는 facilityTaken 으로 읽기만 한다.
 // 시작 때 재료를 예약하되 소비하지 않고, 완료 때 한 트랜잭션으로 소비·생산한다. 예약은 저장하지 않는다(로드 때 버린다).
 // 화덕 목록은 방 이벤트로 갱신하고 요리사에게 가까운 화덕 하나만 좁혀 준다. 주민마다 월드·방 전체를 훑지 않는다.
 import { balance } from '../data/balance';
@@ -25,14 +26,14 @@ export interface CookingDeps {
   readonly events: EventBus;
   /** 칸의 블록 id. 방 재판정 전에 부서진 화덕을 목록에 되살리지 않게 확인한다 */
   readonly blockAt: (pos: BlockPos) => number;
+  /** 이 시설을 다른 주민이 예약했는가 (NPCSystem 의 시설 예약 조회) */
+  readonly facilityTaken: (objectId: string, npcId: string) => boolean;
 }
 
 /** 계측값 (F3). */
 export interface CookingStats {
   /** 인식된 Kitchen 의 화덕 수 */
   readonly stoves: number;
-  /** 화덕 예약 수(가는 중 포함) */
-  readonly claims: number;
   /** 조리 중인 수 */
   readonly cooking: number;
   /** 예약된 crop 합계 */
@@ -54,8 +55,6 @@ function manhattan(a: BlockPos, b: BlockPos): number {
 export class CookingSystem implements SlotSystem {
   /** 화덕 objectId → 시설과 방의 재판정 여부 */
   private stoves = new Map<string, { facility: Facility; roomDirty: boolean }>();
-  /** 화덕 objectId → 예약한 npcId */
-  private readonly stoveClaims = new Map<string, string>();
   /** npcId → 조리 중 재료 예약 */
   private readonly reserved = new Map<string, Reservation>();
   private dirty = true;
@@ -82,31 +81,28 @@ export class CookingSystem implements SlotSystem {
     for (const r of this.reserved.values()) reservedCrop += r.crop;
     return {
       stoves: this.stoves.size,
-      claims: this.stoveClaims.size,
       cooking: this.reserved.size,
       reservedCrop,
     };
   }
 
-  /** 방이 바뀌었으면 화덕 목록을 다시 만들고, 사라진 화덕의 예약을 푼다. NPC 판단(10 번) 전에 부른다. */
+  /** 방이 바뀌었으면 화덕 목록을 다시 만들고, 사라진 화덕의 재료 예약을 푼다. NPC 판단(10 번) 전에 부른다. */
   update(): void {
     this.refreshIfDirty();
   }
 
   /**
-   * 이 요리사에게 줄 화덕 하나. 다른 요리사가 잡은 화덕과 재판정 중인 방의 화덕은 건너뛴다.
-   * 이 요리사가 이미 잡은 화덕이 있으면 그것을 준다. 화덕이 없으면 null (Kitchen 없음 → 요리하지 않는다).
+   * 이 요리사에게 줄 가까운 화덕 하나. 다른 주민이 예약한 화덕과 재판정 중인 방의 화덕은 건너뛴다.
+   * 화덕이 없으면 null (Kitchen 없음 → 요리하지 않는다).
    * 음식 부족 조건은 보지 않는다 (ARCHITECTURE 14.4). 재료는 ingredientsReady 로만 알린다.
    */
   candidateFor(npcId: string, from: BlockPos): CookCandidate | null {
     this.refreshIfDirty();
     const ready = this.availableCropFor(npcId) >= balance.cooking.cropPerCook;
-    const mine = this.claimedBy(npcId);
-    if (mine) return { facility: mine, ingredientsReady: ready };
     let best: Facility | null = null;
     let bestD = Number.POSITIVE_INFINITY;
     for (const [id, s] of this.stoves) {
-      if (s.roomDirty || this.stoveClaims.has(id)) continue;
+      if (s.roomDirty || this.deps.facilityTaken(id, npcId)) continue;
       const d = manhattan(from, s.facility.anchor);
       if (d < bestD || (d === bestD && best !== null && id < best.objectId)) {
         best = s.facility;
@@ -116,27 +112,15 @@ export class CookingSystem implements SlotSystem {
     return best ? { facility: best, ingredientsReady: ready } : null;
   }
 
-  /** 화덕을 예약한다(가는 중부터). 다른 요리사가 잡았거나 화덕이 없으면 false. 한 요리사는 화덕 하나만 잡는다. */
-  claimStove(npcId: string, stoveId: string): boolean {
-    this.refreshIfDirty();
-    if (!this.stoves.has(stoveId)) return false;
-    const owner = this.stoveClaims.get(stoveId);
-    if (owner !== undefined && owner !== npcId) return false;
-    const prev = this.claimedBy(npcId);
-    if (prev && prev.objectId !== stoveId) this.release(npcId);
-    this.stoveClaims.set(stoveId, npcId);
-    return true;
-  }
-
   /**
-   * 조리를 시작한다: 화덕을 잡고 crop 을 예약한다. 소비하지 않는다 (MVP_SPEC 16).
+   * 조리를 시작한다: crop 을 예약한다. 소비하지 않는다 (MVP_SPEC 16).
    * 화덕이 없거나(방 해제·파괴) 다른 요리사의 것이거나 재료가 모자라면 아무것도 바꾸지 않고 false.
    */
   begin(npcId: string, stoveId: string): boolean {
     this.refreshIfDirty();
     const need = balance.cooking.cropPerCook;
     if (this.availableCropFor(npcId) < need) return false;
-    if (!this.claimStove(npcId, stoveId)) return false;
+    if (!this.stoves.has(stoveId) || this.deps.facilityTaken(stoveId, npcId)) return false;
     this.reserved.set(npcId, { stoveId, crop: need });
     return true;
   }
@@ -150,7 +134,7 @@ export class CookingSystem implements SlotSystem {
 
   /**
    * 조리를 끝낸다: 예약한 crop 을 한 번에 소비하고 food 를 만든다 (MVP_SPEC 16).
-   * 조리 중이 아니거나 crop 이 모자라면 아무것도 바꾸지 않고 false. 성공하면 재료 예약을 지운다(화덕 예약은 남는다).
+   * 조리 중이 아니거나 crop 이 모자라면 아무것도 바꾸지 않고 false. 성공하면 재료 예약을 지운다.
    * 감사 포인트 +3 은 GratitudeSystem(TASK-035) 이 생기면 ActionServices 포트로 요청한다.
    */
   complete(npcId: string, stoveId: string): boolean {
@@ -168,25 +152,15 @@ export class CookingSystem implements SlotSystem {
     return ok;
   }
 
-  /** 이 요리사의 화덕 예약과 재료 예약을 푼다(조리 취소·다른 행동). 재료는 소비하지 않았으므로 돌려줄 것이 없다. */
+  /** 이 요리사의 재료 예약을 푼다(조리 취소·실패·다른 행동). 재료는 소비하지 않았으므로 돌려줄 것이 없다. */
   release(npcId: string): void {
     this.reserved.delete(npcId);
-    for (const [id, owner] of this.stoveClaims) if (owner === npcId) this.stoveClaims.delete(id);
   }
 
   /** 로드: 예약은 저장하지 않으므로 전부 버리고 화덕 목록을 다시 만든다 (ARCHITECTURE 23). */
   resetForLoad(): void {
     this.reserved.clear();
-    this.stoveClaims.clear();
     this.dirty = true;
-  }
-
-  /** 이 요리사가 잡은 화덕 시설. */
-  private claimedBy(npcId: string): Facility | null {
-    for (const [id, owner] of this.stoveClaims) {
-      if (owner === npcId) return this.stoves.get(id)?.facility ?? null;
-    }
-    return null;
   }
 
   /** 다른 요리사의 예약을 뺀 crop. 자기 예약은 자기 몫으로 센다. */
@@ -209,14 +183,8 @@ export class CookingSystem implements SlotSystem {
       }
     }
     this.stoves = next;
-    for (const id of [...this.stoveClaims.keys()]) if (!next.has(id)) this.dropStove(id);
-  }
-
-  /** 화덕 하나의 화덕 예약과 그 화덕의 재료 예약을 푼다. */
-  private dropStove(stoveId: string): void {
-    this.stoveClaims.delete(stoveId);
     for (const [npcId, r] of [...this.reserved])
-      if (r.stoveId === stoveId) this.reserved.delete(npcId);
+      if (!next.has(r.stoveId)) this.reserved.delete(npcId);
   }
 
   /** crop 이 예약 합계보다 적으면 합계가 맞을 때까지 예약을 푼다. */

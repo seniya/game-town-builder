@@ -22,8 +22,8 @@ export interface VisualFixture {
   readonly plazaCenter?: BlockPos;
   /** 처음부터 사는 주민과 시작 칸 */
   readonly residents?: readonly { readonly role: NPCRole; readonly cell: BlockPos }[];
-  /** 시작 crop(관찰용). 없으면 게임 초기값이다. 조리 관찰에서 수확을 기다리지 않게 한다 */
-  readonly startCrop?: number;
+  /** 시작 저장소(관찰용). 없는 값은 게임 초기값이다. 조리·식사 관찰에서 수확을 기다리지 않게 한다 */
+  readonly startStorage?: { readonly initialCrop?: number; readonly initialFood?: number };
   /** ?time= 이 없을 때의 시작 시각(시). 없으면 07:00 */
   readonly defaultStartHour?: number;
   /** 카메라 궤도 시점들. 첫 번째가 기본이며 ?view= 로 고른다 */
@@ -385,14 +385,15 @@ export const sleepLabFixture: VisualFixture = {
 };
 
 /**
- * TASK-031 관찰 장면: 취침 실험장에 작은 주방 한 채를 더했다. 시작 09:00, crop 4(조리 두 번 분량).
+ * TASK-031 / 032 관찰 장면: 취침 실험장에 주방과 식당을 한 채씩 더했다. 시작 09:00, crop 4(조리 두 번 분량), food 3.
  * 주방은 내부 x 20~24, z 22~26, 돌벽돌 벽 세 층·판자 바닥·지붕, 북쪽 벽에 붙은 화덕과 물통, 서쪽 창문, 남쪽 문이다.
- * 요리사가 광장에서 주방으로 걸어 들어가 화덕 앞에서 조리한다. 기존 블록만 쓴다.
+ * 식당은 내부 x 20~24, z 36~40, 판자 벽 세 층·지붕, 가운데 식탁 하나와 의자 셋, 동쪽 창문, 북쪽 문(광장 쪽)이다.
+ * 요리사가 오전에 조리하고, 12:00 과 18:00 에 주민 셋이 식당 의자에 앉아 먹는다. 기존 블록만 쓴다.
  */
 export const kitchenLabFixture: VisualFixture = {
   ...sleepLabFixture,
   defaultStartHour: 9,
-  startCrop: 4,
+  startStorage: { initialCrop: 4, initialFood: 3 },
   build(write) {
     sleepLabFixture.build(write);
     const g = 10;
@@ -409,10 +410,26 @@ export const kitchenLabFixture: VisualFixture = {
     write(23, y, 22, BlockId.water_pot);
     write(24, y, 26, BlockId.torch);
     write(24, y, 29, BlockId.torch);
+    // 식당: 문은 objects 로 (22, y, 35) 북쪽
+    fill(write, 20, g, 36, 24, g, 40, BlockId.plank);
+    ringWall(write, 19, 35, 5, 5, y, BlockId.plank, 3, [[22, 35]]);
+    write(22, y + 2, 35, BlockId.plank);
+    write(25, y + 1, 37, BlockId.window);
+    write(25, y + 1, 39, BlockId.window);
+    write(19, y + 1, 38, BlockId.window);
+    fill(write, 18, y + 3, 34, 26, y + 3, 42, BlockId.plank);
+    fill(write, 19, y + 4, 35, 25, y + 4, 41, BlockId.plank);
+    write(22, y, 38, BlockId.table);
+    write(21, y, 38, BlockId.chair);
+    write(23, y, 38, BlockId.chair);
+    write(22, y, 39, BlockId.chair);
+    write(20, y, 40, BlockId.torch);
+    write(24, y, 36, BlockId.torch);
   },
   objects: [
     ...sleepLabFixture.objects,
     { blockId: BlockId.door, anchor: { x: 22, y: 11, z: 27 }, facing: 'south' },
+    { blockId: BlockId.door, anchor: { x: 22, y: 11, z: 35 }, facing: 'north' },
   ],
   views: [
     { target: { x: 27, y: 12, z: 29 }, distance: 24, yaw: -0.35, pitch: 0.5 },
@@ -422,5 +439,7 @@ export const kitchenLabFixture: VisualFixture = {
     { target: { x: 22, y: 12, z: 23 }, distance: 7, yaw: -1.45, pitch: 0.3 },
     // 방 안: 화덕 앞에서 조리하는 요리사
     { target: { x: 22.5, y: 12, z: 23 }, distance: 3, yaw: -0.6, pitch: 0.45 },
+    // 식당 안: 식탁에 둘러앉아 먹는 주민
+    { target: { x: 22.5, y: 12.2, z: 38.5 }, distance: 4.5, yaw: 0.7, pitch: 0.55 },
   ],
 };

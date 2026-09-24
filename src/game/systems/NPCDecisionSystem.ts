@@ -14,6 +14,7 @@ import {
   type ActionView,
   type BlockPos,
   type DayPhase,
+  type DiningSeat,
   type Facility,
   type GameClockReader,
   type NPCRole,
@@ -37,7 +38,7 @@ export interface NPCDecisionView {
 
 /** 역할 작업 후보. 소유 시스템(Farm / Cooking / Repair)이 좁혀 준다. 없으면 null 이다. */
 export interface NPCCandidates {
-  readonly diningSeat: Readonly<Facility> | null;
+  readonly diningSeat: DiningSeat | null;
   readonly farm: FarmCandidate | null;
   readonly cooking: CookCandidate | null;
   readonly repair: Readonly<{ damageId: string; cells: readonly BlockPos[] }> | null;
@@ -63,7 +64,7 @@ export interface NPCContext {
   readonly minuteOfDay: number;
   readonly threatNearby: ThreatView | null;
   readonly dialogueRequested: boolean;
-  /** 식사 구간이 열려 있는가. MealSystem(TASK-032) 전에는 false 다 */
+  /** 식사 구간이 열려 있는가 (MealSystem) */
   readonly mealActive: boolean;
   readonly storage: VillageStorageData;
   /** 이 주민이 광장에서 쉬거나 모일 칸. 광장이 없으면 null */
@@ -85,7 +86,7 @@ export type ActionPlan =
     }
   | { readonly kind: 'sleep'; readonly key: string; readonly bed: Readonly<Facility> }
   | { readonly kind: 'rest'; readonly key: string; readonly spot: BlockPos }
-  | { readonly kind: 'eat'; readonly key: string; readonly seat: Readonly<Facility> | null }
+  | { readonly kind: 'eat'; readonly key: string; readonly seat: DiningSeat | null }
   | { readonly kind: 'role'; readonly key: string; readonly work: 'repair' }
   | { readonly kind: 'cook'; readonly key: string; readonly stove: Readonly<Facility> }
   | { readonly kind: 'plant' | 'harvest'; readonly key: string; readonly target: BlockPos }
@@ -97,6 +98,7 @@ export type MovePurpose =
   | { readonly kind: 'bed'; readonly bedObjectId: string }
   | { readonly kind: 'farm'; readonly target: BlockPos }
   | { readonly kind: 'cook'; readonly stoveObjectId: string }
+  | { readonly kind: 'seat'; readonly seatObjectId: string }
   | { readonly kind: 'plaza' };
 
 const C = balance.clock;
@@ -151,16 +153,43 @@ function toPlaza(spot: BlockPos, label: string): ActionPlan {
 }
 
 /**
+ * 식사 계획 (MVP_SPEC 17). DiningRoom 의 빈 의자가 있으면 그 접근 셀로 걸어가 앉아 먹고,
+ * 없으면 광장 칸으로 가서 앉아 먹는다(12.5 의 대체 동작). 광장도 없으면 제자리에서 먹는다.
+ * food 가 없으면 부르지 않는다(먹지 않고 넘어간다).
+ */
+function toMeal(ctx: NPCContext): ActionPlan | null {
+  const seat = ctx.candidates.diningSeat;
+  if (seat) {
+    const moveKey = `move:seat:${seat.objectId}`;
+    if (arrivedAt(ctx, seat.approachCells, moveKey)) {
+      return { kind: 'eat', key: `eat:${seat.objectId}`, seat };
+    }
+    return {
+      kind: 'move',
+      key: moveKey,
+      label: '식당으로 가는 중',
+      goal: { kind: 'cells', cells: seat.approachCells },
+      destination: seat.anchor,
+      purpose: { kind: 'seat', seatObjectId: seat.objectId },
+    };
+  }
+  const spot = ctx.plazaSpot ?? ctx.npc.cell;
+  if (arrivedAt(ctx, [spot], plazaKey(spot))) return { kind: 'eat', key: 'eat:plaza', seat: null };
+  return toPlaza(spot, '광장으로 밥 먹으러 가는 중');
+}
+
+/**
  * 3 단계 생리(식사·취침)의 계획. 해당 없으면 null.
  * 취침: 배정 침대가 있으면 그 접근 셀로 걸어가 잔다. 없으면 광장 칸으로 가서 쉰다(12.5 의 대체 동작).
  */
 function physiological(ctx: NPCContext): ActionPlan | null {
-  if (ctx.mealActive && !ctx.npc.hasEatenThisMeal) {
-    return {
-      kind: 'eat',
-      key: `eat:${ctx.candidates.diningSeat?.objectId ?? 'plaza'}`,
-      seat: ctx.candidates.diningSeat,
-    };
+  if (ctx.mealActive) {
+    // 먹는 중이면 식사 구간 동안 유지한다(음식은 앉을 때 먹어 hasEatenThisMeal 이 이미 true 다)
+    if (ctx.npc.actionKind === 'eat') return { kind: 'eat', key: ctx.npc.actionKey, seat: null };
+    if (!ctx.npc.hasEatenThisMeal && ctx.storage.food >= balance.meal.foodPerMeal) {
+      const meal = toMeal(ctx);
+      if (meal) return meal;
+    }
   }
   if (!isSleepTime(ctx.phase)) return null;
   const bed = ctx.assignedBed;
@@ -279,6 +308,10 @@ export interface NPCDecisionDeps {
   readonly assign: (npcId: string, plan: ActionPlan) => void;
   /** FarmSystem 의 후보(농부에게만, 역할 작업 시간에만 묻는다). 없으면 농사가 없는 월드다 */
   readonly farmCandidate?: (npcId: string, cell: BlockPos) => FarmCandidate | null;
+  /** 식사 구간인가 (MealSystem). 없으면 식사가 없는 월드다 */
+  readonly mealActive?: () => boolean;
+  /** MealSystem 의 의자 후보(식사 구간에 아직 먹지 않은 주민에게만 묻는다) */
+  readonly diningSeat?: (npcId: string, cell: BlockPos) => DiningSeat | null;
   /** CookingSystem 의 후보(요리사에게만, 역할 작업 시간에만 묻는다). 없으면 요리가 없는 월드다 */
   readonly cookCandidate?: (npcId: string, cell: BlockPos) => CookCandidate | null;
 }
@@ -301,6 +334,7 @@ export class NPCDecisionSystem implements SlotSystem {
     const storage = this.deps.storage();
     let i = 0;
     const work = isWorkTime(this.deps.clock.minuteOfDay);
+    const mealActive = this.deps.mealActive?.() ?? false;
     for (const npc of this.deps.npcs()) {
       const cell = npcCell(npc);
       const farm =
@@ -310,6 +344,10 @@ export class NPCDecisionSystem implements SlotSystem {
       const cooking =
         work && npc.role === 'cook' && this.deps.cookCandidate
           ? this.deps.cookCandidate(npc.id, cell)
+          : null;
+      const diningSeat =
+        mealActive && !npc.hasEatenThisMeal && npc.action.kind !== 'eat' && this.deps.diningSeat
+          ? this.deps.diningSeat(npc.id, cell)
           : null;
       const ctx: NPCContext = {
         npc: {
@@ -327,10 +365,13 @@ export class NPCDecisionSystem implements SlotSystem {
         minuteOfDay: this.deps.clock.minuteOfDay,
         threatNearby: null,
         dialogueRequested: false,
-        mealActive: false,
+        mealActive,
         storage,
         plazaSpot: spots.length > 0 ? (spots[i % spots.length] ?? null) : null,
-        candidates: farm || cooking ? { ...NO_CANDIDATES, farm, cooking } : NO_CANDIDATES,
+        candidates:
+          farm || cooking || diningSeat
+            ? { ...NO_CANDIDATES, farm, cooking, diningSeat }
+            : NO_CANDIDATES,
       };
       const plan = decideAction(ctx);
       if (plan) this.deps.assign(npc.id, plan);

@@ -1,6 +1,6 @@
 # ADR 031. 요리: 화덕 후보·예약, 재료 예약·완료 소비, 조리 자세
 
-Status: Accepted
+Status: Accepted (결정 1·4 의 화덕 예약 소유자는 ADR 032 가 보완)
 Date: 2026-09-24
 Basis: TASK-031 구현과 테스트(`tests/cooking.test.ts` 13 개, `tests/npcDecision.test.ts` 요리 판단 1 개), headless Chrome 관찰. 새 외부 조사 없음.
 Related: ADR 008 / 025 / 030
@@ -27,6 +27,8 @@ MVP_SPEC 16 은 입력·출력·소요·조건과 "시작 때 예약, 완료 때
    로드(`resetForLoad`)·취소·실패 때 버린다. 소비 전이므로 돌려줄 것이 없고, 완료는 트랜잭션 한 번으로 crop −2·food +3 을 확정한다.
    crop 이 예약 합계보다 적어지면(STORAGE_CHANGED) 나중에 잡은 예약부터 푼다.
 4. **화덕 예약**은 가는 중(MoveAction 의 목적 `cook`)부터 잡는다. NPCSystem 이 Action 을 바꿀 때 `cookStove` 로 옮긴다(농사의 `farmTarget` 과 같은 틀).
+   → ADR 032 보완: 처음에는 화덕 예약을 CookingSystem 안에 두었으나 MVP_SPEC 12.4·ARCHITECTURE 14.4 는 임시 시설 예약을
+   NPCSystem 이 소유한다고 정한다. 식사 의자와 함께 NPCSystem 의 `facilityClaim` 예약으로 옮겼다. CookingSystem 은 재료 예약만 갖는다.
    같은 화덕으로 가는 이동 → 조리는 유지하고, 조리에서 다른 Action 으로 바뀌면 화덕·재료 예약을 함께 푼다.
 5. **시간은 게임분**으로 잰다(시작 gameMinutes + 60). 디버그 배속·시각 앞당기기와 일관된다.
 6. **역할 시간이 끝나면 조리를 중단**한다. 판단이 역할 작업을 내지 않으면 기본 행동으로 바뀌고 예약만 풀린다. 다음 역할 시간에 처음부터 다시 한다.

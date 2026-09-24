@@ -224,8 +224,11 @@ export class NpcView {
     const use = a.facilityUse;
     const placed = use ? world.placement(use.objectId) : undefined;
     if (use?.pose === 'lie' && placed) this.poseLying(placed);
-    else if (a.pose === 'sit' || use?.pose === 'sit') this.poseSitting(p, world.plazaCenter, dt);
-    else if (a.pose === 'work') this.poseWorking(p, a.lookAt ?? null, dt);
+    else if (use?.pose === 'sit' && a.lookAt) {
+      this.poseSittingOnChair(use.usePosition, a.lookAt, a.kind === 'eat');
+    } else if (a.pose === 'sit' || use?.pose === 'sit') {
+      this.poseSitting(p, world.plazaCenter, dt, a.kind === 'eat');
+    } else if (a.pose === 'work') this.poseWorking(p, a.lookAt ?? null, dt);
     else if (a.pose === 'cook' || use?.pose === 'cook') this.poseCooking(p, a.lookAt ?? null, dt);
     else this.poseStanding(p, dt);
   }
@@ -319,18 +322,51 @@ export class NpcView {
     this.head.rotation.set(0, look, 0);
   }
 
-  /** 광장에 앉기: 다리를 앞으로 뻗고 광장 중심을 바라본다. */
+  /**
+   * 식당 의자에 앉기: 의자 윗면(usePosition)에 앉아 식탁을 바라본다. 다리는 의자 앞으로 내린다.
+   * 게임 위치는 접근 셀이고 이 자세는 렌더에서만 의자 위로 옮긴다 (ARCHITECTURE 12.3). 먹는 중이면 숟가락질을 한다.
+   */
+  private poseSittingOnChair(
+    seat: { x: number; y: number; z: number },
+    table: { x: number; z: number },
+    eating: boolean,
+  ): void {
+    this.resetSpecial();
+    this.yaw = Math.atan2(-(table.x - seat.x), -(table.z - seat.z));
+    this.legL.rotation.x = 1.25;
+    this.legR.rotation.x = 1.25;
+    this.eatingArms(eating);
+    this.object3d.position.set(seat.x, seat.y, seat.z);
+    this.object3d.rotation.set(0, this.yaw, 0);
+    this.figure.position.set(0, -0.36 + Math.sin(this.time * 1.6) * 0.006, 0.05);
+    this.figure.rotation.set(0, 0, 0);
+    this.head.rotation.set(eating ? -0.25 : 0, 0, 0);
+  }
+
+  /** 먹는 팔: 왼팔은 앞으로 받치고 오른팔은 가끔 입으로 가져간다. 먹지 않으면 무릎 위에 둔다. */
+  private eatingArms(eating: boolean): void {
+    if (!eating) {
+      this.armL.rotation.set(-0.5, 0, 0);
+      this.armR.rotation.set(-0.5, 0, 0);
+      return;
+    }
+    const lift = Math.max(0, Math.sin(this.time * 2.2));
+    this.armL.rotation.set(-0.9, 0, 0.2);
+    this.armR.rotation.set(-0.8 - lift * 1.3, 0, -0.25 * lift);
+  }
+
+  /** 광장에 앉기: 다리를 앞으로 뻗고 광장 중심을 바라본다. 먹는 중이면 숟가락질을 한다. */
   private poseSitting(
     p: { x: number; y: number; z: number },
     center: BlockPos | null,
     dt: number,
+    eating = false,
   ): void {
     this.resetSpecial();
     if (center) this.turnToward(Math.atan2(-(center.x + 0.5 - p.x), -(center.z + 0.5 - p.z)), dt);
     this.legL.rotation.x = Math.PI / 2;
     this.legR.rotation.x = Math.PI / 2;
-    this.armL.rotation.x = -0.5;
-    this.armR.rotation.x = -0.5;
+    this.eatingArms(eating);
     this.object3d.position.set(p.x, p.y, p.z);
     this.object3d.rotation.set(0, this.yaw, 0);
     this.figure.position.set(0, -0.36 + Math.sin(this.time * 1.6) * 0.006, 0);

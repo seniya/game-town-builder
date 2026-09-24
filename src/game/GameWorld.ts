@@ -21,6 +21,7 @@ import { FarmSystem } from './systems/FarmSystem';
 import { GameClockSystem } from './systems/GameClockSystem';
 import { InputSystem } from './systems/InputSystem';
 import { InventorySystem } from './systems/InventorySystem';
+import { MealSystem } from './systems/MealSystem';
 import { NPCDecisionSystem, plazaSpots } from './systems/NPCDecisionSystem';
 import { NPCSystem } from './systems/NPCSystem';
 import { SleepSystem } from './systems/SleepSystem';
@@ -114,6 +115,8 @@ export class GameWorld {
   readonly farm: FarmSystem;
   /** 조리: 화덕 목록·화덕/재료 예약·결과 확정 (update 10 번, 판단 전에 목록 갱신) */
   readonly cooking: CookingSystem;
+  /** 식사 구간·식사 플래그·식당 의자 후보 (update 10 번, 판단 전) */
+  readonly meal: MealSystem;
   /** 침대 배정의 유일한 소유자 (update 10 번, 판단 전) */
   readonly sleep: SleepSystem;
   /** NPC 판단 (update 10 번) */
@@ -210,8 +213,20 @@ export class GameWorld {
       storage: this.storage,
       events: this.events,
       blockAt: (p) => this.voxels.getBlock(p.x, p.y, p.z),
+      facilityTaken: (o, n) => this.npcSystem.facilityTaken(o, n),
     });
     this.debug.cookingSources = { cooking: () => this.cooking.stats, storage: this.storage };
+    this.meal = new MealSystem({
+      clock: this.clock,
+      npcs,
+      npcById: (id) => this.registry.npcs.get(id),
+      storage: this.storage,
+      events: this.events,
+      rooms: () => this.rooms.getAll(),
+      blockAt: (p) => this.voxels.getBlock(p.x, p.y, p.z),
+      facilityTaken: (o, n) => this.npcSystem.facilityTaken(o, n),
+    });
+    this.debug.mealSources = { meal: () => this.meal.stats };
     this.sleep = new SleepSystem({
       events: this.events,
       rooms: () => this.rooms.getAll(),
@@ -236,16 +251,18 @@ export class GameWorld {
           isCooking: (n, s) => this.cooking.isCooking(n, s),
           complete: (n, s) => this.cooking.complete(n, s),
         },
+        meal: {
+          eat: (n, s) => this.meal.eat(n, s),
+          isSeatUsable: (s) => this.meal.isSeatUsable(s),
+          active: () => this.meal.active,
+        },
       },
       onBedUnreachable: (n, b) => this.sleep.reportUnreachable(n, b),
       farmClaims: {
         claim: (n, t) => this.farm.claim(n, t),
         release: (n, t) => this.farm.release(n, t),
       },
-      cookClaims: {
-        claimStove: (n, s) => this.cooking.claimStove(n, s),
-        release: (n) => this.cooking.release(n),
-      },
+      releaseIngredients: (n) => this.cooking.release(n),
     });
     this.npcDecision = new NPCDecisionSystem(
       {
@@ -257,8 +274,10 @@ export class GameWorld {
         assign: (id, plan) => this.npcSystem.assign(id, plan),
         farmCandidate: (id, cell) => this.farm.candidateFor(id, cell),
         cookCandidate: (id, cell) => this.cooking.candidateFor(id, cell),
+        mealActive: () => this.meal.active,
+        diningSeat: (id, cell) => this.meal.seatFor(id, cell),
       },
-      [this.sleep, this.cooking],
+      [this.meal, this.sleep, this.cooking],
     );
     this.attach('npcDecision', this.npcDecision);
     this.attach('npc', this.npcSystem);

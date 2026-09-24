@@ -51,7 +51,8 @@ describe('요리와 요리사 (TASK-031, MVP_SPEC 16)', () => {
     untilCooking(w, id);
     // 시작 때 재료를 예약하되 소비하지 않는다
     expect(w.storage.get('crop')).toBe(2);
-    expect(w.cooking.stats).toMatchObject({ cooking: 1, reservedCrop: 2, claims: 1 });
+    expect(w.cooking.stats).toMatchObject({ cooking: 1, reservedCrop: 2 });
+    expect(w.npcSystem.facilityClaims).toBe(1);
     const action = w.registry.npcs.get(id)?.action;
     expect(action).toBeInstanceOf(CookAction);
     // 화덕을 쓰는 조리 자세: 이동·대기와 구별된다
@@ -66,7 +67,8 @@ describe('요리와 요리사 (TASK-031, MVP_SPEC 16)', () => {
     // 재료가 없으니 다시 조리하지 않고 예약도 남지 않는다
     run(w, 1);
     expect(kindOf(w, id)).not.toBe('cook');
-    expect(w.cooking.stats).toMatchObject({ cooking: 0, reservedCrop: 0, claims: 0 });
+    expect(w.cooking.stats).toMatchObject({ cooking: 0, reservedCrop: 0 });
+    expect(w.npcSystem.facilityClaims).toBe(0);
   });
 
   it('crop 이 2 미만이면 요리하지 않는다', () => {
@@ -100,7 +102,8 @@ describe('요리와 요리사 (TASK-031, MVP_SPEC 16)', () => {
     run(w, 0.5);
     expect(w.rooms.getByType('Kitchen')).toHaveLength(0);
     expect(kindOf(w, id)).not.toBe('cook');
-    expect(w.cooking.stats).toMatchObject({ cooking: 0, reservedCrop: 0, claims: 0 });
+    expect(w.cooking.stats).toMatchObject({ cooking: 0, reservedCrop: 0 });
+    expect(w.npcSystem.facilityClaims).toBe(0);
     run(w, HOUR * 1.2);
     expect(w.storage.snapshot()).toMatchObject({ crop: 2, food: 0 });
   });
@@ -178,7 +181,8 @@ describe('요리와 요리사 (TASK-031, MVP_SPEC 16)', () => {
     run(w, 1);
     const cooking = [id, other].filter((n) => kindOf(w, n) === 'cook');
     expect(cooking).toHaveLength(1);
-    expect(w.cooking.stats).toMatchObject({ cooking: 1, reservedCrop: 2, claims: 1 });
+    expect(w.cooking.stats).toMatchObject({ cooking: 1, reservedCrop: 2 });
+    expect(w.npcSystem.facilityClaims).toBe(1);
   });
 
   it('요리사가 아니면 조리하지 않는다', () => {
@@ -192,11 +196,11 @@ describe('요리와 요리사 (TASK-031, MVP_SPEC 16)', () => {
   });
 });
 
-describe('주방 관찰 장면 (kitchen-lab)', () => {
-  it('주방과 침실이 인식되고, 요리사가 주방으로 걸어 들어가 조리해 crop 4 → food 3 이 된다', () => {
+describe('주방·식당 관찰 장면 (kitchen-lab)', () => {
+  it('주방·식당·침실이 인식되고, 요리사가 조리한 뒤 12:00 에 세 주민이 식당 의자에 앉아 먹는다', () => {
     const f = kitchenLabFixture;
     const w = new GameWorld({
-      storage: { ...balance.storage, initialCrop: f.startCrop ?? 0 },
+      storage: { ...balance.storage, ...f.startStorage },
       worldSize: f.size,
       startGameMinutes: at(f.defaultStartHour ?? 7),
       ...(f.plazaCenter ? { plazaCenter: f.plazaCenter } : {}),
@@ -209,13 +213,20 @@ describe('주방 관찰 장면 (kitchen-lab)', () => {
     w.rooms.rebuildAll();
     expect(w.rooms.getByType('Kitchen')).toHaveLength(1);
     expect(w.rooms.getByType('Bedroom')).toHaveLength(1);
+    expect(w.rooms.getByType('DiningRoom')).toHaveLength(1);
     for (const r of f.residents ?? []) w.spawnResident(r.role, r.cell);
     const cook = [...w.registry.npcs.values()].find((n) => n.role === 'cook');
     if (!cook) throw new Error('요리사 없음');
     run(w, 40, () => cook.action.kind === 'cook');
     expect(cook.action.kind).toBe('cook');
     expect(w.rooms.findContaining(npcCell(cook))?.type).toBe('Kitchen');
-    run(w, HOUR * 1.2, () => w.storage.get('food') > 0);
-    expect(w.storage.snapshot()).toMatchObject({ crop: 2, food: 3 });
+    run(w, HOUR * 1.2, () => w.storage.get('crop') < 4);
+    expect(w.storage.snapshot()).toMatchObject({ crop: 2, food: 6 });
+    // 점심: 세 주민이 모두 식당 의자에 앉아 먹는다
+    w.clock.advanceTo(12, 0);
+    const all = [...w.registry.npcs.values()];
+    run(w, 60, () => all.every((n) => n.action.kind === 'eat'));
+    expect(all.map((n) => n.action.label)).toEqual(Array(3).fill('식당에서 먹는 중'));
+    expect(w.storage.get('food')).toBe(3);
   });
 });

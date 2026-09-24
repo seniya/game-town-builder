@@ -1,8 +1,10 @@
 // NPC 실행 (ARCHITECTURE 4.1 의 11 번, 13, 15). 판단이 넘긴 계획을 Action 으로 만들어 시작하고 매 프레임 진행한다.
 // start / cancel 을 한 번씩 보장한다. Action 이 바뀌면 NPC_ACTION_CHANGED 를 발행한다.
-// 아직 구현하지 않은 계획(식사 032·수리 048·도피 047·대화 040)은 그 사실을 적은 대기로 대신 선다.
+// 임시 시설(화덕·의자) 예약의 소유자다: objectId 별로 한 명만 잡고 Action 이 바뀔 때 옮긴다 (MVP_SPEC 12.4, ARCHITECTURE 14.4).
+// 아직 구현하지 않은 계획(수리 048·도피 047·대화 040)은 그 사실을 적은 대기로 대신 선다.
 import { balance } from '../data/balance';
 import { CookAction } from '../actions/CookAction';
+import { EatAction } from '../actions/EatAction';
 import { HarvestAction, PlantAction } from '../actions/FarmWorkAction';
 import { IdleAction } from '../actions/IdleAction';
 import { MoveAction } from '../actions/MoveAction';
@@ -35,16 +37,12 @@ export interface NPCSystemDeps {
     claim(npcId: string, target: BlockPos): boolean;
     release(npcId: string, target: BlockPos): void;
   };
-  /** 화덕·재료 예약 (CookingSystem). 없으면 요리가 없는 월드다 */
-  readonly cookClaims?: {
-    claimStove(npcId: string, stoveId: string): boolean;
-    release(npcId: string): void;
-  };
+  /** 조리가 끝나거나 취소·실패했을 때 재료 예약을 푼다 (CookingSystem.release). 없으면 요리가 없는 월드다 */
+  readonly releaseIngredients?: (npcId: string) => void;
 }
 
 /** 아직 구현하지 않은 계획의 대기 표시 이름. */
-const NOT_YET: Record<'eat' | 'role' | 'flee' | 'talk', string> = {
-  eat: '식사 대기 (TASK-032)',
+const NOT_YET: Record<'role' | 'flee' | 'talk', string> = {
   role: '역할 작업 대기 (TASK-048)',
   flee: '도피 대기 (TASK-047)',
   talk: '대화 대기 (TASK-040)',
@@ -68,6 +66,7 @@ export function createAction(plan: ActionPlan): Action {
     case 'cook':
       return new CookAction(plan.stove);
     case 'eat':
+      return new EatAction(plan.seat);
     case 'role':
     case 'flee':
     case 'talk':
@@ -93,9 +92,11 @@ class PlannedMove extends MoveAction {
     return this.purpose.kind === 'farm' ? this.purpose.target : undefined;
   }
 
-  /** 화덕으로 가는 이동이면 그 화덕을 예약 대상으로 알린다. */
-  get cookStove(): string | undefined {
-    return this.purpose.kind === 'cook' ? this.purpose.stoveObjectId : undefined;
+  /** 화덕·의자로 가는 이동이면 그 시설을 예약 대상으로 알린다. */
+  get facilityClaim(): string | undefined {
+    if (this.purpose.kind === 'cook') return this.purpose.stoveObjectId;
+    if (this.purpose.kind === 'seat') return this.purpose.seatObjectId;
+    return undefined;
   }
 }
 
@@ -105,10 +106,23 @@ export class NPCSystem implements SlotSystem {
   private readonly started = new WeakSet<Action>();
   /** 실패한 계획 키와 실패 시각(실행 누적 초). 같은 계획을 매 프레임 다시 시작하지 않게 한다 */
   private readonly failed = new Map<string, { key: string; at: number }>();
+  /** 임시 시설 objectId → 예약한 npcId */
+  private readonly facilityOwner = new Map<string, string>();
   private elapsed = 0;
 
   /** 의존 포트를 받는다. */
   constructor(private readonly deps: NPCSystemDeps) {}
+
+  /** 이 시설을 다른 주민이 예약했는가. 후보를 좁히는 소유 시스템(Cooking / Meal)이 읽는다. */
+  facilityTaken(objectId: string, npcId: string): boolean {
+    const owner = this.facilityOwner.get(objectId);
+    return owner !== undefined && owner !== npcId;
+  }
+
+  /** 예약된 임시 시설 수 (F3·테스트). */
+  get facilityClaims(): number {
+    return this.facilityOwner.size;
+  }
 
   /** 판단이 준 계획. 같은 프레임의 실행 슬롯에서 적용한다. */
   assign(npcId: string, plan: ActionPlan): void {
@@ -161,7 +175,8 @@ export class NPCSystem implements SlotSystem {
     const current = npc.action;
     if (cancelCurrent && current !== next && this.started.has(current)) current.cancel(ctx);
     this.moveFarmClaim(npc.id, current, next);
-    this.moveCookClaim(npc.id, current, next);
+    this.moveFacilityClaim(npc.id, current, next);
+    if (current instanceof CookAction && current !== next) this.deps.releaseIngredients?.(npc.id);
     npc.action = next;
     this.started.add(next);
     next.start(ctx);
@@ -180,17 +195,15 @@ export class NPCSystem implements SlotSystem {
   }
 
   /**
-   * 화덕 예약을 옮긴다: 다른 화덕(또는 조리 아님)으로 바뀌면 이전 예약(화덕·재료)을 풀고 새 화덕을 잡는다.
-   * 같은 화덕으로 가는 이동 → 조리는 예약을 유지한다. 조리가 끝나거나 실패해 대기로 바뀌면 여기서 푼다.
+   * 시설 예약을 옮긴다: 다른 시설(또는 시설 없음)로 바뀌면 이전 예약을 풀고 새 시설을 잡는다.
+   * 같은 시설로 가는 이동 → 사용은 예약을 유지한다. 다른 주민이 잡은 시설은 잡지 않는다(사용 Action 이 시작에서 실패한다).
    */
-  private moveCookClaim(npcId: string, prev: Action, next: Action): void {
-    const claims = this.deps.cookClaims;
-    if (!claims) return;
-    const a = prev.cookStove;
-    const b = next.cookStove;
-    if (a === b && prev !== next && !(prev instanceof CookAction)) return;
-    if (a !== undefined) claims.release(npcId);
-    if (b !== undefined) claims.claimStove(npcId, b);
+  private moveFacilityClaim(npcId: string, prev: Action, next: Action): void {
+    const a = prev.facilityClaim;
+    const b = next.facilityClaim;
+    if (a === b) return;
+    if (a !== undefined && this.facilityOwner.get(a) === npcId) this.facilityOwner.delete(a);
+    if (b !== undefined && !this.facilityOwner.has(b)) this.facilityOwner.set(b, npcId);
   }
 
   /**

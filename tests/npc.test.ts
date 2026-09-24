@@ -38,7 +38,16 @@ describe('NPC 골격 (TASK-028)', () => {
     const npc = createNPC('a', 'farmer', { x: 1, y: 2, z: 3 }, new IdleAction());
     expect(Object.keys(npc)).not.toContain('state');
     expect(Object.keys(npc).sort()).toEqual(
-      ['action', 'body', 'hasEatenThisMeal', 'health', 'id', 'role', 'stunUntilGameMinutes'].sort(),
+      [
+        'action',
+        'body',
+        'hasEatenThisMeal',
+        'health',
+        'id',
+        'mealId',
+        'role',
+        'stunUntilGameMinutes',
+      ].sort(),
     );
   });
 

@@ -11,7 +11,9 @@ export interface NPC<A extends ActionView = ActionView> {
   body: AabbBody;
   health: number;
   action: A;
-  /** 현재 식사 구간에 먹었는가 (MealSystem 이 리셋한다, TASK-032) */
+  /** 이 주민이 마지막으로 맞은 식사 구간 id "day:lunch|dinner". 없으면 null (MVP_SPEC 17, 저장 대상) */
+  mealId: string | null;
+  /** mealId 구간에 먹었는가. MealSystem 만 바꾼다 (TASK-032) */
   hasEatenThisMeal: boolean;
   /** 기절이 끝나는 gameMinutes. 0 이면 기절하지 않았다 (MVP_SPEC 19.2) */
   stunUntilGameMinutes: number;
@@ -39,6 +41,7 @@ export function createNPC<A extends ActionView>(
     },
     health: balance.npc.maxHealth,
     action: initialAction,
+    mealId: null,
     hasEatenThisMeal: false,
     stunUntilGameMinutes: 0,
   };

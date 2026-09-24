@@ -219,8 +219,11 @@ export class DebugPanel {
         ? `농사: 밭 ${g.farm.farmland} · 작물 ${g.farm.crops} (성숙 ${g.farm.mature}) · 예약 ${g.farm.claims} · 씨앗 ${g.seed ?? '—'}`
         : '농사 —',
       g.cooking
-        ? `요리: 화덕 ${g.cooking.stoves} · 예약 ${g.cooking.claims} · 조리 중 ${g.cooking.cooking} (재료 예약 ${g.cooking.reservedCrop}) · 작물 ${g.crop ?? '—'} · 음식 ${g.food ?? '—'}`
+        ? `요리: 화덕 ${g.cooking.stoves} · 조리 중 ${g.cooking.cooking} (재료 예약 ${g.cooking.reservedCrop}) · 작물 ${g.crop ?? '—'} · 음식 ${g.food ?? '—'}`
         : '요리 —',
+      g.meal
+        ? `식사: ${g.meal.mealId ?? '구간 밖'} · 먹은 주민 ${g.meal.eaten} · 식당 의자 ${g.meal.seats}`
+        : '식사 —',
       `NPC ${g.npcs.length}${g.sleep ? ` · 침대 배정 ${g.sleep.assigned}/${g.sleep.beds} (확인 중 ${g.sleep.checking})` : ''}`,
       ...g.npcs.map(
         (n) =>

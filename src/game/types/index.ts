@@ -261,6 +261,12 @@ export interface Facility {
   readonly usePosition: Vec3;
 }
 
+/** 식당 의자 하나 (MealSystem 이 DiningRoom 시설에서 만든다, TASK-032). */
+export interface DiningSeat extends Facility {
+  /** 의자에 맞닿은 식탁의 윗면 가운데. 식탁 위 음식 연출과 앉는 방향에 쓴다(렌더 전용) */
+  readonly tableTop: Vec3;
+}
+
 /** 방 타입이 주민에게 주는 시설 (MVP_SPEC 12.4). 최종 타입의 시설만 채운다. */
 export interface RoomFacilities {
   readonly beds: readonly Facility[];
