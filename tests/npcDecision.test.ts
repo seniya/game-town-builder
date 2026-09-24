@@ -276,9 +276,15 @@ describe('decideAction (TASK-029, MVP_SPEC 19.4)', () => {
     if (seq[3]?.kind === 'move') expect(seq[3].label).toContain('일어나');
   });
 
-  it('기절 중에는 새 Action 을 시작하지 않는다', () => {
+  it('기절 중에는 다른 판단 없이 주저앉은 기절 대기만 한다', () => {
     const c = ctx({ hour: 21, assignedBed: BED, npc: { ...ctx().npc, stunned: true } });
-    expect(decideAction(c)).toBeNull();
+    expect(decideAction(c)).toEqual({ kind: 'idle', key: 'stunned', label: '기절', pose: 'sit' });
+    const already = ctx({
+      hour: 21,
+      assignedBed: BED,
+      npc: { ...ctx().npc, stunned: true, actionKey: 'stunned' },
+    });
+    expect(decideAction(already)).toBeNull();
   });
 
   it('Context 가 전부 readonly 다 (컴파일 검사)', () => {

@@ -1,6 +1,6 @@
 // 기본 행동 (MVP_SPEC 19.4 의 5 단계). 제자리에 서 있고 중력만 받는다.
 import { standStill } from '../nav/MovementController';
-import type { ActionStatus } from '../types';
+import type { ActionStatus, UsePose } from '../types';
 import type { Action, ActionContext } from './Action';
 
 /**
@@ -11,10 +11,11 @@ import type { Action, ActionContext } from './Action';
 export class IdleAction implements Action {
   readonly kind = 'idle' as const;
 
-  /** 표시 이름과 판단 키. 기본은 순수한 대기다. */
+  /** 표시 이름·판단 키·자세(기절은 주저앉는다). 기본은 순수한 대기다. */
   constructor(
     readonly label = '대기',
     readonly key = 'idle',
+    readonly pose?: UsePose,
   ) {}
 
   /** 시작할 때 할 일은 없다. */

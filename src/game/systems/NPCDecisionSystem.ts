@@ -19,6 +19,7 @@ import {
   type GameClockReader,
   type NPCRole,
   type Vec3,
+  type UsePose,
   type VillageStorageData,
   type WorldStateData,
 } from '../types';
@@ -79,7 +80,13 @@ export interface NPCContext {
 
 /** 실행할 계획. NPCSystem 이 Action 으로 만든다. key 가 현재 Action 과 같으면 판단은 null 을 반환한다. */
 export type ActionPlan =
-  | { readonly kind: 'idle'; readonly key: string; readonly label: string }
+  | {
+      readonly kind: 'idle';
+      readonly key: string;
+      readonly label: string;
+      /** 기절처럼 자세가 있는 대기 */
+      readonly pose?: UsePose;
+    }
   | {
       readonly kind: 'move';
       readonly key: string;
@@ -286,10 +293,14 @@ function fallback(ctx: NPCContext): ActionPlan {
 /**
  * 우선순위 5 단계를 위에서 아래로 한 번만 평가한다 (MVP_SPEC 19.4, ARCHITECTURE 14.1).
  *   1 위협 → 도피 / 2 대화 → 대화 / 3 생리 → 식사·취침·휴식 / 4 역할 → 역할 작업 / 5 기본 → 대기
- * 기절 중이거나 결과가 현재 Action 과 같은 계획이면 null(현재 Action 유지)이다. 아무것도 바꾸지 않는다.
+ * 기절 중에는 '기절' 대기만 낸다. 결과가 현재 Action 과 같은 계획이면 null(현재 Action 유지)이다. 아무것도 바꾸지 않는다.
  */
 export function decideAction(ctx: NPCContext): ActionPlan | null {
-  if (ctx.npc.stunned) return null;
+  if (ctx.npc.stunned) {
+    // 기절: 30 게임분 동안 아무 판단도 하지 않고 주저앉아 있다 (MVP_SPEC 19.2 / 26.1)
+    const stun: ActionPlan = { kind: 'idle', key: 'stunned', label: '기절', pose: 'sit' };
+    return ctx.npc.actionKey === stun.key ? null : stun;
+  }
   const plan = choose(ctx);
   return plan.key === ctx.npc.actionKey ? null : plan;
 }

@@ -42,6 +42,8 @@ export interface BlockEditOptions {
   readonly occupants: () => Iterable<AabbBody>;
   /** 0 이상 1 미만 난수. leaves 의 seed 25% 에만 쓴다 (MVP_SPEC 14.1). 테스트는 고정값을 넣는다 */
   readonly random?: () => number;
+  /** 조준 광선이 블록보다 먼저 몬스터에 닿는가. 그러면 좌클릭은 공격이고 파괴하지 않는다 (MVP_SPEC 26.1) */
+  readonly monsterInAim?: () => boolean;
 }
 
 /** 파괴 진행 중인 대상. 다중 칸 객체는 객체 id 로 같은 대상인지 판단한다. */
@@ -121,7 +123,8 @@ export class BlockEditSystem implements SlotSystem {
   update(dt: number): void {
     this.target = findAimTarget(this.world, this.player);
     const frame = this.input.frame;
-    this.updateBreaking(frame.primaryHeld, dt);
+    const attacking = this.options.monsterInAim?.() ?? false;
+    this.updateBreaking(frame.primaryHeld && !attacking, dt);
     if (frame.secondaryPressed) {
       const r = this.placeAtTarget();
       this.lastFailure = r.ok ? null : r.reason;

@@ -147,6 +147,20 @@ export const balance = {
     despawnHour: 5,
     reachedRadius: 6,
     maxDestroyedCellsPerRaid: 16,
+    /** 공격 수평 사거리·높이 차 한도 (MVP_SPEC 26.1, READY-05) */
+    attackRange: 1.2,
+    attackHeight: 1.5,
+    /** 추적 반경 (주민 위협 반경과 같다) */
+    chaseRadius: 12,
+  },
+
+  combat: {
+    /** 플레이어 공격의 넉백 거리(칸) */
+    knockback: 0.3,
+    /** 부활 뒤 공격받지 않는 실초 */
+    respawnGuardSeconds: 3,
+    /** 부활 칸은 몬스터와 이만큼 떨어져야 한다 */
+    respawnSafeDistance: 3,
   },
 
   raids: [

@@ -42,6 +42,11 @@ export interface GameEventMap {
   /** 대화가 시작됐다 / 끝났다 (ARCHITECTURE 21) */
   DIALOGUE_STARTED: { npcId: string; dialogueId: string; lines: string[] };
   DIALOGUE_ENDED: { npcId: string; dialogueId: string };
+  /** 공격이 맞았다(연출용) / 몬스터를 처치했다 / 플레이어가 쓰러졌다 (MVP_SPEC 26.1) */
+  COMBAT_HIT: { target: 'monster' | 'player' | 'npc'; id: string; at: Vec3 };
+  MONSTER_DEFEATED: { monsterId: string; at: Vec3 };
+  /** 정본의 void payload. lint 규칙 때문에 undefined 로 표기한다 */
+  PLAYER_DOWN: undefined;
   /** 습격이 시작됐다 / 끝났다 (MVP_SPEC 24.5) */
   RAID_STARTED: { raidId: number; count: number };
   RAID_ENDED: RaidResult;

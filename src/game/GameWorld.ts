@@ -15,6 +15,7 @@ import { PathScheduler } from './nav/PathScheduler';
 import { RoomRegistry } from './room/RoomRegistry';
 import { createRoomReader } from './room/roomReader';
 import { BlockEditSystem } from './systems/BlockEditSystem';
+import { CombatSystem } from './systems/CombatSystem';
 import { CookingSystem } from './systems/CookingSystem';
 import { CraftingSystem } from './systems/CraftingSystem';
 import { DebugSystem } from './systems/DebugSystem';
@@ -150,6 +151,8 @@ export class GameWorld {
   readonly npcSystem: NPCSystem;
   /** 습격 예약·시작·종료와 이력 (update 8 번, 도착보다 먼저) */
   readonly raids: RaidSystem;
+  /** 공격·체력·기절·부활 (update 12 번) */
+  readonly combat: CombatSystem;
   /** 몬스터 판단·이동·파괴 (update 9 번) */
   readonly monsterSystem: MonsterSystem;
   /** 새 주민 도착 예약·스폰 (update 8 번) */
@@ -188,6 +191,7 @@ export class GameWorld {
     this.blockEdit = player
       ? new BlockEditSystem(this.voxels, player, this.inventory, this.input, this.events, {
           occupants: () => [...this.characterBodies()],
+          monsterInAim: () => this.combat.monsterInAim() !== null,
         })
       : null;
     const reader = createRoomReader(this.voxels);
@@ -352,6 +356,18 @@ export class GameWorld {
     });
     this.attach('worldState', this.worldStateSystem);
     this.debug.worldStateSource = () => this.worldStateSystem.current;
+    this.combat = new CombatSystem({
+      events: this.events,
+      clock: this.clock,
+      world: this.voxels,
+      player: this.player,
+      primaryHeld: () => this.input.frame.primaryHeld,
+      monsters: this.registry.monsters,
+      npcs,
+      respawnCells: () => this.currentPlazaSpots(),
+      playerSpawn: init.playerSpawn ?? null,
+    });
+    this.attach('combat', this.combat);
     this.monsterSystem = new MonsterSystem({
       monsters: () => this.registry.monsters.values(),
       world: this.voxels,
@@ -359,6 +375,7 @@ export class GameWorld {
       paths: this.paths,
       bell: this.plazaCenter,
       raid: this.raids,
+      combat: this.combat,
     });
     this.attach('monster', this.monsterSystem);
     const arrivalCell = init.arrivalCell ?? null;
@@ -415,6 +432,7 @@ export class GameWorld {
   *characterBodies(): Generator<AabbBody> {
     if (this.player) yield this.player.body;
     for (const npc of this.registry.npcs.values()) yield npc.body;
+    for (const m of this.registry.monsters.values()) yield m.body;
   }
 
   /**

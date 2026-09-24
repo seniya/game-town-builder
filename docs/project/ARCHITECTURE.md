@@ -1361,7 +1361,7 @@ ResidentArrivalSystem 레벨별 도착 예약과 실제 스폰의 유일한 소�
 RaidSystem            습격 스케줄. 몬스터 스폰 / 소멸
 MonsterSystem         몬스터 AI. 블록 파괴
 RepairSystem          DamageLog 관리. 목수 수리 할당
-CombatSystem          플레이어 / 몬스터 공격 판정
+CombatSystem          플레이어 / 몬스터 공격 판정·체력·기절·부활 (update 12 번, ADR 036). monsterInAim 으로 BlockEditSystem 이 파괴를 멈춘다
 WorldStateSystem      파생 지표 계산 (순수 함수 호출)
 GameEventSystem       진행 이벤트 조건 평가 / 커맨드 실행
 DialogueSystem        대사 재생
@@ -2271,6 +2271,7 @@ DI 컨테이너
 033  상호작용 대상(READY-07)·종 패널·마을 레벨          Accepted
 034  새 주민 도착과 Villager 의 낮 생활                 Accepted
 035  대사 화자 키·TalkAction·모달 키 전달               Accepted
+036  전투: 공격 대상·차폐·넉백·기절·안전한 부활(READY-05) Accepted
 ```
 
 ---

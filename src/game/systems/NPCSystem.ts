@@ -52,7 +52,7 @@ const NOT_YET: Record<'role' | 'flee', string> = {
 export function createAction(plan: ActionPlan): Action {
   switch (plan.kind) {
     case 'idle':
-      return new IdleAction(plan.label, plan.key);
+      return new IdleAction(plan.label, plan.key, plan.pose);
     case 'move':
       return new PlannedMove(plan.goal, plan.key, plan.label, plan.destination, plan.purpose);
     case 'sleep':

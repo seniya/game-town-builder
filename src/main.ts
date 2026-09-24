@@ -43,6 +43,7 @@ import { ClockHud } from './ui/ClockHud';
 import { InteractPrompt } from './ui/InteractPrompt';
 import { ArrivalToast } from './ui/ArrivalToast';
 import { ObjectivePanel } from './ui/ObjectivePanel';
+import { HealthHud } from './ui/HealthHud';
 import { BellRingView } from './render/BellRingView';
 import { donate } from './game/systems/donation';
 import { findInteractTarget, type InteractTarget } from './game/systems/interaction';
@@ -372,6 +373,17 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
     },
   );
   world.events.on('VILLAGE_LEVEL_UP', () => camera.shake(0.9));
+  // 쓰러지면 열린 모달을 닫고 흔든다(부활은 CombatSystem 이 한다, MVP_SPEC 26.1)
+  world.events.on('PLAYER_DOWN', () => {
+    if (machine?.state.kind === 'modal') machine.close(true);
+    camera.shake(0.5);
+  });
+  const healthHud = new HealthHud(
+    document.body,
+    () => player.health,
+    balance.player.maxHealth,
+    world.events,
+  );
   bindModalKeys(canvas, machine);
   const diagnosticPanel = new RoomDiagnosticPanel(document.body, {
     active: () => world.roomSystem.diagnosisActive,
@@ -402,6 +414,7 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
               : null,
       );
       bellPanel.update(now);
+      healthHud.update();
       diagnosticPanel.update();
     },
   };
