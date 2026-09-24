@@ -1595,6 +1595,10 @@ WALL_REQUEST는 raidId=1의 결과 존재, SLICE_END는 raidId=2의 종료 뒤 �
 이력의 소유자는 RaidSystem 하나이며 이벤트용 별도 습격 상태를 만들지 않는다.
 각 이벤트 평가 직전에 snapshot을 조립하여 같은 프레임에 앞선 이벤트의 완료를 반영한다.
 
+구현(TASK-042 / 043): `systems/GameEventSystem.ts`(15 번 슬롯), 정의 `data/gameEvents.ts`. EventContext·GameCommand·GameEventDefinition 은
+`types` 에 둔다. markDialogueAvailable 의 npcId 는 화자 키(ADR 035)다. playCutscene 은 CUTSCENE_REQUESTED 로 알리고 연출은 TASK-052 가 완성한다.
+raidResults 는 RaidSystem(TASK-044~) 전까지 빈 배열이다. 시험 월드는 GameWorldInit.gameEvents 로 정의를 바꿀 수 있다.
+
 ## 20.1 왜 커맨드인가
 
 ```text

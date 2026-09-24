@@ -6,6 +6,7 @@ import type {
   PlacedObjectSnapshot,
   RoomFailure,
   RoomType,
+  GameEventId,
   GratitudeSource,
   Vec3,
   VillageStorageData,
@@ -40,6 +41,10 @@ export interface GameEventMap {
   /** 대화가 시작됐다 / 끝났다 (ARCHITECTURE 21) */
   DIALOGUE_STARTED: { npcId: string; dialogueId: string; lines: string[] };
   DIALOGUE_ENDED: { npcId: string; dialogueId: string };
+  /** 진행 이벤트가 발생했다 (MVP_SPEC 27) */
+  GAME_EVENT_FIRED: { id: GameEventId };
+  /** 이벤트가 연출(도착 확인·엔딩)을 요청했다. 연출 완성은 TASK-052 */
+  CUTSCENE_REQUESTED: { id: string };
   /** 목표 표시가 바뀌었다 (MVP_SPEC 29, ARCHITECTURE 21.3) */
   OBJECTIVE_CHANGED: { text: string; progress?: { current: number; total: number } };
   /** 새 주민이 도착했다 (MVP_SPEC 19.6) */

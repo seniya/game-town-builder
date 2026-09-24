@@ -60,6 +60,11 @@ export class DialogueSystem {
     return (this.pending.get(speakerKey(npc))?.length ?? 0) > 0;
   }
 
+  /** 완료한 대사 id 집합(읽기 전용 복사본). 진행 이벤트 조건이 읽는다. */
+  completedIds(): ReadonlySet<string> {
+    return new Set(this.completed);
+  }
+
   /** 완료한 대사인가. */
   isCompleted(dialogueId: string): boolean {
     return this.completed.has(dialogueId);

@@ -432,3 +432,39 @@ export interface DialogueDefinition {
   readonly lines: readonly string[];
   readonly nextObjective?: ObjectiveDefinition;
 }
+
+// ── 진행 이벤트 정의와 커맨드 (ARCHITECTURE 20, ADR 007) ────────────────────────
+
+/** 이벤트 조건이 읽는 snapshot. 이벤트마다 평가 직전에 다시 조립한다 (ARCHITECTURE 20). */
+export interface EventContext {
+  readonly clock: GameClockReader;
+  readonly storage: Readonly<VillageStorageData>;
+  readonly worldState: Readonly<WorldStateData>;
+  readonly rooms: readonly Room[];
+  readonly gratitude: number;
+  readonly bellWorldCenter: Vec3;
+  readonly villageLevel: number;
+  /** RaidSystem 의 완료 이력(TASK-044~). 그 전에는 빈 배열 */
+  readonly raidResults: readonly RaidResult[];
+  readonly completed: ReadonlySet<GameEventId>;
+  readonly dialogueCompleted: ReadonlySet<string>;
+}
+
+/** 이벤트가 반환하는 명령 4 종. 주민 스폰 명령은 없다 (MVP_SPEC 23.3). */
+export type GameCommand =
+  | { readonly kind: 'setObjective'; readonly objective: ObjectiveDefinition }
+  | { readonly kind: 'markDialogueAvailable'; readonly npcId: string; readonly dialogueId: string }
+  | {
+      readonly kind: 'gainGratitude';
+      readonly amount: number;
+      readonly source: GratitudeSource;
+      readonly at: Vec3;
+    }
+  | { readonly kind: 'playCutscene'; readonly id: string };
+
+/** 이벤트 정의. 두 함수 모두 부작용이 없어야 한다. */
+export interface GameEventDefinition {
+  readonly id: GameEventId;
+  canTrigger(ctx: EventContext): boolean;
+  execute(ctx: EventContext): readonly GameCommand[];
+}

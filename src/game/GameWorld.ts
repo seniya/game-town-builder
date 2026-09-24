@@ -19,6 +19,8 @@ import { CraftingSystem } from './systems/CraftingSystem';
 import { DebugSystem } from './systems/DebugSystem';
 import { DialogueSystem } from './systems/DialogueSystem';
 import { FarmSystem } from './systems/FarmSystem';
+import { GAME_EVENTS } from './data/gameEvents';
+import { GameEventSystem } from './systems/GameEventSystem';
 import { GratitudeSystem } from './systems/GratitudeSystem';
 import { GameClockSystem } from './systems/GameClockSystem';
 import { InputSystem } from './systems/InputSystem';
@@ -34,7 +36,7 @@ import { ResidentArrivalSystem } from './systems/ResidentArrivalSystem';
 import { RoomSystem } from './systems/RoomSystem';
 import { VillageLevelSystem } from './systems/VillageLevelSystem';
 import { WorldStateSystem } from './systems/WorldStateSystem';
-import type { AabbBody, BlockPos, NPCRole, WorldStateData } from './types';
+import type { AabbBody, BlockPos, GameEventDefinition, NPCRole, WorldStateData } from './types';
 import { VillageStorage, type VillageStorageInit } from './VillageStorage';
 import { VoxelWorld, type WorldSize } from './voxel/VoxelWorld';
 
@@ -86,6 +88,8 @@ export interface GameWorldInit {
   readonly plazaCenter?: BlockPos;
   /** 새 주민이 나타나는 섬 가장자리 칸 (MVP_SPEC 19.6). 없으면 광장 남쪽에서 찾는다 */
   readonly arrivalCell?: BlockPos;
+  /** 진행 이벤트 정의. 기본은 MVP_SPEC 27.1 의 8 개. 빈 배열이면 진행 이벤트가 없는 시험 월드다 */
+  readonly gameEvents?: readonly GameEventDefinition[];
 }
 
 /** 게임 상태의 루트. 순수 TypeScript 이며 three 를 모른다. */
@@ -123,6 +127,8 @@ export class GameWorld {
   readonly farm: FarmSystem;
   /** 대화 표시·재생·완료 (TASK-040). 대화 중 주민은 판단 2 단계로 TalkAction 을 한다 */
   readonly dialogue: DialogueSystem;
+  /** 진행 이벤트 (update 15 번) */
+  readonly gameEvents: GameEventSystem;
   /** 현재 목표 (update 16 번) */
   readonly objectives: ObjectiveSystem;
   /** 감사 포인트의 유일한 소유자 (update 13 번) */
@@ -338,6 +344,31 @@ export class GameWorld {
       spawn: (id, cell) => void this.spawnResident('villager', cell, id),
     });
     this.attach('raidArrival', this.arrivals);
+    const bell = this.plazaCenter;
+    this.gameEvents = new GameEventSystem({
+      events: this.events,
+      definitions: init.gameEvents ?? GAME_EVENTS,
+      context: () => ({
+        clock: this.clock,
+        storage: this.storage.snapshot(),
+        worldState: this.worldStateSystem.current,
+        rooms: this.rooms.getAll(),
+        gratitude: this.gratitude.total,
+        bellWorldCenter: bell
+          ? { x: bell.x + 0.5, y: bell.y + 1.6, z: bell.z + 0.5 }
+          : { x: 0, y: 0, z: 0 },
+        villageLevel: this.village.level,
+        raidResults: [],
+        dialogueCompleted: this.dialogue.completedIds(),
+      }),
+      ports: {
+        setObjective: (o) => void this.objectives.apply(o),
+        markDialogueAvailable: (_npcId, id) => void this.dialogue.markAvailable(id),
+        gainGratitude: (s, n, at) => void this.gratitude.gain(s, n, at),
+        playCutscene: (id) => this.events.emit('CUTSCENE_REQUESTED', { id }),
+      },
+    });
+    this.attach('gameEvent', this.gameEvents);
     this.village = new VillageLevelSystem({
       events: this.events,
       gratitude: this.gratitude,

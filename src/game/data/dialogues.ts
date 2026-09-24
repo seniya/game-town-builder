@@ -62,6 +62,8 @@ export const DIALOGUES: readonly DialogueDefinition[] = [
     lines: [
       '마을에 종이 있어. 마을이 커졌을 때 치는 거야.',
       '종에 가서 F 를 눌러 봐. 무엇이 모자란지 다 보여 줄 거야.',
+      '종을 치면 주민이 늘어요. 밭을 8 칸으로 넓히고 씨앗과 침대도 준비해 주세요.',
+      '다음 종은 방 4 개, housingLevel 100, foodLevel 50 이 필요해. 상자로 창고를, 식탁과 의자로 식당을 만들 수 있어.',
     ],
     nextObjective: {
       id: 'objective_bell',
@@ -69,6 +71,36 @@ export const DIALOGUES: readonly DialogueDefinition[] = [
       text: '마을의 종을 쳐 주세요',
       progress: null,
     },
+  },
+  {
+    id: 'wall_request',
+    npcId: 'carpenter',
+    lines: [
+      '어젯밤에 몬스터가 벽을 부수고 들어왔어.',
+      '부서진 곳은 내가 고칠게. 마을을 벽으로 둘러싸 주면 훨씬 안전할 거야.',
+    ],
+    nextObjective: {
+      id: 'objective_wall',
+      sourceEventId: 'EVENT_WALL_REQUEST',
+      text: '마을을 벽으로 둘러싸 주세요',
+      progress: null,
+    },
+  },
+  {
+    id: 'new_resident_welcome',
+    npcId: 'farmer',
+    lines: ['식구가 다섯이 됐어.', '처음 왔을 때는 아무것도 없었는데, 이제 정말 마을 같아.'],
+    nextObjective: {
+      id: 'objective_protect',
+      sourceEventId: 'EVENT_NEW_RESIDENT',
+      text: '마을을 지키며 함께 지내 주세요',
+      progress: null,
+    },
+  },
+  {
+    id: 'slice_end_thanks',
+    npcId: 'cook',
+    lines: ['긴 밤이 또 지나갔네.', '고마워. 네가 만든 방에서 우리는 오늘도 밥을 먹고 잠을 자.'],
   },
 ];
 

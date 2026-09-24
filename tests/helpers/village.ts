@@ -22,6 +22,8 @@ export function village(startGameMinutes = at(19, 50), withRoom = true): GameWor
     worldSize: { sizeX: 40, sizeY: 12, sizeZ: 40 },
     startGameMinutes,
     plazaCenter: PLAZA,
+    // 진행 이벤트(ARRIVAL 의 +15 등)는 이벤트 테스트에서만 켠다
+    gameEvents: [],
   });
   for (let x = 0; x < 40; x++)
     for (let z = 0; z < 40; z++) {
