@@ -75,11 +75,19 @@ export class FarmSystem implements SlotSystem {
   private readonly planted = new Map<string, number>();
   /** farmland posKey → 예약한 npcId */
   private readonly claims = new Map<string, string>();
+  /** 밭·작물·예약·씨앗이 바뀔 때마다 오른다. 후보 캐시의 유효성 기준이다 (PERF-002) */
+  private revision = 0;
+  /** npcId → 마지막 후보와 그때의 판·시각 칸 */
+  private readonly cache = new Map<
+    string,
+    { rev: number; slot: number; result: FarmCandidate | null }
+  >();
 
   /** 월드의 farmland 를 한 번 모으고(로드·장면 초기화) 블록 변경을 구독한다. */
   constructor(private readonly deps: FarmDeps) {
     this.rescan();
     deps.events.on('BLOCK_CHANGED', (c) => this.onBlockChanged(c.pos, c.from, c.to));
+    deps.events.on('STORAGE_CHANGED', () => void (this.revision += 1));
   }
 
   /** 계측값. */
@@ -114,6 +122,41 @@ export class FarmSystem implements SlotSystem {
    * 다른 농부가 예약한 칸과 작업 칸이 없는 칸은 건너뛴다. 없으면 null.
    */
   candidateFor(npcId: string, from: BlockPos): FarmCandidate | null {
+    // 판(밭·작물·예약·씨앗)이 그대로이고 같은 5 게임분 안이면 지난 결과를 쓴다. 성숙은 시계로 바뀌므로 시각 칸도 본다.
+    // 주민마다 매 프레임 모든 밭을 훑지 않는다(후보 1000 건 × 농부 수, PERF-002)
+    const slot = Math.floor(this.deps.clock.gameMinutes / 5);
+    // 이미 잡은 칸이 아직 같은 일(수확·심기)의 대상이면 그대로 준다: 일하러 가는 농부는 다시 훑지 않는다
+    const own = this.ownClaim(npcId);
+    if (own) {
+      const kind = this.kindAt(own);
+      const approachCells = kind ? this.approachCells(own) : [];
+      if (kind && approachCells.length > 0) return { kind, target: own, approachCells };
+    }
+    const hit = this.cache.get(npcId);
+    if (hit && hit.rev === this.revision && hit.slot === slot) return hit.result;
+    const result = this.computeCandidate(npcId, from);
+    this.cache.set(npcId, { rev: this.revision, slot, result });
+    return result;
+  }
+
+  /** 이 농부가 잡은 칸. 없으면 null. */
+  private ownClaim(npcId: string): BlockPos | null {
+    for (const [k, owner] of this.claims) {
+      if (owner === npcId) return this.farmland.get(k) ?? null;
+    }
+    return null;
+  }
+
+  /** 이 칸에서 할 일: 성숙 작물이면 수확, 빈 밭이고 씨앗이 있으면 심기. 없으면 null. */
+  private kindAt(p: BlockPos): 'plant' | 'harvest' | null {
+    const k = posKey(p);
+    const t = this.planted.get(k);
+    if (t !== undefined) return isMature(this.elapsed(t)) && this.cropAt(p) ? 'harvest' : null;
+    return this.plantable(p) && this.deps.storage.get('seed') >= 1 ? 'plant' : null;
+  }
+
+  /** 후보를 새로 계산한다. */
+  private computeCandidate(npcId: string, from: BlockPos): FarmCandidate | null {
     const harvest = this.nearest(from, npcId, (k, p) => {
       const t = this.planted.get(k);
       return t !== undefined && isMature(this.elapsed(t)) && this.cropAt(p);
@@ -129,14 +172,24 @@ export class FarmSystem implements SlotSystem {
     const k = posKey(target);
     const owner = this.claims.get(k);
     if (owner !== undefined && owner !== npcId) return false;
+    if (owner !== npcId) this.revision += 1;
     this.claims.set(k, npcId);
     return true;
+  }
+
+  /** 다른 농부가 이 칸을 잡았는가. */
+  taken(npcId: string, target: BlockPos): boolean {
+    const owner = this.claims.get(posKey(target));
+    return owner !== undefined && owner !== npcId;
   }
 
   /** 예약을 푼다. 자기 예약만 푼다. */
   release(npcId: string, target: BlockPos): void {
     const k = posKey(target);
-    if (this.claims.get(k) === npcId) this.claims.delete(k);
+    if (this.claims.get(k) === npcId) {
+      this.claims.delete(k);
+      this.revision += 1;
+    }
   }
 
   /**
@@ -187,6 +240,7 @@ export class FarmSystem implements SlotSystem {
 
   /** 로드 복원. farmland 를 다시 모으고, 위에 crop 이 있는 기록만 남긴다 (ARCHITECTURE 23.4). */
   restore(records: readonly CropRecord[]): void {
+    this.revision += 1;
     this.rescan();
     this.planted.clear();
     this.claims.clear();
@@ -198,6 +252,14 @@ export class FarmSystem implements SlotSystem {
 
   /** 블록 변경: farmland 목록 갱신, farmland 제거 시 위 crop 정리, crop 이 사라지면 기록 삭제. */
   private onBlockChanged(pos: BlockPos, from: number, to: number): void {
+    if (
+      from === BlockId.farmland ||
+      to === BlockId.farmland ||
+      from === BlockId.crop ||
+      to === BlockId.crop
+    ) {
+      this.revision += 1;
+    }
     if (to === BlockId.farmland) this.farmland.set(posKey(pos), pos);
     if (from === BlockId.farmland && to !== BlockId.farmland) {
       const k = posKey(pos);

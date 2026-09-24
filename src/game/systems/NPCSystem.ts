@@ -37,6 +37,8 @@ export interface NPCSystemDeps {
   readonly farmClaims?: {
     claim(npcId: string, target: BlockPos): boolean;
     release(npcId: string, target: BlockPos): void;
+    /** 다른 주민이 이 칸을 잡았는가 */
+    taken(npcId: string, target: BlockPos): boolean;
   };
   /** 조리가 끝나거나 취소·실패했을 때 재료 예약을 푼다 (CookingSystem.release). 없으면 요리가 없는 월드다 */
   readonly releaseIngredients?: (npcId: string) => void;
@@ -147,8 +149,12 @@ export class NPCSystem implements SlotSystem {
       const ctx = this.contextFor(npc);
       const plan = this.planned.get(npc.id);
       if (plan) this.planned.delete(npc.id);
-      if (plan && !this.recentlyFailed(npc.id, plan.key)) {
-        this.switchTo(ctx, createAction(plan), true);
+      const next = plan && !this.recentlyFailed(npc.id, plan.key) ? createAction(plan) : null;
+      if (next && this.conflicts(npc.id, next)) {
+        // 같은 프레임에 다른 주민이 먼저 잡은 칸·시설이다. 시작하지 않고 다음 판단에서 다른 후보를 받는다 (PERF-002)
+        this.failed.set(npc.id, { key: next.key, at: this.elapsed });
+      } else if (next) {
+        this.switchTo(ctx, next, true);
       } else if (!this.started.has(npc.action)) {
         this.switchTo(ctx, npc.action, false);
       }
@@ -192,6 +198,14 @@ export class NPCSystem implements SlotSystem {
     this.started.add(next);
     next.start(ctx);
     this.deps.events.emit('NPC_ACTION_CHANGED', { npcId: npc.id, label: next.label });
+  }
+
+  /** 이 Action 의 밭 칸·시설을 이미 다른 주민이 잡았는가. */
+  private conflicts(npcId: string, next: Action): boolean {
+    const t = next.farmTarget;
+    if (t && this.deps.farmClaims?.taken(npcId, t)) return true;
+    const f = next.facilityClaim;
+    return f !== undefined && this.facilityTaken(f, npcId);
   }
 
   /** 밭 예약을 옮긴다: 이전 Action 의 칸을 풀고 새 Action 의 칸을 잡는다(같은 칸이면 유지). */

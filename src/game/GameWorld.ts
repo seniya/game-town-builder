@@ -337,6 +337,7 @@ export class GameWorld {
       farmClaims: {
         claim: (n, t) => this.farm.claim(n, t),
         release: (n, t) => this.farm.release(n, t),
+        taken: (n, t) => this.farm.taken(n, t),
       },
       releaseIngredients: (n) => this.cooking.release(n),
     });

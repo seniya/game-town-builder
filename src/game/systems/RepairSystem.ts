@@ -62,6 +62,9 @@ export class RepairSystem implements SlotSystem {
   private repaired = 0;
   private counter = 0;
   private reportedDay: number;
+  /** 미수리 목록·예약·블록이 바뀔 때마다 오른다(후보 캐시, PERF-002) */
+  private revision = 0;
+  private readonly cache = new Map<string, { rev: number; result: RepairCandidate | null }>();
   private reportedThrough = -1;
 
   /** 블록 변경을 구독한다. */
@@ -71,6 +74,7 @@ export class RepairSystem implements SlotSystem {
     this.reportedDay = deps.clock.day;
     this.reportedThrough = deps.clock.gameMinutes - 1e-6;
     deps.events.on('BLOCK_CHANGED', (c) => {
+      this.revision += 1;
       if (c.by === 'monster' && c.from !== BlockId.air)
         this.log(c.batchId, c.pos, c.from, c.removedObject ?? null);
       else if (c.by === 'player' && c.to !== BlockId.air) this.resolveCoveredCells();
@@ -125,6 +129,26 @@ export class RepairSystem implements SlotSystem {
    */
   candidateFor(npcId: string, from: BlockPos): RepairCandidate | null {
     if (!this.inHours()) return null;
+    // 미수리 목록·블록·예약·당일 수리량이 그대로면 지난 결과를 쓴다 (PERF-002)
+    // 예약이 풀린 후보를 놓치지 않게 5 게임분마다도 다시 계산한다
+    const rev =
+      (this.revision * 64 + this.repairedToday) * 1_000_000 +
+      Math.floor(this.deps.clock.gameMinutes / 5);
+    const hit = this.cache.get(npcId);
+    if (
+      hit &&
+      hit.rev === rev &&
+      (!hit.result || !this.deps.claimed(RepairSystem.claimKey(hit.result.damageId), npcId))
+    ) {
+      return hit.result;
+    }
+    const result = this.computeCandidate(npcId, from);
+    this.cache.set(npcId, { rev, result });
+    return result;
+  }
+
+  /** 후보를 새로 계산한다. */
+  private computeCandidate(npcId: string, from: BlockPos): RepairCandidate | null {
     const left = R.repairPerDay - this.repairedToday;
     let best: { c: RepairCandidate; d: number } | null = null;
     for (const e of this.pendingMap.values()) {

@@ -17,6 +17,7 @@ import { BLOCKS, BlockId } from './game/data/blocks';
 import { GameWorld } from './game/GameWorld';
 import { buildIsland, ISLAND_REGIONS, islandPlayerSpawn } from './game/data/island';
 import { perfFixture } from './game/data/perfFixture';
+import { applyRoleLoad, writeRoleLoad, type RoleLoad } from './game/perfLoad';
 import { formatClock, MINUTES_PER_DAY } from './game/systems/GameClockSystem';
 import { CameraController, HIDE_PLAYER_BELOW } from './render/CameraController';
 import { PlayerView } from './render/EntityView';
@@ -210,6 +211,7 @@ function createWorld(
   play: boolean,
   startGameMinutes: number,
   residentLimit: number,
+  roleLoad = 0,
 ): GameWorld {
   const world = new GameWorld({
     storage: { ...balance.storage, ...fixture.startStorage },
@@ -223,6 +225,11 @@ function createWorld(
   });
   const t0 = performance.now();
   fixture.build((x, y, z, id) => world.voxels.writeInitial(x, y, z, id));
+  // PERF-002: ?load=n 이면 역할 후보 n 건을 넣는다(시험 장면 전용)
+  const load: RoleLoad | null =
+    roleLoad > 0
+      ? writeRoleLoad((x, y, z, id) => world.voxels.writeInitial(x, y, z, id), roleLoad)
+      : null;
   console.info(`[gtb] 월드 생성 ${(performance.now() - t0).toFixed(1)} ms`);
   for (const o of fixture.objects) {
     const placed = world.voxels.editObject(
@@ -234,6 +241,7 @@ function createWorld(
   world.voxels.markAllDirty();
   // 장면에 미리 지어 둔 방은 로드처럼 조용히 인식한다(인식 연출·보상 이벤트 없음)
   world.rooms.rebuildAll();
+  if (load) applyRoleLoad(world, load);
   const kit =
     fixture === roomLabFixture
       ? ROOM_LAB_KIT
@@ -463,6 +471,8 @@ function createPerfDriver(
   world: GameWorld,
   renderer: Renderer,
   seconds: number,
+  /** false 면 시각을 옮기지 않는다(PERF-002: 역할 작업 시간 그대로 잰다) */
+  timeJumps = true,
 ): { frame: (sinceWarmMs: number, dtMs: number, renderMs: number) => void; result: () => unknown } {
   world.profile = true;
   const samples: PerfSample[] = [];
@@ -489,7 +499,9 @@ function createPerfDriver(
     frame(since, dtMs, renderMs) {
       if (done) return;
       const t = since / 1000;
-      if (bursts === 0 && t >= 0) {
+      if (!timeJumps) {
+        bursts = 3;
+      } else if (bursts === 0 && t >= 0) {
         world.clock.advanceTo(19, 58);
         bursts = 1;
       } else if (bursts === 1 && t >= 20) {
@@ -625,6 +637,7 @@ function start(): void {
     play,
     startMinutesFromParam(params.get('time'), fixture.defaultStartHour),
     Number(params.get('residents') ?? Number.POSITIVE_INFINITY),
+    sceneName === 'perf' ? Number(params.get('load') ?? 0) : 0,
   );
   const renderer = new Renderer(getCanvas(), world.voxels, {
     workerCount: Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1)),
@@ -725,7 +738,12 @@ function start(): void {
   const measureSeconds = Number(params.get('measure') ?? 0);
   const perf =
     sceneName === 'perf'
-      ? createPerfDriver(world, renderer, Number(params.get('seconds') ?? 60))
+      ? createPerfDriver(
+          world,
+          renderer,
+          Number(params.get('seconds') ?? 60),
+          params.get('jumps') !== '0',
+        )
       : null;
   const measured: number[] = [];
   let maxDraws = 0;
