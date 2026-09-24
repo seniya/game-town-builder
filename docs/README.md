@@ -1,7 +1,7 @@
 # 문서 안내
 
 현재는 **Phase D(시간과 이동) 완료, TASK-033 재미 검증(분기점 2, G2) 통과** 상태다.
-PERF-001 을 마쳤고 다음은 TASK-030 이다. 전체 순서는 TASKS 2.3을 따른다.
+PERF-001·TASK-030(농사) 을 마쳤고 다음은 TASK-031(요리) 이다. 전체 순서는 TASKS 2.3을 따른다.
 게이트 결과는 [G1 기록](state/2026-09-23_1400-task-022-gate-g1-passed.md), Phase D 는
 [Phase D 기록](state/2026-09-23_2241-phase-d-time-movement-and-sleep-gate.md), [G2 기록](state/2026-09-23_2309-task-033-gate-g2-passed.md)에 있다.
 결과는 [Phase A 기록](state/2026-09-23_1036-phase-a-voxel-foundation.md),

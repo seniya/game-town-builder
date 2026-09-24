@@ -197,7 +197,30 @@ export class NpcView {
     const placed = use ? world.placement(use.objectId) : undefined;
     if (use?.pose === 'lie' && placed) this.poseLying(placed);
     else if (a.pose === 'sit' || use?.pose === 'sit') this.poseSitting(p, world.plazaCenter, dt);
+    else if (a.pose === 'work') this.poseWorking(p, a.lookAt ?? null, dt);
     else this.poseStanding(p, dt);
+  }
+
+  /**
+   * 밭일(심기·수확): 밭 칸을 바라보고 허리를 굽혀 두 팔로 땅을 고른다. 걷기·정지와 구별된다 (TASK-030).
+   */
+  private poseWorking(
+    p: { x: number; y: number; z: number },
+    lookAt: { x: number; z: number } | null,
+    dt: number,
+  ): void {
+    this.resetSpecial();
+    if (lookAt) this.turnToward(Math.atan2(-(lookAt.x - p.x), -(lookAt.z - p.z)), dt * 2);
+    const dig = Math.sin(this.time * 9);
+    this.legL.rotation.x = 0.25;
+    this.legR.rotation.x = -0.15;
+    this.armL.rotation.set(-1.1 + dig * 0.35, 0, 0.1);
+    this.armR.rotation.set(-1.1 + dig * 0.35, 0, -0.1);
+    this.object3d.position.set(p.x, p.y, p.z);
+    this.object3d.rotation.set(0, this.yaw, 0);
+    this.figure.position.set(0, -0.04, 0);
+    this.figure.rotation.set(-0.42, 0, 0);
+    this.head.rotation.set(-0.35, 0, 0);
   }
 
   /** 걸음 방향으로 부드럽게 돈다. */

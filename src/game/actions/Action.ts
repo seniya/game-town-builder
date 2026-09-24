@@ -16,6 +16,11 @@ export interface ActionServices {
     /** 이 침대가 지금도 이 주민에게 배정되어 있는가. 침대 배정은 SleepSystem 만 소유한다 */
     isAssigned(npcId: string, bedObjectId: string): boolean;
   };
+  /** 농사 결과 확정 (FarmSystem, TASK-030). 조건이 맞지 않으면 아무것도 바꾸지 않고 false */
+  readonly farm: {
+    plant(target: BlockPos): boolean;
+    harvest(target: BlockPos): boolean;
+  };
 }
 
 /** 방 조회 포트. 방 전체 목록이 아니라 필요한 조회만 연다. */
@@ -39,6 +44,8 @@ export interface ActionContext {
 
 /** 실행 가능한 Action. NPCSystem 이 start / cancel 을 한 번씩 보장한다. */
 export interface Action extends ActionView {
+  /** 이 Action 이 잡고 있는 밭 칸(farmland). NPCSystem 이 바뀔 때 FarmSystem 예약을 잡고 푼다 */
+  readonly farmTarget?: BlockPos;
   /** 시작. 이 Action 이 NPC 의 현재 Action 이 된 직후 한 번 */
   start(ctx: ActionContext): void;
   /** 한 프레임 진행 */

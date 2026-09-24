@@ -6,6 +6,7 @@ import type { NPC } from '../entities/NPC';
 import type { SlotSystem } from '../GameWorld';
 import type { NavigationGraph } from '../nav/NavigationGraph';
 import type { PathGoal } from '../nav/pathfind';
+import type { FarmCandidate } from './FarmSystem';
 import {
   posKey,
   type ActionKind,
@@ -36,7 +37,7 @@ export interface NPCDecisionView {
 /** 역할 작업 후보. 소유 시스템(Farm / Cooking / Repair)이 좁혀 준다. 이 단계에서는 전부 null 이다. */
 export interface NPCCandidates {
   readonly diningSeat: Readonly<Facility> | null;
-  readonly farm: Readonly<{ kind: 'plant' | 'harvest'; target: BlockPos }> | null;
+  readonly farm: FarmCandidate | null;
   readonly cooking: Readonly<{ facility: Facility; ingredientsReady: boolean }> | null;
   readonly repair: Readonly<{ damageId: string; cells: readonly BlockPos[] }> | null;
 }
@@ -84,13 +85,16 @@ export type ActionPlan =
   | { readonly kind: 'sleep'; readonly key: string; readonly bed: Readonly<Facility> }
   | { readonly kind: 'rest'; readonly key: string; readonly spot: BlockPos }
   | { readonly kind: 'eat'; readonly key: string; readonly seat: Readonly<Facility> | null }
-  | { readonly kind: 'role'; readonly key: string; readonly work: 'farm' | 'cook' | 'repair' }
+  | { readonly kind: 'role'; readonly key: string; readonly work: 'cook' | 'repair' }
+  | { readonly kind: 'plant' | 'harvest'; readonly key: string; readonly target: BlockPos }
   | { readonly kind: 'flee'; readonly key: string; readonly from: Vec3 }
   | { readonly kind: 'talk'; readonly key: string };
 
 /** 이동 계획의 목적. 침대로 가다 실패하면 SleepSystem 에 알린다. */
 export type MovePurpose =
-  { readonly kind: 'bed'; readonly bedObjectId: string } | { readonly kind: 'plaza' };
+  | { readonly kind: 'bed'; readonly bedObjectId: string }
+  | { readonly kind: 'farm'; readonly target: BlockPos }
+  | { readonly kind: 'plaza' };
 
 const C = balance.clock;
 
@@ -182,7 +186,23 @@ function physiological(ctx: NPCContext): ActionPlan | null {
 function roleWork(ctx: NPCContext): ActionPlan | null {
   if (!isWorkTime(ctx.minuteOfDay)) return null;
   const c = ctx.candidates;
-  if (ctx.npc.role === 'farmer' && c.farm) return { kind: 'role', key: 'role:farm', work: 'farm' };
+  if (ctx.npc.role === 'farmer' && c.farm) {
+    // 밭 작업: 작업 칸까지 걸어간 뒤(MoveAction) 심기·수확(PlantAction / HarvestAction). 복합 Action 을 만들지 않는다
+    const f = c.farm;
+    const k = posKey(f.target);
+    const moveKey = `move:farm:${k}`;
+    if (arrivedAt(ctx, f.approachCells, moveKey)) {
+      return { kind: f.kind, key: `${f.kind}:${k}`, target: f.target };
+    }
+    return {
+      kind: 'move',
+      key: moveKey,
+      label: f.kind === 'harvest' ? '수확하러 가는 중' : '밭으로 가는 중',
+      goal: { kind: 'cells', cells: f.approachCells },
+      destination: f.target,
+      purpose: { kind: 'farm', target: f.target },
+    };
+  }
   if (ctx.npc.role === 'cook' && c.cooking?.ingredientsReady) {
     return { kind: 'role', key: 'role:cook', work: 'cook' };
   }
@@ -241,6 +261,8 @@ export interface NPCDecisionDeps {
   readonly plazaSpots: () => readonly BlockPos[];
   /** 계획을 NPCSystem 에 넘긴다 */
   readonly assign: (npcId: string, plan: ActionPlan) => void;
+  /** FarmSystem 의 후보(농부에게만, 역할 작업 시간에만 묻는다). 없으면 농사가 없는 월드다 */
+  readonly farmCandidate?: (npcId: string, cell: BlockPos) => FarmCandidate | null;
 }
 
 /** 빈 후보. 역할·식사 시스템(030~032·048)이 생기면 소유자가 채운다. */
@@ -260,12 +282,18 @@ export class NPCDecisionSystem implements SlotSystem {
     const spots = this.deps.plazaSpots();
     const storage = this.deps.storage();
     let i = 0;
+    const work = isWorkTime(this.deps.clock.minuteOfDay);
     for (const npc of this.deps.npcs()) {
+      const cell = npcCell(npc);
+      const farm =
+        work && npc.role === 'farmer' && this.deps.farmCandidate
+          ? this.deps.farmCandidate(npc.id, cell)
+          : null;
       const ctx: NPCContext = {
         npc: {
           id: npc.id,
           role: npc.role,
-          cell: npcCell(npc),
+          cell,
           actionKind: npc.action.kind,
           actionKey: npc.action.key,
           hasEatenThisMeal: npc.hasEatenThisMeal,
@@ -280,7 +308,7 @@ export class NPCDecisionSystem implements SlotSystem {
         mealActive: false,
         storage,
         plazaSpot: spots.length > 0 ? (spots[i % spots.length] ?? null) : null,
-        candidates: NO_CANDIDATES,
+        candidates: farm ? { ...NO_CANDIDATES, farm } : NO_CANDIDATES,
       };
       const plan = decideAction(ctx);
       if (plan) this.deps.assign(npc.id, plan);

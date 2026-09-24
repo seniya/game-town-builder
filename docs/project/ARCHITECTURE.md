@@ -393,7 +393,7 @@ ROOM_UNREGISTERED의 `MERGED`는 두 방 이상의 내부가 하나로 이어져
 player    파괴 진행 UI 를 닫는다
 monster   DamageLog 에 기록한다
 npc       농사 또는 목수 수리. 피해 cells가 복구된 경우에만 해결한다
-world     채석장 재생(MVP_SPEC 14.3). 드롭·DamageLog·수리 대상이 아니다
+world     규칙에 따른 환경 변화: 채석장 재생(MVP_SPEC 14.3), farmland 제거 시 crop 정리(15.4). 드롭·DamageLog·수리 대상이 아니다
 ```
 
 `world`도 방 재판정·통행 무효화는 다른 주체와 똑같이 거친다. 주체에 따라 방·경로 처리를 건너뛰지 않는다.
@@ -1183,6 +1183,9 @@ Action 은 `GameWorld` 전체를 받지 않는다. 필요한 것만 받는다.
 
 ---
 
+구현(TASK-030, ADR 030): `ActionServices.farm`(plant / harvest)을 더했다. Action 의 `farmTarget` 이 바뀌면 NPCSystem 이
+FarmSystem 예약을 옮긴다. PlantAction / HarvestAction 은 start 에서 결과를 확정하고 작업 자세(pose 'work', lookAt)만 잠깐 보인다.
+
 구현(TASK-028, ADR 025): `ActionContext`의 nav 는 통행 그래프이고 경로 요청은 `paths`(PathScheduler)로 따로 받는다.
 rooms 는 `findContaining`만 여는 RoomQuery 다. `ActionServices`는 지금 `sleep.isAssigned`만 있다(감사·조리·식사·수리는
 해당 Task). Action 은 읽기 view `ActionView`(kind / label / key / facilityUse(pose 포함) / pose / remainingPath / destination)를
@@ -1330,7 +1333,7 @@ BlockEditSystem       레이캐스트 / 파괴 진행도 / 설치 규칙. 조준
 RoomSystem            RoomRegistry.processQueue 호출. 예산 관리
 NPCDecisionSystem     Action 선택 (순수)
 NPCSystem             Action 실행. NPC 이동
-FarmSystem            crop 성장 단계. farmland 파괴 시 정리
+FarmSystem            crop 성장 단계. farmland 파괴 시 정리. farmland 칸 목록·농사 후보·칸 예약 (update 7 번)
 CookingSystem         조리 진행. crop → food
 MealSystem            식사 시간 판정. hasEatenThisMeal 리셋
 SleepSystem           침대 배정 / 해제. 후보 침대까지 실제 경로가 나오면 확정한다 (update 10 번, 판단 전)
@@ -1845,7 +1848,7 @@ src/game/data/
 ```text
 cells        다중 칸 객체의 점유 칸 수. bed / door = 2, 나머지 1. setBlock 거부 판정에 쓴다
 translucent  반투명 메시 분리. water / window 만 true
-prop         청크 메시 대신 render/PropView 모형으로 그린다. door / bed 만 true (ADR 026). 메셔는 air 처럼 본다
+prop         청크 메시 대신 render/PropView 모형으로 그린다. door / bed / crop 이 true (ADR 026, crop 은 ADR 030 의 CropView). 메셔는 air 처럼 본다
 ```
 
 `drops`의 항목은 `ItemRef`(블록 또는 재료 seed / crop / food)를 가리킨다. seed는 블록이 아니다.
@@ -2209,6 +2212,7 @@ DI 컨테이너
 027  물 가장자리 멈춤, 잎 안쪽 면 (HR 결과 반영)       Accepted
 028  기존 블록의 비정육면체 모양 — 범위·시점          Accepted
 029  PERF-001 구조 수정: NO_PATH 영역 공유·침대 재시도  Accepted
+030  농사: 밭 목록·후보·예약, 작업 자세, 작물 모형        Accepted
 ```
 
 ---

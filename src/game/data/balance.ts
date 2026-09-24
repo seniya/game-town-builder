@@ -73,6 +73,8 @@ export const balance = {
   farm: {
     growthStages: 3,
     hoursPerStage: 4,
+    /** 심기·수확 뒤 작업 자세를 보이는 실초 (MVP_SPEC 15.4, 렌더 표현) */
+    workPoseSeconds: 0.8,
     seedReturnedPerHarvest: 1,
     tutorialPlotCount: 4,
     expandedPlotCount: 8,

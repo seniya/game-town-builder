@@ -32,6 +32,8 @@ export interface DebugPanelPort {
   setTimeScale(scale: number): void;
   /** 시각 강제 설정: 다음 도래하는 hour:minute 로 앞당긴다 (MVP_SPEC 20.3) */
   advanceClockTo(hour: number, minute: number): void;
+  /** 디버그 씨앗 투입 (TASK-030) */
+  addSeeds(count: number): void;
   /** 고를 수 있는 배속 */
   readonly timeScales: readonly number[];
 }
@@ -148,7 +150,10 @@ export class DebugPanel {
       const h = Math.floor(Number(hourInput.value));
       if (h >= 0 && h <= 23) port.advanceClockTo(h, 0);
     });
-    timeControls.append(hourInput, jump);
+    const seeds = document.createElement('button');
+    seeds.textContent = '씨앗 +5';
+    seeds.addEventListener('click', () => port.addSeeds(5));
+    timeControls.append(hourInput, jump, seeds);
     this.extraRows = document.createElement('div');
     this.root.append(this.text, controls, roomControls, timeControls, this.extraRows);
     // 패널 조작 클릭이 뒤의 메뉴(클릭하면 계속)로 전달되지 않게 한다
@@ -205,6 +210,9 @@ export class DebugPanel {
       g.nav && g.paths
         ? `통행 캐시 ${g.nav.cachedCells} · 감시 칸 ${g.nav.watchedCells} · 경로 대기 ${g.paths.pending} · 이번 프레임 확장 ${g.paths.lastFrameNodes} · 완료 ${g.paths.completed}`
         : '통행 —',
+      g.farm
+        ? `농사: 밭 ${g.farm.farmland} · 작물 ${g.farm.crops} (성숙 ${g.farm.mature}) · 예약 ${g.farm.claims} · 씨앗 ${g.seed ?? '—'}`
+        : '농사 —',
       `NPC ${g.npcs.length}${g.sleep ? ` · 침대 배정 ${g.sleep.assigned}/${g.sleep.beds} (확인 중 ${g.sleep.checking})` : ''}`,
       ...g.npcs.map(
         (n) =>

@@ -303,6 +303,7 @@ export const SLEEP_LAB_KIT: readonly { readonly blockId: number; readonly count:
   { blockId: BlockId.plank, count: 64 },
   { blockId: BlockId.table, count: 2 },
   { blockId: BlockId.chair, count: 4 },
+  { blockId: BlockId.farmland, count: 8 },
 ];
 
 /**

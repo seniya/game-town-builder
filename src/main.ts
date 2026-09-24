@@ -27,6 +27,7 @@ import { DayNightVisual } from './render/DayNightVisual';
 import { NavOverlayView } from './render/NavOverlayView';
 import { NpcViews } from './render/NpcView';
 import { PropView } from './render/PropView';
+import { CropView } from './render/CropView';
 import { CeilingCapView } from './render/CeilingCapView';
 import { RoomOverlayView } from './render/RoomOverlayView';
 import { blockItem } from './game/systems/InventorySystem';
@@ -542,6 +543,8 @@ function start(): void {
   renderer.scene.add(npcViews.object3d);
   const props = new PropView(world.voxels.placements, () => world.characterBodies());
   renderer.scene.add(props.object3d);
+  const crops = new CropView(() => world.farm.crops());
+  renderer.scene.add(crops.object3d);
   const dayNight = new DayNightVisual(
     renderer,
     world.clock,
@@ -595,6 +598,7 @@ function start(): void {
     setTimeScale: (scale) => void world.debug.setTimeScale(scale),
     advanceClockTo: (hour, minute) => world.debug.advanceClockTo(hour, minute),
     timeScales: balance.clock.debugTimeScales,
+    addSeeds: (n) => world.debug.addSeeds(n),
   });
   if (params.get('debug') === '1') debugPanel.toggle();
   const measureSeconds = Number(params.get('measure') ?? 0);
@@ -645,6 +649,7 @@ function start(): void {
     roomLabels.update(frameMs / 1000, diagnosing);
     npcViews.update(frameMs / 1000);
     props.update(frameMs / 1000);
+    crops.update(frameMs / 1000);
     dayNight.update(frameMs / 1000);
     navOverlay.update(
       frameMs / 1000,

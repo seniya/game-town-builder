@@ -950,6 +950,18 @@ VillageStorage.crop +1, VillageStorage.seed +1
 수확에서 seed가 한 개 돌아온다. 작물이 파괴되면 그 씨앗은 돌아오지 않으므로
 추가 채집으로 보충한다. 안정된 밭의 씨앗만 순환한다고 설명한다.
 
+## 15.4 구현 세부 (TASK-030, ADR 030)
+
+```text
+작업 칸        crop 칸(farmland 바로 위)의 수평 이웃 중 NPC 가 설 수 있는 칸. 다른 farmland 위가 아닌 칸을 우선한다
+후보          FarmSystem 이 farmland 칸 목록을 블록 변경으로 유지한다. 농부에게 가까운 성숙 작물 → (seed ≥ 1 이면) 빈 밭 순
+예약          한 칸은 한 농부만 잡는다. 완료·취소·실패 때 푼다
+작업 자세      심기·수확의 효과는 도착 즉시 적용하고, 그 뒤 workPoseSeconds(0.8 실초) 동안 작업 자세를 보인다(렌더 표현)
+작물 표시      crop 은 렌더 모형으로 그린다. 표시 단계 0 / 1 / 2 와 성숙(이삭)을 구별해 보인다
+밭 정리        farmland 가 사라지면 위의 crop 을 제거한다. BLOCK_CHANGED by = 'world', 씨앗은 돌아오지 않는다
+플레이어 파괴   crop 을 부수면 드롭 없이 사라지고 기록도 지운다(14 장)
+```
+
 ---
 
 # 16. 요리
@@ -1990,6 +2002,7 @@ export const balance = {
   farm: {
     growthStages: 3,
     hoursPerStage: 4,
+    workPoseSeconds: 0.8,   // 15.4 작업 자세(렌더 표현) 실초
     seedReturnedPerHarvest: 1,
     tutorialPlotCount: 4, expandedPlotCount: 8,
   },

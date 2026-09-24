@@ -16,6 +16,7 @@ import { createRoomReader } from './room/roomReader';
 import { BlockEditSystem } from './systems/BlockEditSystem';
 import { CraftingSystem } from './systems/CraftingSystem';
 import { DebugSystem } from './systems/DebugSystem';
+import { FarmSystem } from './systems/FarmSystem';
 import { GameClockSystem } from './systems/GameClockSystem';
 import { InputSystem } from './systems/InputSystem';
 import { InventorySystem } from './systems/InventorySystem';
@@ -108,6 +109,8 @@ export class GameWorld {
   readonly nav: NavigationGraph;
   /** 경로 요청 스케줄러 (update 6 번). 프레임당 확장 예산을 모든 요청이 나눠 쓴다 */
   readonly paths: PathScheduler;
+  /** 농사: crop 성장 상태·밭 후보·예약 (update 7 번) */
+  readonly farm: FarmSystem;
   /** 침대 배정의 유일한 소유자 (update 10 번, 판단 전) */
   readonly sleep: SleepSystem;
   /** NPC 판단 (update 10 번) */
@@ -189,6 +192,15 @@ export class GameWorld {
     this.attach('nav', this.paths);
     this.debug.navSources = { nav: this.nav, paths: this.paths };
     this.plazaCenter = init.plazaCenter ?? null;
+    this.farm = new FarmSystem({
+      voxels: this.voxels,
+      clock: this.clock,
+      storage: this.storage,
+      nav: this.nav,
+      events: this.events,
+    });
+    this.attach('farm', this.farm);
+    this.debug.farmSources = { farm: () => this.farm.stats, storage: this.storage };
     const npcs = (): Iterable<NPC<Action>> => this.registry.npcs.values();
     this.sleep = new SleepSystem({
       events: this.events,
@@ -206,8 +218,15 @@ export class GameWorld {
       rooms: this.rooms,
       clock: this.clock,
       events: this.events,
-      services: { sleep: { isAssigned: (n, b) => this.sleep.isAssigned(n, b) } },
+      services: {
+        sleep: { isAssigned: (n, b) => this.sleep.isAssigned(n, b) },
+        farm: { plant: (t) => this.farm.plant(t), harvest: (t) => this.farm.harvest(t) },
+      },
       onBedUnreachable: (n, b) => this.sleep.reportUnreachable(n, b),
+      farmClaims: {
+        claim: (n, t) => this.farm.claim(n, t),
+        release: (n, t) => this.farm.release(n, t),
+      },
     });
     this.npcDecision = new NPCDecisionSystem(
       {
@@ -217,6 +236,7 @@ export class GameWorld {
         assignedBed: (id) => this.sleep.assignedBed(id),
         plazaSpots: () => this.currentPlazaSpots(),
         assign: (id, plan) => this.npcSystem.assign(id, plan),
+        farmCandidate: (id, cell) => this.farm.candidateFor(id, cell),
       },
       [this.sleep],
     );

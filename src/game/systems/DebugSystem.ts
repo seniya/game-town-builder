@@ -9,6 +9,8 @@ import type { ActionView, BlockPos, DayPhase, Vec3 } from '../types';
 import type { BlockEditSystem } from './BlockEditSystem';
 import { formatClock, type GameClockSystem } from './GameClockSystem';
 import type { SleepStats, SleepSystem } from './SleepSystem';
+import type { FarmStats } from './FarmSystem';
+import type { VillageStorage } from '../VillageStorage';
 
 /** NPC 한 줄 (ARCHITECTURE 26: id / 현재 Action label / 목적지 / 경로 길이). */
 export interface NPCDebugLine {
@@ -49,6 +51,9 @@ export interface GameDebugSnapshot {
   readonly paths: PathSchedulerStats | null;
   readonly npcs: readonly NPCDebugLine[];
   readonly sleep: SleepStats | null;
+  /** 농사 계측 (TASK-030) */
+  readonly farm: FarmStats | null;
+  readonly seed: number | null;
   /** 방: 인식 수 / 타입별 / 재판정 큐 길이 / 마지막 판정 소요 ms (ARCHITECTURE 26) */
   readonly rooms: RoomRegistryStats | null;
   /** "방 경계 상시 표시" 디버그 명령 */
@@ -64,6 +69,8 @@ export class DebugSystem {
   showNavCells = false;
   /** 통행 계측 대상. GameWorld 가 연결한다 */
   navSources: { readonly nav: NavigationGraph; readonly paths: PathScheduler } | null = null;
+  /** 농사 계측·씨앗 투입 대상. GameWorld 가 연결한다 */
+  farmSources: { readonly farm: () => FarmStats; readonly storage: VillageStorage } | null = null;
   /** NPC 계측 대상. GameWorld 가 연결한다 */
   npcSources: {
     readonly npcs: () => Iterable<NPC<ActionView>>;
@@ -82,6 +89,11 @@ export class DebugSystem {
   /** 디버그 시간 배속 1× / 4× / 16× (MVP_SPEC 20.2). 허용 밖이면 false. */
   setTimeScale(scale: number): boolean {
     return this.clock?.setTimeScale(scale) ?? false;
+  }
+
+  /** 디버그 씨앗 투입 (TASK-030 AC). 기부 경로(TASK-036) 전의 시험용이다. */
+  addSeeds(count: number): void {
+    if (count > 0) this.farmSources?.storage.add('seed', count);
   }
 
   /** 디버그 시각 강제 설정. 다음 도래하는 hour:minute 로 앞당긴다 (MVP_SPEC 20.3). */
@@ -133,6 +145,8 @@ export class DebugSystem {
       paths: this.navSources ? this.navSources.paths.stats : null,
       npcs: this.npcLines(),
       sleep: this.npcSources ? this.npcSources.sleep.stats : null,
+      farm: this.farmSources ? this.farmSources.farm() : null,
+      seed: this.farmSources ? this.farmSources.storage.get('seed') : null,
       rooms: this.rooms ? this.rooms.stats : null,
       showRoomBounds: this.showRoomBounds,
       diagnosisActive: this.roomSystem?.diagnosisActive ?? false,

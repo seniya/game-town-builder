@@ -2,6 +2,7 @@
 // start / cancel 을 한 번씩 보장한다. Action 이 바뀌면 NPC_ACTION_CHANGED 를 발행한다.
 // 아직 구현하지 않은 계획(식사 032·역할 030/031/048·도피 047·대화 040)은 그 사실을 적은 대기로 대신 선다.
 import { balance } from '../data/balance';
+import { HarvestAction, PlantAction } from '../actions/FarmWorkAction';
 import { IdleAction } from '../actions/IdleAction';
 import { MoveAction } from '../actions/MoveAction';
 import { RestAction } from '../actions/RestAction';
@@ -12,7 +13,7 @@ import type { EventBus } from '../EventBus';
 import type { SlotSystem } from '../GameWorld';
 import type { NavigationGraph } from '../nav/NavigationGraph';
 import type { PathScheduler } from '../nav/PathScheduler';
-import type { GameClockReader } from '../types';
+import type { BlockPos, GameClockReader } from '../types';
 import type { CollisionWorld } from '../voxel/collision';
 import type { ActionPlan, MovePurpose } from './NPCDecisionSystem';
 
@@ -28,12 +29,17 @@ export interface NPCSystemDeps {
   readonly services: ActionServices;
   /** 침대로 가는 이동이 경로를 찾지 못했을 때 (SleepSystem.reportUnreachable) */
   readonly onBedUnreachable: (npcId: string, bedObjectId: string) => void;
+  /** 밭 칸 예약 (FarmSystem). 없으면 농사가 없는 월드다 */
+  readonly farmClaims?: {
+    claim(npcId: string, target: BlockPos): boolean;
+    release(npcId: string, target: BlockPos): void;
+  };
 }
 
 /** 아직 구현하지 않은 계획의 대기 표시 이름. */
 const NOT_YET: Record<'eat' | 'role' | 'flee' | 'talk', string> = {
   eat: '식사 대기 (TASK-032)',
-  role: '역할 작업 대기 (TASK-030/031/048)',
+  role: '역할 작업 대기 (TASK-031/048)',
   flee: '도피 대기 (TASK-047)',
   talk: '대화 대기 (TASK-040)',
 };
@@ -49,6 +55,10 @@ export function createAction(plan: ActionPlan): Action {
       return new SleepAction(plan.bed);
     case 'rest':
       return new RestAction(plan.spot);
+    case 'plant':
+      return new PlantAction(plan.target);
+    case 'harvest':
+      return new HarvestAction(plan.target);
     case 'eat':
     case 'role':
     case 'flee':
@@ -68,6 +78,11 @@ class PlannedMove extends MoveAction {
     readonly purpose: MovePurpose,
   ) {
     super(goal, key, label, destination);
+  }
+
+  /** 밭으로 가는 이동이면 그 칸을 예약 대상으로 알린다. */
+  get farmTarget(): BlockPos | undefined {
+    return this.purpose.kind === 'farm' ? this.purpose.target : undefined;
   }
 }
 
@@ -132,10 +147,22 @@ export class NPCSystem implements SlotSystem {
     const npc = ctx.npc;
     const current = npc.action;
     if (cancelCurrent && current !== next && this.started.has(current)) current.cancel(ctx);
+    this.moveFarmClaim(npc.id, current, next);
     npc.action = next;
     this.started.add(next);
     next.start(ctx);
     this.deps.events.emit('NPC_ACTION_CHANGED', { npcId: npc.id, label: next.label });
+  }
+
+  /** 밭 예약을 옮긴다: 이전 Action 의 칸을 풀고 새 Action 의 칸을 잡는다(같은 칸이면 유지). */
+  private moveFarmClaim(npcId: string, prev: Action, next: Action): void {
+    const claims = this.deps.farmClaims;
+    if (!claims) return;
+    const a = prev.farmTarget;
+    const b = next.farmTarget;
+    const same = a !== undefined && b !== undefined && a.x === b.x && a.y === b.y && a.z === b.z;
+    if (a && !same) claims.release(npcId, a);
+    if (b && !same) claims.claim(npcId, b);
   }
 
   /**

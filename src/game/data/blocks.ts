@@ -68,7 +68,7 @@ function def(
 const TRANSLUCENT: ReadonlySet<BlockName> = new Set<BlockName>(['water', 'window']);
 
 /** 청크 메시 대신 렌더 모형으로 그리는 블록 (ADR 026). 게임 규칙에는 영향이 없는 렌더 분류다. */
-const PROPS: ReadonlySet<BlockName> = new Set<BlockName>(['door', 'bed']);
+const PROPS: ReadonlySet<BlockName> = new Set<BlockName>(['door', 'bed', 'crop']);
 
 const B = BlockId;
 

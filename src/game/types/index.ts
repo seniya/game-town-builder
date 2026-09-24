@@ -332,7 +332,7 @@ export type ActionKind =
 export type ActionStatus = 'running' | 'done' | 'failed';
 
 /** 렌더가 그릴 사용 자세. 게임 위치(body.pos)는 접근 셀에 남는다 (ARCHITECTURE 12.3). */
-export type UsePose = 'lie' | 'sit';
+export type UsePose = 'lie' | 'sit' | 'work';
 
 /** 사용 중인 시설의 렌더 snapshot (ARCHITECTURE 13). */
 export interface FacilityUse {
@@ -353,8 +353,10 @@ export interface ActionView {
   readonly key: string;
   /** 실제 사용 중인 시설의 렌더 snapshot. 이동·대기 중에는 없다 (ARCHITECTURE 13) */
   readonly facilityUse?: FacilityUse;
-  /** 시설 없이 취하는 자세(광장에 앉기). 없으면 서 있다 */
+  /** 시설 없이 취하는 자세(광장에 앉기·밭일). 없으면 서 있다 */
   readonly pose?: UsePose;
+  /** 작업 자세에서 바라볼 곳(밭 칸 가운데). 렌더 전용 */
+  readonly lookAt?: Vec3;
   /** 이동 중이면 남은 경로(디버그 표시). 없으면 빈 배열 */
   readonly remainingPath?: readonly BlockPos[];
   /** 이동 목적지(디버그 표시) */

@@ -126,9 +126,23 @@ describe('decideAction (TASK-029, MVP_SPEC 19.4)', () => {
   });
 
   it('4 역할: 소유 시스템이 준 후보가 있고 작업 시간이면 역할 작업이다', () => {
-    const farm = { kind: 'plant' as const, target: { x: 1, y: 2, z: 1 } };
+    const farm = {
+      kind: 'plant' as const,
+      target: { x: 1, y: 1, z: 1 },
+      approachCells: [{ x: 2, y: 2, z: 1 }],
+    };
     const c = ctx({ hour: 9, candidates: { diningSeat: null, farm, cooking: null, repair: null } });
-    expect(kind(decideAction(c))).toBe('role');
+    // 작업 칸이 아니면 밭으로 걸어가고, 작업 칸에 서 있으면 심는다
+    const toFarm = decideAction(c);
+    expect(toFarm?.kind).toBe('move');
+    if (toFarm?.kind === 'move')
+      expect(toFarm.purpose).toEqual({ kind: 'farm', target: farm.target });
+    const atFarm = ctx({
+      hour: 9,
+      npc: { ...ctx().npc, cell: { x: 2, y: 2, z: 1 } },
+      candidates: { diningSeat: null, farm, cooking: null, repair: null },
+    });
+    expect(kind(decideAction(atFarm))).toBe('plant');
     // 역할이 다르면 해당하지 않는다
     const cook = ctx({
       hour: 9,
