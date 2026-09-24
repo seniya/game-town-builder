@@ -397,3 +397,38 @@ export type GratitudeSource =
   | { readonly kind: 'eat'; readonly npcId: string }
   | { readonly kind: 'firstRoom'; readonly roomType: RoomType }
   | { readonly kind: 'gameEvent'; readonly id: string };
+
+// ── 진행 이벤트·목표·대사 (MVP_SPEC 27, ARCHITECTURE 20 / 21) ──────────────────
+
+/** 진행 이벤트 id. 표의 순서가 진행 순서다 (MVP_SPEC 27.1). */
+export type GameEventId =
+  | 'EVENT_ARRIVAL'
+  | 'EVENT_FARM_REQUEST'
+  | 'EVENT_KITCHEN_REQUEST'
+  | 'EVENT_BEDROOM_REQUEST'
+  | 'EVENT_BELL_REQUEST'
+  | 'EVENT_WALL_REQUEST'
+  | 'EVENT_NEW_RESIDENT'
+  | 'EVENT_SLICE_END';
+
+/** 진행 수치의 원천 종류. */
+export type ObjectiveProgressKind = 'farmland';
+
+/** 목표 하나 (ARCHITECTURE 21.1). 표시용 current 는 저장하지 않는다. */
+export interface ObjectiveDefinition {
+  readonly id: string;
+  readonly sourceEventId: GameEventId;
+  readonly text: string;
+  readonly progress: { readonly kind: ObjectiveProgressKind; readonly total: number } | null;
+}
+
+/**
+ * 대사 하나 (ARCHITECTURE 21.1). npcId 는 화자 키다: 창립 주민은 역할 이름(farmer / cook / carpenter),
+ * 그 밖의 주민은 NPC id 다 (ADR 035). 대사는 해금을 하지 않는다 (ADR 010).
+ */
+export interface DialogueDefinition {
+  readonly id: string;
+  readonly npcId: string;
+  readonly lines: readonly string[];
+  readonly nextObjective?: ObjectiveDefinition;
+}

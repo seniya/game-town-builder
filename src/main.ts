@@ -36,6 +36,7 @@ import { RoomOverlayView } from './render/RoomOverlayView';
 import { blockItem } from './game/systems/InventorySystem';
 import type { BlockPos } from './game/types';
 import { BellPanel } from './ui/BellPanel';
+import { DialogueBox } from './ui/DialogueBox';
 import { BellSound } from './ui/BellSound';
 import { ClockHud } from './ui/ClockHud';
 import { InteractPrompt } from './ui/InteractPrompt';
@@ -315,6 +316,29 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
     requestClose: () => machine?.close(true),
   });
   const prompt = new InteractPrompt(document.body);
+  /** F 로 고른 대화 상대. DialogueBox 가 열릴 때 읽는다 */
+  let talkTarget: string | null = null;
+  const speakerNames: Record<string, string> = {
+    farmer: '농부',
+    cook: '요리사',
+    carpenter: '목수',
+    villager: '주민',
+  };
+  const dialogueBox = new DialogueBox(document.body, {
+    begin: () => {
+      const npc = talkTarget ? world.registry.npcs.get(talkTarget) : undefined;
+      return npc ? world.dialogue.begin(npc) : null;
+    },
+    advance: () => world.dialogue.advance(),
+    abort: () => world.dialogue.abort(),
+    speakerName: (id) => speakerNames[world.registry.npcs.get(id)?.role ?? 'villager'] ?? '주민',
+    requestClose: () => machine?.close(true),
+  });
+  /** 이 주민이 지금 대화할 수 있는가. */
+  const talkable = (npcId: string): boolean => {
+    const npc = world.registry.npcs.get(npcId);
+    return npc !== undefined && world.dialogue.hasDialogue(npc);
+  };
   /** 지금 F 로 열 대상 (READY-07). */
   const interactTarget = (): InteractTarget | null =>
     findInteractTarget(world.voxels, player, world.registry.npcs.values());
@@ -326,12 +350,21 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
       showMenu: () => menu.show(),
       hideMenu: () => menu.hide(),
     },
-    { inventory: inventoryPanel, bell: bellPanel.bellView, storage: bellPanel.storageView },
+    {
+      inventory: inventoryPanel,
+      bell: bellPanel.bellView,
+      storage: bellPanel.storageView,
+      dialogue: dialogueBox,
+    },
     () => {
       const t = interactTarget();
       if (t?.kind === 'bell') return 'bell';
       if (t?.kind === 'chest') return 'storage';
-      return null; // 주민 대화는 TASK-040
+      if (t?.kind === 'npc' && talkable(t.npcId)) {
+        talkTarget = t.npcId;
+        return 'dialogue';
+      }
+      return null;
     },
   );
   world.events.on('VILLAGE_LEVEL_UP', () => camera.shake(0.9));
@@ -355,7 +388,15 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
       highlight.show(target ? target.pos : null, world.voxels.placements, blockEdit.breakProgress);
       crosshair.update(target !== null, screen.state.kind === 'playing');
       const it = screen.state.kind === 'playing' ? interactTarget() : null;
-      prompt.update(it?.kind === 'bell' ? '[F] 종' : it?.kind === 'chest' ? '[F] 저장소' : null);
+      prompt.update(
+        it?.kind === 'bell'
+          ? '[F] 종'
+          : it?.kind === 'chest'
+            ? '[F] 저장소'
+            : it?.kind === 'npc' && talkable(it.npcId)
+              ? '[F] 대화하기'
+              : null,
+      );
       bellPanel.update(now);
       diagnosticPanel.update();
     },
@@ -585,6 +626,7 @@ function start(): void {
   const npcViews = new NpcViews(() => world.registry.npcs.values(), {
     placement: (id) => world.voxels.placements.get(id),
     plazaCenter: world.plazaCenter,
+    talkable: (npc) => world.dialogue.hasDialogue(npc),
   });
   renderer.scene.add(npcViews.object3d);
   const props = new PropView(world.voxels.placements, () => world.characterBodies());

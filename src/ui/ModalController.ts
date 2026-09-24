@@ -15,6 +15,8 @@ export type ScreenState =
 export interface ModalView {
   open(): void;
   close(): void;
+  /** 열려 있을 때 키를 먼저 받는다(대사 넘기기 등). 처리했으면 true */
+  key?(code: string): boolean;
 }
 
 /** 상태 전이가 일으키는 부수 효과. 브라우저에서는 DOM 을, 테스트에서는 기록용 가짜를 넣는다. */
@@ -105,6 +107,7 @@ export class ScreenStateMachine {
   /** 키 입력. E 는 인벤토리 열기·닫기, F 는 조준 대상의 패널 열기, Esc 는 모달 닫기(→ 메뉴). 처리했으면 true. */
   key(code: string): boolean {
     const s = this.current;
+    if (s.kind === 'modal' && code !== 'Escape' && this.views[s.name]?.key?.(code)) return true;
     if (code === 'KeyF') {
       // 종·저장소 패널은 F 로도 닫는다(E 가 인벤토리를 닫는 것과 같다)
       if (s.kind === 'modal' && (s.name === 'bell' || s.name === 'storage')) {

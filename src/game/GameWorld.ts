@@ -17,6 +17,7 @@ import { BlockEditSystem } from './systems/BlockEditSystem';
 import { CookingSystem } from './systems/CookingSystem';
 import { CraftingSystem } from './systems/CraftingSystem';
 import { DebugSystem } from './systems/DebugSystem';
+import { DialogueSystem } from './systems/DialogueSystem';
 import { FarmSystem } from './systems/FarmSystem';
 import { GratitudeSystem } from './systems/GratitudeSystem';
 import { GameClockSystem } from './systems/GameClockSystem';
@@ -119,6 +120,8 @@ export class GameWorld {
   readonly paths: PathScheduler;
   /** 농사: crop 성장 상태·밭 후보·예약 (update 7 번) */
   readonly farm: FarmSystem;
+  /** 대화 표시·재생·완료 (TASK-040). 대화 중 주민은 판단 2 단계로 TalkAction 을 한다 */
+  readonly dialogue: DialogueSystem;
   /** 감사 포인트의 유일한 소유자 (update 13 번) */
   readonly gratitude: GratitudeSystem;
   /** 조리: 화덕 목록·화덕/재료 예약·결과 확정 (update 10 번, 판단 전에 목록 갱신) */
@@ -222,6 +225,7 @@ export class GameWorld {
     this.attach('farm', this.farm);
     this.debug.farmSources = { farm: () => this.farm.stats, storage: this.storage };
     const npcs = (): Iterable<NPC<Action>> => this.registry.npcs.values();
+    this.dialogue = new DialogueSystem(this.events);
     this.gratitude = new GratitudeSystem({
       events: this.events,
       clock: this.clock,
@@ -293,6 +297,8 @@ export class GameWorld {
         clock: this.clock,
         storage: () => this.storage.snapshot(),
         worldState: () => this.worldStateSystem.current,
+        talkingTo: (id) =>
+          this.dialogue.active?.npcId === id && this.player ? this.player.body.pos : null,
         assignedBed: (id) => this.sleep.assignedBed(id),
         plazaSpots: () => this.currentPlazaSpots(),
         assign: (id, plan) => this.npcSystem.assign(id, plan),

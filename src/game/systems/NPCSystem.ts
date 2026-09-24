@@ -1,7 +1,7 @@
 // NPC 실행 (ARCHITECTURE 4.1 의 11 번, 13, 15). 판단이 넘긴 계획을 Action 으로 만들어 시작하고 매 프레임 진행한다.
 // start / cancel 을 한 번씩 보장한다. Action 이 바뀌면 NPC_ACTION_CHANGED 를 발행한다.
 // 임시 시설(화덕·의자) 예약의 소유자다: objectId 별로 한 명만 잡고 Action 이 바뀔 때 옮긴다 (MVP_SPEC 12.4, ARCHITECTURE 14.4).
-// 아직 구현하지 않은 계획(수리 048·도피 047·대화 040)은 그 사실을 적은 대기로 대신 선다.
+// 아직 구현하지 않은 계획(수리 048·도피 047)은 그 사실을 적은 대기로 대신 선다.
 import { balance } from '../data/balance';
 import { CookAction } from '../actions/CookAction';
 import { EatAction } from '../actions/EatAction';
@@ -10,6 +10,7 @@ import { IdleAction } from '../actions/IdleAction';
 import { MoveAction } from '../actions/MoveAction';
 import { RestAction } from '../actions/RestAction';
 import { SleepAction } from '../actions/SleepAction';
+import { TalkAction } from '../actions/TalkAction';
 import type { Action, ActionContext, ActionServices, RoomQuery } from '../actions/Action';
 import type { NPC } from '../entities/NPC';
 import type { EventBus } from '../EventBus';
@@ -42,10 +43,9 @@ export interface NPCSystemDeps {
 }
 
 /** 아직 구현하지 않은 계획의 대기 표시 이름. */
-const NOT_YET: Record<'role' | 'flee' | 'talk', string> = {
+const NOT_YET: Record<'role' | 'flee', string> = {
   role: '역할 작업 대기 (TASK-048)',
   flee: '도피 대기 (TASK-047)',
-  talk: '대화 대기 (TASK-040)',
 };
 
 /** 계획을 Action 으로 만든다. */
@@ -67,9 +67,10 @@ export function createAction(plan: ActionPlan): Action {
       return new CookAction(plan.stove);
     case 'eat':
       return new EatAction(plan.seat);
+    case 'talk':
+      return new TalkAction(plan.toward ?? undefined);
     case 'role':
     case 'flee':
-    case 'talk':
       return new IdleAction(NOT_YET[plan.kind], plan.key);
   }
 }

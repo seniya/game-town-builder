@@ -1343,14 +1343,16 @@ DialogueSystem + src/ui/DialogueBox.ts
 NPC 머리 위 대화 가능 표시
 ```
 
+결과: [TASK-040 기록](../state/2026-09-24_2130-task-040-dialogue.md), [ADR 035](../adr/035-dialogue-speaker-key-and-modal-keys.md). 대화 표시 등록은 TASK-042, 목표 적용은 TASK-041. 사람 판단은 HR-020.
+
 Acceptance Criteria:
 
-- [ ] NPC 에 F 를 누르면 대사가 나온다
-- [ ] 대사 중 이동과 블록 편집이 막힌다
-- [ ] 대사 표시가 있는 NPC 만 대화된다
-- [ ] 대사가 끝나면 정확한 dialogueId를 포함한 종료 이벤트와 완료 기록이 생긴다. nextObjective 표시 연동은 TASK-041에서 검증한다
-- [ ] 같은 NPC에게 두 대사를 등록해도 미완료 대사가 덮어써지거나 같은 id가 중복 등록되지 않는다
-- [ ] 대사가 해금을 하지 않는다 (ADR 010)
+- [x] NPC 에 F 를 누르면 대사가 나온다
+- [x] 대사 중 이동과 블록 편집이 막힌다
+- [x] 대사 표시가 있는 NPC 만 대화된다
+- [x] 대사가 끝나면 정확한 dialogueId를 포함한 종료 이벤트와 완료 기록이 생긴다. nextObjective 표시 연동은 TASK-041에서 검증한다
+- [x] 같은 NPC에게 두 대사를 등록해도 미완료 대사가 덮어써지거나 같은 id가 중복 등록되지 않는다
+- [x] 대사가 해금을 하지 않는다 (ADR 010)
 
 ---
 

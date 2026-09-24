@@ -80,6 +80,36 @@ function sleepTexture(): THREE.Texture {
   return zTexture;
 }
 
+/** 머리 위 대화 표시 텍스처(말풍선 속 느낌표, 한 번만 만든다). */
+let bubbleTexture: THREE.Texture | null = null;
+function talkTexture(): THREE.Texture {
+  if (bubbleTexture) return bubbleTexture;
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 64;
+  const g = c.getContext('2d');
+  if (g) {
+    g.fillStyle = '#fff8e6';
+    g.strokeStyle = 'rgba(70, 50, 30, 0.9)';
+    g.lineWidth = 4;
+    g.beginPath();
+    g.arc(32, 28, 22, 0, Math.PI * 2);
+    g.moveTo(26, 47);
+    g.lineTo(32, 60);
+    g.lineTo(38, 47);
+    g.fill();
+    g.stroke();
+    g.fillStyle = '#d9822b';
+    g.font = 'bold 34px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('!', 32, 30);
+  }
+  bubbleTexture = new THREE.CanvasTexture(c);
+  bubbleTexture.colorSpace = THREE.SRGBColorSpace;
+  return bubbleTexture;
+}
+
 /** 조리 중 화덕 위로 오르는 김 텍스처(한 번만 만든다). 부드러운 흰 원이다. */
 let puffTexture: THREE.Texture | null = null;
 function steamTexture(): THREE.Texture {
@@ -110,6 +140,8 @@ export interface NpcViewWorld {
   placement(objectId: string): PlacedObjectSnapshot | undefined;
   /** 광장 중심(앉을 때 바라볼 곳). 없으면 null */
   readonly plazaCenter: BlockPos | null;
+  /** 이 주민에게 들을 대사가 있는가(머리 위 대화 표시). 없으면 표시하지 않는다 */
+  readonly talkable?: (npc: NPC<ActionView>) => boolean;
 }
 
 /** 주민 한 명의 모형과 자세. */
@@ -127,6 +159,8 @@ export class NpcView {
   private readonly zs: THREE.Sprite[] = [];
   /** 조리 중 화덕 위의 김 */
   private readonly steam: THREE.Sprite[] = [];
+  /** 머리 위 대화 표시 */
+  private readonly bubble: THREE.Sprite;
   private yaw = 0;
   private walk = 0;
   private time: number;
@@ -204,6 +238,10 @@ export class NpcView {
       this.steam.push(s);
       this.object3d.add(s);
     }
+    this.bubble = new THREE.Sprite(createCharacterSpriteMaterial(talkTexture()));
+    this.bubble.scale.setScalar(0.5);
+    this.bubble.visible = false;
+    this.object3d.add(this.bubble);
     this.object3d.add(this.bedding);
   }
 
@@ -223,7 +261,12 @@ export class NpcView {
     const a = npc.action;
     const use = a.facilityUse;
     const placed = use ? world.placement(use.objectId) : undefined;
-    if (use?.pose === 'lie' && placed) this.poseLying(placed);
+    // 대화 표시: 들을 대사가 있고 자는 중이 아닐 때 머리 위에서 살짝 떠 있다
+    const talk = (world.talkable?.(npc) ?? false) && a.kind !== 'sleep';
+    this.bubble.visible = talk;
+    if (talk) this.bubble.position.set(0, 2.35 + Math.sin(this.time * 2.4) * 0.05, 0);
+    if (a.kind === 'talk') this.poseTalking(p, a.lookAt ?? null, dt);
+    else if (use?.pose === 'lie' && placed) this.poseLying(placed);
     else if (use?.pose === 'sit' && a.lookAt) {
       this.poseSittingOnChair(use.usePosition, a.lookAt, a.kind === 'eat');
     } else if (a.pose === 'sit' || use?.pose === 'sit') {
@@ -291,6 +334,19 @@ export class NpcView {
       puff.scale.setScalar(0.18 + t * 0.35);
       (puff.material as THREE.SpriteMaterial).opacity = Math.sin(t * Math.PI) * 0.55;
     });
+  }
+
+  /** 대화: 서서 상대(플레이어)를 보고 한 팔로 가볍게 손짓한다. */
+  private poseTalking(
+    p: { x: number; y: number; z: number },
+    lookAt: { x: number; z: number } | null,
+    dt: number,
+  ): void {
+    this.poseStanding(p, dt);
+    if (lookAt) this.turnToward(Math.atan2(-(lookAt.x - p.x), -(lookAt.z - p.z)), dt * 2);
+    this.object3d.rotation.set(0, this.yaw, 0);
+    this.armR.rotation.set(-0.6 + Math.sin(this.time * 3) * 0.25, 0, -0.15);
+    this.head.rotation.set(0, 0, 0);
   }
 
   /** 걸음 방향으로 부드럽게 돈다. */

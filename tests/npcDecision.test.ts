@@ -43,6 +43,7 @@ function ctx(over: Partial<NPCContext> & { hour?: number } = {}): NPCContext {
     minuteOfDay: hour * 60,
     threatNearby: null,
     dialogueRequested: false,
+    talkPartner: null,
     mealActive: false,
     storage: { seed: 3, crop: 0, food: 0 },
     worldState: {

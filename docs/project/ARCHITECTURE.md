@@ -1677,6 +1677,9 @@ ObjectiveSystem은 sourceEventId의 정본 순서를 비교해 현재보다 이�
 첫 Farmer 대사의 nextObjective는 FARM_REQUEST의 밭 목표를 가리킨다.
 FARM_REQUEST 자체는 완료 확인·보상을 담당하고 같은 요청 대사를 재등록하지 않는다.
 
+구현(TASK-040, ADR 035): `systems/DialogueSystem.ts`, `data/dialogues.ts`, `ui/DialogueBox.ts`, `actions/TalkAction.ts`.
+화자 키는 창립 주민의 역할 이름(그 밖은 NPC id)이다. Esc 로 닫으면 abort(완료하지 않음). ModalView.key 로 대사 넘기기 키를 받는다.
+
 ## 21.2 해금은 대사에 걸지 않는다
 
 ADR 010 을 유지한다.
@@ -2249,6 +2252,7 @@ DI 컨테이너
 032  식사: mealId·의자 후보, NPCSystem 시설 예약, 식탁 음식 연출 Accepted
 033  상호작용 대상(READY-07)·종 패널·마을 레벨          Accepted
 034  새 주민 도착과 Villager 의 낮 생활                 Accepted
+035  대사 화자 키·TalkAction·모달 키 전달               Accepted
 ```
 
 ---
