@@ -43,6 +43,9 @@ import { ClockHud } from './ui/ClockHud';
 import { InteractPrompt } from './ui/InteractPrompt';
 import { ArrivalToast } from './ui/ArrivalToast';
 import { ObjectivePanel } from './ui/ObjectivePanel';
+import { IndexedDbSaveStore } from './ui/IndexedDbSaveStore';
+import { SaveIndicator } from './ui/SaveIndicator';
+import { applySave, SaveRejectedError } from './game/save/saveData';
 import { HealthHud } from './ui/HealthHud';
 import { DamageReportPanel } from './ui/DamageReportPanel';
 import { DamageMarkView } from './render/DamageMarkView';
@@ -212,6 +215,7 @@ function createWorld(
   startGameMinutes: number,
   residentLimit: number,
   roleLoad = 0,
+  saveStore: IndexedDbSaveStore | null = null,
 ): GameWorld {
   const world = new GameWorld({
     storage: { ...balance.storage, ...fixture.startStorage },
@@ -220,6 +224,7 @@ function createWorld(
     ...(fixture.plazaCenter ? { plazaCenter: fixture.plazaCenter } : {}),
     ...(fixture.arrivalCell ? { arrivalCell: fixture.arrivalCell } : {}),
     ...(fixture.monsterSpawns ? { monsterSpawns: fixture.monsterSpawns } : {}),
+    ...(saveStore ? { saveStore } : {}),
     ...(fixture.quarryCandidates ? { quarryCandidates: fixture.quarryCandidates } : {}),
     ...(play && fixture.playerSpawn ? { playerSpawn: fixture.playerSpawn } : {}),
   });
@@ -288,6 +293,8 @@ interface PlayView {
   readonly paused: () => boolean;
   /** 일시정지 메뉴에 소리 켜기/끄기 버튼을 붙인다 (TASK-050) */
   readonly addMuteToggle: (audio: AudioEngine) => void;
+  /** 일시정지 메뉴에 "새로 시작" 버튼을 붙인다 (TASK-051) */
+  readonly addNewGameButton: (onClick: () => void) => void;
 }
 
 /**
@@ -410,6 +417,7 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
   (window as unknown as { __gtbScreen: unknown }).__gtbScreen = screen;
   return {
     paused: () => screen.paused,
+    addNewGameButton: (onClick) => menu.addButton('새로 시작', onClick),
     addMuteToggle: (audio) => {
       const render = menu.addToggle(
         (on) => (on ? '소리 켜기 (M)' : '소리 끄기 (M)'),
@@ -636,10 +644,13 @@ function createPerfDriver(
 }
 
 /** 앱을 시작한다. */
-function start(): void {
+async function start(): Promise<void> {
   const params = new URLSearchParams(window.location.search);
   const sceneName = params.get('scene');
   const fixture = pickFixture(sceneName);
+  // 자동 저장은 고정 섬(기본 장면)에서만 한다. 시험 장면은 저장하지 않는다
+  const saveStore =
+    sceneName === null && typeof indexedDB !== 'undefined' ? new IndexedDbSaveStore() : null;
   // ?view= 가 있으면 고정 시점 관찰(측정) 모드, 없고 시작 칸이 있으면 조작 모드다
   const play = fixture.playerSpawn !== undefined && !params.has('view');
   const world = createWorld(
@@ -648,7 +659,27 @@ function start(): void {
     startMinutesFromParam(params.get('time'), fixture.defaultStartHour),
     Number(params.get('residents') ?? Number.POSITIVE_INFINITY),
     sceneName === 'perf' ? Number(params.get('load') ?? 0) : 0,
+    saveStore,
   );
+  // 저장이 있으면 이어서 한다(섬 장면만, ?new=1 이면 새로 시작). 버전이 맞지 않으면 조용히 깨지지 않고 알린다 (TASK-051)
+  let loadNote: string | null = null;
+  if (saveStore && !params.has('new')) {
+    try {
+      const saved = await saveStore.read();
+      if (saved) {
+        const t0 = performance.now();
+        applySave(world, saved);
+        console.info(`[gtb] 불러오기 ${(performance.now() - t0).toFixed(0)} ms`);
+        loadNote = '저장한 곳에서 이어 합니다';
+      }
+    } catch (e) {
+      loadNote =
+        e instanceof SaveRejectedError
+          ? `저장을 불러올 수 없어 새로 시작합니다: ${e.message}`
+          : '저장을 읽지 못해 새로 시작합니다';
+      console.warn('[gtb] 불러오기 실패', e);
+    }
+  }
   const renderer = new Renderer(getCanvas(), world.voxels, {
     workerCount: Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1)),
     chunkUploadsPerFrame: balance.performance.chunkUploadsPerFrame,
@@ -670,6 +701,14 @@ function start(): void {
   if (playView) playView.addMuteToggle(audio);
   let lastFeet: { x: number; z: number } | null = null;
   new ArrivalToast(document.body, world.events);
+  const saveIndicator = new SaveIndicator(document.body, world.events);
+  if (loadNote) saveIndicator.show(loadNote, '#f4efe2');
+  if (playView && saveStore) {
+    playView.addNewGameButton(() => {
+      if (!window.confirm('저장을 지우고 처음부터 시작할까요?')) return;
+      void saveStore.clear().then(() => window.location.reload());
+    });
+  }
   new ObjectivePanel(document.body, world.events);
   const bellRing = new BellRingView(world.plazaCenter, world.events);
   const damageMarks = new DamageMarkView(() => world.repair.pending.flatMap((e) => e.cells));
@@ -873,4 +912,4 @@ function start(): void {
   requestAnimationFrame(frame);
 }
 
-start();
+void start();

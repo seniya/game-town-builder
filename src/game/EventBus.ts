@@ -56,6 +56,9 @@ export interface GameEventMap {
   /** 습격이 시작됐다 / 끝났다 (MVP_SPEC 24.5) */
   RAID_STARTED: { raidId: number; count: number };
   RAID_ENDED: RaidResult;
+  /** 저장이 끝났다 / 실패했다 (ARCHITECTURE 23.3). 실패하면 이전 슬롯이 남는다 */
+  SAVE_COMPLETED: { gameMinutes: number };
+  SAVE_FAILED: { reason: string };
   /** 진행 이벤트가 발생했다 (MVP_SPEC 27) */
   GAME_EVENT_FIRED: { id: GameEventId };
   /** 이벤트가 연출(도착 확인·엔딩)을 요청했다. 연출 완성은 TASK-052 */

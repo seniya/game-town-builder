@@ -46,6 +46,8 @@ export class VoxelWorld {
   /** 청크별 메시 revision. 블록이 없는(air 만인) 청크도 이웃 변경으로 revision 이 오를 수 있다. */
   private readonly revisions: Uint32Array;
   private readonly dirty = new Set<number>();
+  /** 세션 전체에서 편집으로 바뀐 청크(저장 대상). 렌더의 dirty 와 별개이며 메싱 뒤에도 남는다 (ARCHITECTURE 23.3) */
+  private readonly modified = new Set<number>();
   private readonly index = new PlacementIndex();
   private batchCounter = 0;
 
@@ -226,8 +228,46 @@ export class VoxelWorld {
     return true;
   }
 
+  /** 편집으로 바뀐 청크의 블록 복사본(저장용). 살아 있는 배열과 분리된다. */
+  modifiedChunks(): { coord: ChunkCoord; blocks: Uint16Array }[] {
+    const out: { coord: ChunkCoord; blocks: Uint16Array }[] = [];
+    for (const i of [...this.modified].sort((a, b) => a - b)) {
+      const c = this.chunks[i];
+      if (c) out.push({ coord: this.chunkCoordOf(i), blocks: c.blocks.slice() });
+    }
+    return out;
+  }
+
+  /** 저장된 청크 하나를 되돌린다(로드 전용). 이벤트를 내지 않고 이후에도 저장 대상으로 남긴다. */
+  restoreChunk(coord: ChunkCoord, blocks: Uint16Array): void {
+    if (!this.chunkInBounds(coord.cx, coord.cy, coord.cz) || blocks.length !== Chunk.VOLUME) {
+      throw new RangeError(`저장된 청크가 잘못되었다: ${coord.cx},${coord.cy},${coord.cz}`);
+    }
+    const i = this.chunkIndex(coord.cx, coord.cy, coord.cz);
+    let chunk = this.chunks[i];
+    if (!chunk) {
+      chunk = new Chunk(coord);
+      this.chunks[i] = chunk;
+    }
+    chunk.blocks.set(blocks);
+    this.modified.add(i);
+  }
+
+  /** 배치 목록·id 카운터·편집 묶음 카운터를 되돌린다(로드 전용, 이벤트 없음). */
+  restorePlacements(
+    objects: readonly PlacedObjectSnapshot[],
+    idCounter: number,
+    batchCounter: number,
+  ): void {
+    this.index.clear();
+    for (const o of objects) this.index.insert(o, objectCells(o));
+    this.index.ensureCounterAtLeast(idCounter);
+    this.batchCounter = Math.max(this.batchCounter, batchCounter);
+  }
+
   /** 칸 하나를 배열에 쓰고, padded 뷰에 이 칸을 포함하는 모든 청크를 dirty 로 만든다. */
   private writeCell(p: BlockPos, id: number): void {
+    this.modified.add(this.chunkIndexOfBlock(p.x, p.y, p.z));
     this.chunkForWrite(p.x, p.y, p.z).blocks[
       Chunk.index(p.x & Chunk.MASK, p.y & Chunk.MASK, p.z & Chunk.MASK)
     ] = id;

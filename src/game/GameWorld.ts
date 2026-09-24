@@ -32,6 +32,8 @@ import { MonsterSystem } from './systems/MonsterSystem';
 import { ObjectiveSystem } from './systems/ObjectiveSystem';
 import { NPCDecisionSystem, plazaSpots, type ThreatView } from './systems/NPCDecisionSystem';
 import { NPCSystem } from './systems/NPCSystem';
+import { SaveSystem, type SaveStore } from './systems/SaveSystem';
+import { captureSave } from './save/saveData';
 import { SleepSystem } from './systems/SleepSystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
 import { QuarryRespawnSystem } from './systems/QuarryRespawnSystem';
@@ -102,6 +104,8 @@ export interface GameWorldInit {
   readonly arrivalCell?: BlockPos;
   /** 몬스터 스폰 칸(어두운 외곽). 없으면 습격하지 않는 시험 월드다 (MVP_SPEC 24.1) */
   readonly monsterSpawns?: readonly BlockPos[];
+  /** 저장소. 없으면 자동 저장하지 않는 시험 월드다 (TASK-051) */
+  readonly saveStore?: SaveStore;
   /** 진행 이벤트 정의. 기본은 MVP_SPEC 27.1 의 8 개. 빈 배열이면 진행 이벤트가 없는 시험 월드다 */
   readonly gameEvents?: readonly GameEventDefinition[];
 }
@@ -143,6 +147,8 @@ export class GameWorld {
   readonly dialogue: DialogueSystem;
   /** 진행 이벤트 (update 15 번) */
   readonly gameEvents: GameEventSystem;
+  /** 자동 저장 (update 16 번, 목표 뒤) */
+  readonly saves: SaveSystem;
   /** 현재 목표 (update 16 번) */
   readonly objectives: ObjectiveSystem;
   /** 피해 기록·수리 후보·복원 (판단 전 10 번 슬롯에서 날짜 갱신) */
@@ -365,6 +371,13 @@ export class GameWorld {
     this.attach('npc', this.npcSystem);
     this.attach('gratitude', this.gratitude);
     this.attach('objectiveSave', this.objectives);
+    this.saves = new SaveSystem({
+      events: this.events,
+      clock: this.clock,
+      capture: () => captureSave(this),
+      store: init.saveStore ?? null,
+    });
+    this.attach('objectiveSave', this.saves);
     this.debug.gratitudeSource = () => this.gratitude.total;
     this.raids = new RaidSystem({
       events: this.events,
@@ -472,6 +485,38 @@ export class GameWorld {
     this.registry.npcs.add(npc);
     this.sleep.markDirty();
     return npc;
+  }
+
+  /**
+   * 로드 복원: 주민을 저장된 id·역할·위치로 다시 세운다. 모든 주민은 대기에서 새로 판단한다 (ARCHITECTURE 23.4 의 4 / 5).
+   * 이후 새로 도착하는 주민의 id 가 겹치지 않게 번호를 맞춘다.
+   */
+  restoreResidents(
+    list: readonly {
+      id: string;
+      role: NPCRole;
+      pos: Vec3;
+      health: number;
+      stunUntilGameMinutes: number;
+      mealId: string | null;
+      hasEatenThisMeal: boolean;
+    }[],
+  ): void {
+    for (const n of [...this.registry.npcs.values()]) this.registry.npcs.remove(n.id);
+    let counter = 0;
+    for (const r of list) {
+      const npc = createNPC(r.id, r.role, { x: 0, y: 0, z: 0 }, new IdleAction());
+      npc.body.pos = { ...r.pos };
+      npc.health = r.health;
+      npc.stunUntilGameMinutes = r.stunUntilGameMinutes;
+      npc.mealId = r.mealId;
+      npc.hasEatenThisMeal = r.hasEatenThisMeal;
+      this.registry.npcs.add(npc);
+      const n = Number(/-(\d+)$/.exec(r.id)?.[1] ?? 0);
+      counter = Math.max(counter, n);
+    }
+    this.residentCounter = Math.max(this.residentCounter, counter);
+    this.sleep.markDirty();
   }
 
   /**

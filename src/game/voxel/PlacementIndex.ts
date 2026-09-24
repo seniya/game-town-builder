@@ -41,6 +41,12 @@ export class PlacementIndex {
   private readonly cellToObject = new Map<string, string>();
   private counter = 0;
 
+  /** 모든 배치를 지운다(로드 복원 전용, ARCHITECTURE 23.4 의 2). */
+  clear(): void {
+    this.objects.clear();
+    this.cellToObject.clear();
+  }
+
   /** 다음 객체 id 를 발급한다. 단조 증가하며 저장된다 (objectIdCounter). */
   allocateId(): string {
     this.counter += 1;

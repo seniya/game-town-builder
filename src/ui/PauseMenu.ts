@@ -109,6 +109,28 @@ export class PauseMenu {
     return render;
   }
 
+  /** 카드 아래에 버튼을 더한다. 클릭은 "계속" 으로 전달하지 않는다. */
+  addButton(label: string, onClick: () => void): void {
+    const b = document.createElement('button');
+    b.textContent = label;
+    Object.assign(b.style, {
+      marginTop: '10px',
+      marginLeft: '8px',
+      font: '600 13px system-ui, sans-serif',
+      padding: '5px 12px',
+      borderRadius: '6px',
+      border: '1px solid #a88a60',
+      background: '#fff8ea',
+      color: '#3a2f25',
+      cursor: 'pointer',
+    });
+    b.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      onClick();
+    });
+    this.card.append(b);
+  }
+
   /** 메뉴를 보인다. */
   show(): void {
     this.renderTitle();

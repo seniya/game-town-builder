@@ -70,8 +70,9 @@ export class RepairSystem implements SlotSystem {
   /** 블록 변경을 구독한다. */
   constructor(private readonly deps: RepairDeps) {
     this.day = deps.clock.day;
-    // 시작한 날 아침은 이미 지난 것으로 본다(첫 보고는 다음 날 07:00)
-    this.reportedDay = deps.clock.day;
+    // 07:00 뒤에 시작했으면 그날 아침은 지난 것으로 본다(07:00 전이면 그날 07:00 에 보고한다)
+    this.reportedDay =
+      deps.clock.minuteOfDay >= R.repairStartHour * 60 ? deps.clock.day : deps.clock.day - 1;
     this.reportedThrough = deps.clock.gameMinutes - 1e-6;
     deps.events.on('BLOCK_CHANGED', (c) => {
       this.revision += 1;
