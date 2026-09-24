@@ -30,7 +30,7 @@ import { InventorySystem } from './systems/InventorySystem';
 import { MealSystem } from './systems/MealSystem';
 import { MonsterSystem } from './systems/MonsterSystem';
 import { ObjectiveSystem } from './systems/ObjectiveSystem';
-import { NPCDecisionSystem, plazaSpots } from './systems/NPCDecisionSystem';
+import { NPCDecisionSystem, plazaSpots, type ThreatView } from './systems/NPCDecisionSystem';
 import { NPCSystem } from './systems/NPCSystem';
 import { SleepSystem } from './systems/SleepSystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
@@ -40,7 +40,14 @@ import { ResidentArrivalSystem } from './systems/ResidentArrivalSystem';
 import { RoomSystem } from './systems/RoomSystem';
 import { VillageLevelSystem } from './systems/VillageLevelSystem';
 import { WorldStateSystem } from './systems/WorldStateSystem';
-import type { AabbBody, BlockPos, GameEventDefinition, NPCRole, WorldStateData } from './types';
+import type {
+  AabbBody,
+  BlockPos,
+  GameEventDefinition,
+  NPCRole,
+  Vec3,
+  WorldStateData,
+} from './types';
 import { VillageStorage, type VillageStorageInit } from './VillageStorage';
 import { VoxelWorld, type WorldSize } from './voxel/VoxelWorld';
 
@@ -168,6 +175,8 @@ export class GameWorld {
   /** 슬롯 계측을 켠다. 기본은 끔(계측 비용을 게임에 얹지 않는다) */
   profile = false;
   private residentCounter = 0;
+  /** 주민별 도피 칸. 위협이 사라지면 지운다(몬스터가 움직여도 목적지가 흔들리지 않게) */
+  private readonly fleeSpots = new Map<string, BlockPos>();
   private plazaCache: { revision: number; spots: readonly BlockPos[] } | null = null;
 
   private readonly slots = new Map<UpdateSlot, SlotSystem[]>(
@@ -322,6 +331,7 @@ export class GameWorld {
         clock: this.clock,
         storage: () => this.storage.snapshot(),
         worldState: () => this.worldStateSystem.current,
+        threat: (id, cell) => this.threatFor(id, cell),
         talkingTo: (id) =>
           this.dialogue.active?.npcId === id && this.player ? this.player.body.pos : null,
         assignedBed: (id) => this.sleep.assignedBed(id),
@@ -474,6 +484,69 @@ export class GameWorld {
       if (this.nav.isStandable(p, 'npc')) return p;
     }
     return this.currentPlazaSpots()[0] ?? null;
+  }
+
+  /**
+   * 이 주민의 위협(반경 12 안 가장 가까운 몬스터)과 도피 칸 (MVP_SPEC 19.4, TASK-047).
+   * 도피 칸: 이미 방 안이면 제자리, 아니면 24 칸 안의 가장 가까운 방 안 칸, 없으면 몬스터 반대쪽 10 칸 부근의 설 수 있는 칸.
+   * 한 번 정한 칸은 위협이 사라질 때까지 유지한다.
+   */
+  private threatFor(
+    npcId: string,
+    cell: BlockPos,
+  ): { threat: ThreatView; spot: BlockPos | null } | null {
+    const npc = this.registry.npcs.get(npcId);
+    if (!npc) return null;
+    let near: { m: Monster; d: number } | null = null;
+    // 이미 도피 중이면 더 멀어질 때까지(15) 위협으로 본다
+    const radius = this.fleeSpots.has(npcId)
+      ? balance.npc.threatReleaseRadius
+      : balance.npc.threatRadius;
+    for (const m of this.registry.monsters.values()) {
+      const p = m.body.pos;
+      const q = npc.body.pos;
+      const d = Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+      if (d <= radius && (!near || d < near.d)) near = { m, d };
+    }
+    if (!near) {
+      this.fleeSpots.delete(npcId);
+      return null;
+    }
+    const threat: ThreatView = { monsterId: near.m.id, pos: near.m.body.pos };
+    let spot = this.fleeSpots.get(npcId) ?? null;
+    if (!spot || !this.nav.isStandable(spot, 'npc')) {
+      spot = this.chooseFleeSpot(cell, near.m.body.pos);
+      if (spot) this.fleeSpots.set(npcId, spot);
+    }
+    return { threat, spot };
+  }
+
+  /** 도피 칸을 고른다. */
+  private chooseFleeSpot(cell: BlockPos, from: Vec3): BlockPos | null {
+    if (this.rooms.findContaining(cell)) return cell;
+    let best: { c: BlockPos; d: number } | null = null;
+    for (const room of this.rooms.getAll()) {
+      if (room.dirty) continue;
+      const c = room.center;
+      const d = Math.hypot(c.x - cell.x, c.z - cell.z);
+      if (d > 24 || (best && d >= best.d)) continue;
+      const inside = [c, ...room.shape.interior].find((p) => this.nav.isStandable(p, 'npc'));
+      if (inside) best = { c: inside, d };
+    }
+    if (best) return best.c;
+    const dx = cell.x + 0.5 - from.x;
+    const dz = cell.z + 0.5 - from.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const tx = Math.round(cell.x + (dx / len) * 10);
+    const tz = Math.round(cell.z + (dz / len) * 10);
+    for (let r = 0; r <= 2; r++)
+      for (let ox = -r; ox <= r; ox++)
+        for (let oz = -r; oz <= r; oz++)
+          for (const dy of [0, 1, -1, 2, -2]) {
+            const p = { x: tx + ox, y: cell.y + dy, z: tz + oz };
+            if (this.nav.isStandable(p, 'npc')) return p;
+          }
+    return null;
   }
 
   /** 광장 칸 목록. 통행이 바뀌었을 때만 다시 계산한다. */

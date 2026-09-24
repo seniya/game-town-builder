@@ -65,6 +65,8 @@ export interface NPCContext {
   /** 그날 00:00 부터의 분 */
   readonly minuteOfDay: number;
   readonly threatNearby: ThreatView | null;
+  /** 위협이 있을 때 달아날 칸(소유자가 정한다). 없으면 null */
+  readonly fleeSpot: BlockPos | null;
   readonly dialogueRequested: boolean;
   /** 대화 상대(플레이어)의 위치. 대화 중이 아니면 null */
   readonly talkPartner: Vec3 | null;
@@ -102,7 +104,13 @@ export type ActionPlan =
   | { readonly kind: 'role'; readonly key: string; readonly work: 'repair' }
   | { readonly kind: 'cook'; readonly key: string; readonly stove: Readonly<Facility> }
   | { readonly kind: 'plant' | 'harvest'; readonly key: string; readonly target: BlockPos }
-  | { readonly kind: 'flee'; readonly key: string; readonly from: Vec3 }
+  | {
+      readonly kind: 'flee';
+      readonly key: string;
+      readonly from: Vec3;
+      /** 달아날 칸. null 이면 이미 안전한 곳에 있어 숨어 있는다 */
+      readonly to: BlockPos | null;
+    }
   | { readonly kind: 'talk'; readonly key: string; readonly toward: Vec3 | null };
 
 /** 이동 계획의 목적. 침대로 가다 실패하면 SleepSystem 에 알린다. */
@@ -305,9 +313,23 @@ export function decideAction(ctx: NPCContext): ActionPlan | null {
   return plan.key === ctx.npc.actionKey ? null : plan;
 }
 
+/**
+ * 1 단계 위협 (MVP_SPEC 19.4, TASK-047). 소유자가 준 도피 칸(가까운 방 안, 없으면 몬스터 반대쪽)으로 달아나고,
+ * 도착했으면 숨어 있는다. 도피 칸이 없으면 제자리에서 숨는다. 다른 판단을 하지 않는다.
+ */
+function flee(ctx: NPCContext, threat: ThreatView): ActionPlan {
+  const to = ctx.fleeSpot;
+  if (!to) return { kind: 'flee', key: 'flee:hide', from: threat.pos, to: null };
+  const moveKey = `flee:${posKey(to)}`;
+  const moving = ctx.npc.actionKind === 'flee' && ctx.npc.actionKey === moveKey;
+  if (!moving && same(to, ctx.npc.cell))
+    return { kind: 'flee', key: 'flee:hide', from: threat.pos, to: null };
+  return { kind: 'flee', key: moveKey, from: threat.pos, to };
+}
+
 /** 5 단계 중 첫 번째로 해당하는 계획. */
 function choose(ctx: NPCContext): ActionPlan {
-  if (ctx.threatNearby) return { kind: 'flee', key: 'flee', from: ctx.threatNearby.pos };
+  if (ctx.threatNearby) return flee(ctx, ctx.threatNearby);
   if (ctx.dialogueRequested) return { kind: 'talk', key: 'talk', toward: ctx.talkPartner };
   return physiological(ctx) ?? roleWork(ctx) ?? fallback(ctx);
 }
@@ -333,6 +355,11 @@ export interface NPCDecisionDeps {
   readonly assign: (npcId: string, plan: ActionPlan) => void;
   /** FarmSystem 의 후보(농부에게만, 역할 작업 시간에만 묻는다). 없으면 농사가 없는 월드다 */
   readonly farmCandidate?: (npcId: string, cell: BlockPos) => FarmCandidate | null;
+  /** 이 주민의 위협(반경 12 안 가장 가까운 몬스터)과 도피 칸. 없으면 위협이 없는 월드다 */
+  readonly threat?: (
+    npcId: string,
+    cell: BlockPos,
+  ) => { threat: ThreatView; spot: BlockPos | null } | null;
   /** 이 주민과 대화 중인 상대의 위치 (DialogueSystem). 대화 중이 아니면 null */
   readonly talkingTo?: (npcId: string) => Vec3 | null;
   /** 식사 구간인가 (MealSystem). 없으면 식사가 없는 월드다 */
@@ -383,6 +410,7 @@ export class NPCDecisionSystem implements SlotSystem {
           ? this.deps.cookCandidate(npc.id, cell)
           : null;
       const talkPartner = this.deps.talkingTo?.(npc.id) ?? null;
+      const danger = this.deps.threat?.(npc.id, cell) ?? null;
       const diningSeat =
         mealActive && !npc.hasEatenThisMeal && npc.action.kind !== 'eat' && this.deps.diningSeat
           ? this.deps.diningSeat(npc.id, cell)
@@ -401,7 +429,8 @@ export class NPCDecisionSystem implements SlotSystem {
         phase: this.deps.clock.phase,
         gameMinutes: this.deps.clock.gameMinutes,
         minuteOfDay: this.deps.clock.minuteOfDay,
-        threatNearby: null,
+        threatNearby: danger?.threat ?? null,
+        fleeSpot: danger?.spot ?? null,
         dialogueRequested: talkPartner !== null,
         talkPartner,
         mealActive,

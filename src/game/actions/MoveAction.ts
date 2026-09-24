@@ -34,7 +34,8 @@ export function startCellOf(ctx: ActionContext): BlockPos | null {
 
 /** 경로를 요청하고 따라 걷는 Action. */
 export class MoveAction implements Action {
-  readonly kind = 'move' as const;
+  /** 'flee' 는 도피 이동이다(속도 5.0, 우선순위 1, TASK-047) */
+  readonly kind: 'move' | 'flee';
   private request: PathRequest | null = null;
   private controller: MovementController | null = null;
   private unwatch: (() => void) | null = null;
@@ -42,13 +43,17 @@ export class MoveAction implements Action {
   /** 실패했을 때의 사유. NPCSystem 이 실패 보고에 쓴다 */
   failure: MoveFailure | null = null;
 
-  /** 목적지·판단 키·표시 이름. destination 은 디버그 표시용 대표 칸이다. */
+  /** 목적지·판단 키·표시 이름·속도·종류. destination 은 디버그 표시용 대표 칸이다. */
   constructor(
     readonly goal: PathGoal,
     readonly key: string,
     readonly label: string,
     readonly destination: BlockPos | null,
-  ) {}
+    private readonly speed: number = balance.npc.moveSpeed,
+    kind: 'move' | 'flee' = 'move',
+  ) {
+    this.kind = kind;
+  }
 
   /** 남은 경로(디버그). */
   get remainingPath(): readonly BlockPos[] {
@@ -82,7 +87,7 @@ export class MoveAction implements Action {
       }
       this.follow(ctx, path);
     }
-    const status = controller.update(dt, body, balance.npc.moveSpeed);
+    const status = controller.update(dt, body, this.speed);
     if (status === 'arrived') {
       this.stopWatching();
       return 'done';

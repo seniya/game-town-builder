@@ -127,6 +127,8 @@ export const balance = {
     maxHealth: 10,
     stunMinutes: 30,
     threatRadius: 12,
+    /** 도피 중인 주민의 위협 해제 반경. 경계에서 도피·복귀가 되풀이되지 않게 한다 (MVP_SPEC 19.4.1) */
+    threatReleaseRadius: 15,
     repathMinIntervalSeconds: 0.5,
   },
 
