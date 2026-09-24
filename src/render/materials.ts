@@ -192,6 +192,16 @@ export function createEmissiveMaterial(color: number): THREE.Material {
   return new THREE.MeshBasicMaterial({ color });
 }
 
+/** 미수리 피해 표시 재질 (TASK-049). 붉은 반투명, 깊이 쓰기 없음. */
+export function createDamageMarkMaterial(): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color: 0xff3b2f,
+    transparent: true,
+    opacity: 0.3,
+    depthWrite: false,
+  });
+}
+
 /** 종 연출의 빛 번짐 재질 (TASK-036). 가산 합성, 깊이 쓰기 없음. 투명도는 연출이 매 프레임 바꾼다. */
 export function createGlowMaterial(color: number): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({

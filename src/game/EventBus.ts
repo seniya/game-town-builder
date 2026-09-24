@@ -51,6 +51,8 @@ export interface GameEventMap {
   /** 몬스터가 부순 피해가 기록됐다 / 피해 칸이 복원됐다 (MVP_SPEC 25) */
   DAMAGE_LOGGED: DamageEntry;
   BLOCK_REPAIRED: { pos: BlockPos };
+  /** 아침 피해 보고: 지난 보고 뒤 파괴된 점유 칸 수 (MVP_SPEC 25.4) */
+  DAMAGE_REPORT: { cells: number; entries: number };
   /** 습격이 시작됐다 / 끝났다 (MVP_SPEC 24.5) */
   RAID_STARTED: { raidId: number; count: number };
   RAID_ENDED: RaidResult;

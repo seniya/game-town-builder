@@ -36,6 +36,9 @@ export interface RepairSnapshot {
   readonly day: number;
   readonly repairedCells: number;
   readonly counter: number;
+  /** 마지막으로 아침 보고를 한 day 와 그때까지 센 시각 (MVP_SPEC 25.4) */
+  readonly reportedDay: number;
+  readonly reportedThrough: number;
 }
 
 /** RepairSystem 이 읽고 쓰는 것. */
@@ -58,10 +61,15 @@ export class RepairSystem implements SlotSystem {
   private day: number;
   private repaired = 0;
   private counter = 0;
+  private reportedDay: number;
+  private reportedThrough = -1;
 
   /** 블록 변경을 구독한다. */
   constructor(private readonly deps: RepairDeps) {
     this.day = deps.clock.day;
+    // 시작한 날 아침은 이미 지난 것으로 본다(첫 보고는 다음 날 07:00)
+    this.reportedDay = deps.clock.day;
+    this.reportedThrough = deps.clock.gameMinutes - 1e-6;
     deps.events.on('BLOCK_CHANGED', (c) => {
       if (c.by === 'monster' && c.from !== BlockId.air)
         this.log(c.batchId, c.pos, c.from, c.removedObject ?? null);
@@ -90,9 +98,25 @@ export class RepairSystem implements SlotSystem {
     return `repair:${damageId}`;
   }
 
-  /** 자정이 지나면 당일 수리량을 초기화한다. */
+  /** 자정이 지나면 당일 수리량을 초기화하고, 07:00 을 지나면 아침 보고를 한 번 한다. */
   update(): void {
     this.rollDay();
+    this.morningReport();
+  }
+
+  /**
+   * 07:00 아침 보고 (MVP_SPEC 25.4): 지난 보고 뒤에 기록된 파괴가 있으면 파괴 칸 수를 알린다.
+   * 그 사이 수리한 피해도 센다(이력 기준). 피해가 없으면 알리지 않는다. 하루 한 번이며 보고 여부는 저장한다.
+   */
+  private morningReport(): void {
+    const c = this.deps.clock;
+    if (c.day === this.reportedDay || c.minuteOfDay < R.repairStartHour * 60) return;
+    this.reportedDay = c.day;
+    const since = this.reportedThrough;
+    this.reportedThrough = c.gameMinutes;
+    const entries = this.historyList.filter((e) => e.gameMinutes > since);
+    const cells = entries.reduce((n, e) => n + e.cells.length, 0);
+    if (cells > 0) this.deps.events.emit('DAMAGE_REPORT', { cells, entries: entries.length });
   }
 
   /**
@@ -170,6 +194,8 @@ export class RepairSystem implements SlotSystem {
       day: this.day,
       repairedCells: this.repaired,
       counter: this.counter,
+      reportedDay: this.reportedDay,
+      reportedThrough: this.reportedThrough,
     };
   }
 
@@ -185,6 +211,8 @@ export class RepairSystem implements SlotSystem {
     this.day = s.day;
     this.repaired = s.repairedCells;
     this.counter = s.counter;
+    this.reportedDay = s.reportedDay;
+    this.reportedThrough = s.reportedThrough;
   }
 
   /** 파괴 한 건을 기록한다. 같은 편집(batchId)의 같은 객체는 한 번만. */

@@ -44,6 +44,8 @@ import { InteractPrompt } from './ui/InteractPrompt';
 import { ArrivalToast } from './ui/ArrivalToast';
 import { ObjectivePanel } from './ui/ObjectivePanel';
 import { HealthHud } from './ui/HealthHud';
+import { DamageReportPanel } from './ui/DamageReportPanel';
+import { DamageMarkView } from './render/DamageMarkView';
 import { BellRingView } from './render/BellRingView';
 import { donate } from './game/systems/donation';
 import { findInteractTarget, type InteractTarget } from './game/systems/interaction';
@@ -321,6 +323,9 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
     requestClose: () => machine?.close(true),
   });
   const prompt = new InteractPrompt(document.body);
+  const damageReport = new DamageReportPanel(document.body, world.events, () =>
+    machine?.close(true),
+  );
   /** F 로 고른 대화 상대. DialogueBox 가 열릴 때 읽는다 */
   let talkTarget: string | null = null;
   const speakerNames: Record<string, string> = {
@@ -360,6 +365,7 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
       bell: bellPanel.bellView,
       storage: bellPanel.storageView,
       dialogue: dialogueBox,
+      damageReport,
     },
     () => {
       const t = interactTarget();
@@ -414,6 +420,8 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
               : null,
       );
       bellPanel.update(now);
+      // 아침 피해 보고는 조작 중일 때 연다 (MVP_SPEC 25.4)
+      if (damageReport.pending && screen.state.kind === 'playing') screen.open('damageReport');
       healthHud.update();
       diagnosticPanel.update();
     },
@@ -635,6 +643,8 @@ function start(): void {
   new ArrivalToast(document.body, world.events);
   new ObjectivePanel(document.body, world.events);
   const bellRing = new BellRingView(world.plazaCenter, world.events);
+  const damageMarks = new DamageMarkView(() => world.repair.pending.flatMap((e) => e.cells));
+  renderer.scene.add(damageMarks.object3d);
   renderer.scene.add(bellRing.object3d);
   const clockHud = new ClockHud(document.body, world.clock, formatClock);
   if (params.get('bounds') === '1') world.debug.showRoomBounds = true;
@@ -765,6 +775,7 @@ function start(): void {
     props.update(frameMs / 1000);
     crops.update(frameMs / 1000);
     bellRing.update(frameMs / 1000);
+    damageMarks.update(frameMs / 1000);
     dishes.update();
     dayNight.update(frameMs / 1000);
     navOverlay.update(
