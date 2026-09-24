@@ -167,4 +167,32 @@ describe('취침 (TASK-033, MVP_SPEC 18)', () => {
     run(w, 1);
     expect(w.sleep.assignedBed(without)).not.toBeNull();
   });
+
+  it('Test 6 (MVP_SPEC 39): 침대 셋·주민 셋은 각자의 침대에 누워 각각 +5, 침대가 둘이면 쉬는 한 명은 포인트가 없다', () => {
+    const { w, ids } = scene(3, 3);
+    const gains: string[] = [];
+    w.events.on('GRATITUDE_GAINED', (g) => {
+      if (g.source.kind === 'sleep' && g.amount === 5) gains.push(g.source.npcId);
+    });
+    w.clock.advanceTo(20, 0);
+    run(w, 60, () => ids.every((id) => kindOf(w, id) === 'sleep') && gains.length === 3);
+    expect(ids.map((id) => kindOf(w, id))).toEqual(['sleep', 'sleep', 'sleep']);
+    const beds = ids.map((id) => w.sleep.assignedBed(id)?.objectId);
+    expect(new Set(beds).size).toBe(3);
+    expect([...gains].sort()).toEqual([...ids].sort());
+
+    const two = scene(2, 3);
+    const got: string[] = [];
+    two.w.events.on('GRATITUDE_GAINED', (g) => {
+      if (g.source.kind === 'sleep' || g.source.kind === 'eat' || g.source.kind === 'cook')
+        got.push(g.source.npcId);
+    });
+    two.w.clock.advanceTo(20, 0);
+    run(two.w, 60, () => two.ids.every((id) => ['sleep', 'rest'].includes(kindOf(two.w, id))));
+    run(two.w, 5);
+    const resting = two.ids.find((id) => kindOf(two.w, id) === 'rest');
+    expect(resting).toBeDefined();
+    expect(got).toHaveLength(2);
+    expect(got).not.toContain(resting);
+  });
 });

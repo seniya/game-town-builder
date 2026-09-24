@@ -17,7 +17,13 @@ import { BLOCKS, BlockId } from './game/data/blocks';
 import { GameWorld } from './game/GameWorld';
 import { buildIsland, ISLAND_REGIONS, islandPlayerSpawn } from './game/data/island';
 import { perfFixture } from './game/data/perfFixture';
-import { applyRoleLoad, writeRoleLoad, type RoleLoad } from './game/perfLoad';
+import {
+  applyRoleLoad,
+  prepareMvpPerf,
+  writeMvpPerfRooms,
+  writeRoleLoad,
+  type RoleLoad,
+} from './game/perfLoad';
 import { formatClock, MINUTES_PER_DAY } from './game/systems/GameClockSystem';
 import { CameraController, HIDE_PLAYER_BELOW } from './render/CameraController';
 import { PlayerView } from './render/EntityView';
@@ -179,6 +185,25 @@ const islandScene: VisualFixture = {
   ],
 };
 
+/** MVP 성능 측정 장면의 방·객체 (MVP_SPEC 36, TASK-053). 쓰기 없이 한 번 불러 객체 목록을 얻는다. */
+const mvpPerfObjects = writeMvpPerfRooms(() => undefined, islandData.bellPos);
+
+/** MVP 성능 측정 장면: 초기 섬 + 네 방·광원 16 + 주민 다섯, 20:58 시작(곧 2 차 습격 몬스터 다섯). 측정 전용이다. */
+const mvpPerfScene: VisualFixture = {
+  ...islandScene,
+  build: (write) => {
+    buildIsland(write);
+    writeMvpPerfRooms(write, islandData.bellPos);
+  },
+  objects: mvpPerfObjects,
+  residents: [
+    ...(islandScene.residents ?? []),
+    { role: 'villager', cell: islandData.residentArrival },
+    { role: 'villager', cell: islandData.residentArrival },
+  ],
+  defaultStartHour: 20 + 58 / 60,
+};
+
 /**
  * ?time=시(소수 가능, 19.5 = 19:30) 를 시작 gameMinutes 로 바꾼다. 07:00 이후면 Day 1, 이전이면 Day 2 의 그 시각이다.
  * 관찰 장면용 시작 조건이며 게임 규칙이 아니다.
@@ -200,6 +225,7 @@ function pickFixture(name: string | null): VisualFixture {
   if (name === 'sleep-lab') return sleepLabFixture;
   if (name === 'kitchen-lab') return kitchenLabFixture;
   if (name === 'perf') return perfFixture;
+  if (name === 'mvp-perf') return mvpPerfScene;
   return islandScene;
 }
 
@@ -692,6 +718,8 @@ async function start(): Promise<void> {
     sceneName === 'perf' ? Number(params.get('load') ?? 0) : 0,
     saveStore,
   );
+  // MVP 성능 측정 장면: 레벨 3·1 차 습격 종료로 두어 21:00 에 몬스터 다섯이 온다 (MVP_SPEC 36, TASK-053)
+  if (sceneName === 'mvp-perf') prepareMvpPerf(world);
   // 저장이 있으면 이어서 한다(섬 장면만, ?new=1 이면 새로 시작). 버전이 맞지 않으면 조용히 깨지지 않고 알린다 (TASK-051)
   let loadNote: string | null = null;
   if (saveStore && !params.has('new')) {
@@ -823,7 +851,7 @@ async function start(): Promise<void> {
   if (params.get('debug') === '1') debugPanel.toggle();
   const measureSeconds = Number(params.get('measure') ?? 0);
   const perf =
-    sceneName === 'perf'
+    sceneName === 'perf' || sceneName === 'mvp-perf'
       ? createPerfDriver(
           world,
           renderer,

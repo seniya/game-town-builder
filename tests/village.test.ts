@@ -260,4 +260,16 @@ describe('상호작용 대상 선택 (READY-07)', () => {
     expect(m.key('KeyF')).toBe(true);
     expect(opened).toEqual(['open:bell', 'close:bell', 'open:storage']);
   });
+
+  it('Test 7-1 (MVP_SPEC 39): 다른 게이트를 다 만족해도 감사 포인트가 79 면 칠 수 없고, 부족한 것은 포인트뿐이다', () => {
+    const { sys } = levels({
+      points: 79,
+      rooms: [room('Bedroom', 2), room('EmptyRoom')],
+      population: 3,
+    });
+    const e = sys.evaluate();
+    expect(e.canRing).toBe(false);
+    expect(e.gates.filter((g) => !g.met).map((g) => g.requirement)).toEqual(['감사 포인트']);
+    expect(sys.ring()).toBe(false);
+  });
 });

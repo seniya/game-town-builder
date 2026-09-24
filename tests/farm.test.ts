@@ -204,4 +204,18 @@ describe('후보는 밭 목록에서 고른다: 월드 크기와 무관 (AC)', (
     expect(reads(128)).toBe(reads(16));
     expect(reads(16)).toBeLessThan(40);
   });
+
+  it('Test 4-1·3 (MVP_SPEC 39): 밭 네 칸을 깔면 농부가 네 칸 모두 심고 seed 가 4 준다', () => {
+    const { w, cells } = farmScene([
+      [10, 10],
+      [11, 10],
+      [12, 10],
+      [13, 10],
+    ]);
+    w.storage.add('seed', 4);
+    const seed0 = w.storage.get('seed');
+    run(w, 90, () => cells.every((c) => hasCrop(w, c)));
+    expect(cells.every((c) => hasCrop(w, c))).toBe(true);
+    expect(w.storage.get('seed')).toBe(seed0 - 4);
+  });
 });

@@ -182,4 +182,29 @@ describe('몬스터 AI 와 블록 파괴 (TASK-045, MVP_SPEC 24.3)', () => {
     expect(Math.hypot(m.body.pos.x - p0.x, m.body.pos.z - p0.z)).toBeLessThan(0.01);
     expect(w.raids.active?.destroyedCells).toBe(0);
   });
+
+  it('Test 8-10·12~15 (MVP_SPEC 39): 몬스터가 부순 판자는 DamageLog 에 남고, 흙으로 완전히 막으면 배회하다 05:00 에 사라져 safetyLevel 100', () => {
+    const w = field();
+    ring(w, R, BlockId.plank);
+    const m = raid(w);
+    const broken: BlockPos[] = [];
+    w.events.on('BLOCK_CHANGED', (c) => void (c.by === 'monster' && broken.push(c.pos)));
+    run(w, 40, () => toBell(m) <= balance.monster.reachedRadius);
+    expect(broken.length).toBeGreaterThan(0);
+    const logged = w.repair.pending.flatMap((e) => e.cells);
+    for (const p of broken) expect(logged).toContainEqual(p);
+
+    const closed = field();
+    ring(closed, R, BlockId.dirt);
+    const b = raid(closed);
+    run(closed, 20);
+    expect(b.action.kind).toBe('wander');
+    expect(closed.raids.active?.destroyedCells).toBe(0);
+    closed.clock.advanceTo(5, 0);
+    run(closed, 0.5);
+    expect(closed.registry.monsters.size).toBe(0);
+    expect(closed.raids.active).toBeNull();
+    expect(closed.raids.snapshot().results.at(-1)?.reached).toBe(0);
+    expect(closed.worldStateSystem.current.safetyLevel).toBe(100);
+  });
 });

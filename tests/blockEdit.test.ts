@@ -373,4 +373,17 @@ describe('설치 방향', () => {
     expect(facingFromLook({ yaw: Math.PI / 2, pitch: 0 })).toBe('west');
     expect(facingFromLook({ yaw: -Math.PI / 2 + 0.3, pitch: 0.5 })).toBe('east');
   });
+
+  it('Test 1-4·5 (MVP_SPEC 39): 놓은 판자를 다시 부수면 공기가 되고 아이템이 돌아온다', () => {
+    const env = setup();
+    wallAhead(env, BlockId.stone);
+    hold(env, BlockId.plank, 3);
+    env.input.frame = { ...EMPTY_INPUT_FRAME, secondaryPressed: true };
+    env.edit.update(1 / 60);
+    expect(env.world.getBlock(6, 6, 4)).toBe(BlockId.plank);
+    expect(env.inventory.count(blockItem(BlockId.plank))).toBe(2);
+    holdPrimary(env, 3);
+    expect(env.world.getBlock(6, 6, 4)).toBe(BlockId.air);
+    expect(env.inventory.count(blockItem(BlockId.plank))).toBe(3);
+  });
 });
