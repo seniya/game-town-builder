@@ -342,7 +342,7 @@ export type GameEventMap = {
   ROOM_FACILITIES_CHANGED: { roomId: string };
   ROOM_TYPE_CHANGED:   { roomId: string; from: RoomType; to: RoomType };
   ROOM_UNREGISTERED:   { roomId: string; reason: RoomFailure | { reason: 'MERGED' } };
-  GRATITUDE_GAINED:    { amount: number; source: GratitudeSource; at: Vec3 };
+  GRATITUDE_GAINED:    { amount: number; source: GratitudeSource; at: Vec3; total: number };
   VILLAGE_LEVEL_UP:    { level: number; unlocked: number[] };
   STORAGE_CHANGED:     { seed: number; crop: number; food: number };
   INVENTORY_CHANGED:   void;
@@ -1391,8 +1391,8 @@ EventBus는 완료 사실을 알린다. data의 진행 정의는 순수 커맨�
 export class GratitudeSystem {
   get total(): number;
 
-  /** 다른 시스템이 호출한다. */
-  gain(source: GratitudeSource, amount: number, at: Vec3): void;
+  /** 다른 시스템이 호출한다. 중복·잘못된 양이면 false (TASK-035) */
+  gain(source: GratitudeSource, amount: number, at: Vec3): boolean;
 
   /** VillageLevelSystem 만 호출한다. */
   spend(amount: number): boolean;
@@ -1405,6 +1405,11 @@ export type GratitudeSource =
   | { kind: 'firstRoom'; roomType: RoomType }
   | { kind: 'gameEvent';  id: GameEventId };
 ```
+
+구현(TASK-035): 취침·조리·식당 식사는 사용 시점에 `gain` 을 바로 부르고(조리·식사는 완료 트랜잭션 안), 최초 방 타입은
+ROOM_REGISTERED / ROOM_TYPE_CHANGED 를 모아 13 번 슬롯에서 방 center 위에 준다(그 사이 타입이 바뀐 방은 건너뛴다).
+GRATITUDE_GAINED 에 얻은 뒤 합계 `total` 을 더했다. 장면·로드의 `rebuildAll` 은 방 이벤트를 내지 않으므로 미리 지어 둔 방에는 최초 보너스가 없다.
++N 은 render/GratitudePopupView(투영 DOM), 합계는 ui/GratitudeHud 가 그린다. `gain` 은 인자가 잘못되거나 중복이면 false 를 반환한다.
 
 ## 16.1 중복 방지
 

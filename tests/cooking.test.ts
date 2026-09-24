@@ -146,8 +146,8 @@ describe('요리와 요리사 (TASK-031, MVP_SPEC 16)', () => {
     // 같은 조리의 완료를 두 번 요청해도 한 번만 생산한다
     const stove = w.cooking.candidateFor(id, STOVE)?.facility.objectId as string;
     expect(w.cooking.begin(id, stove)).toBe(true);
-    expect(w.cooking.complete(id, stove)).toBe(true);
-    expect(w.cooking.complete(id, stove)).toBe(false);
+    expect(w.cooking.complete(id, stove, STOVE)).toBe(true);
+    expect(w.cooking.complete(id, stove, STOVE)).toBe(false);
     expect(w.storage.snapshot()).toMatchObject({ crop: 0, food: 3 });
   });
 

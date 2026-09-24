@@ -4,14 +4,26 @@ import type { NPC } from '../entities/NPC';
 import type { EventBus } from '../EventBus';
 import type { NavigationGraph } from '../nav/NavigationGraph';
 import type { PathScheduler } from '../nav/PathScheduler';
-import type { ActionStatus, ActionView, BlockPos, GameClockReader, Room } from '../types';
+import type {
+  ActionStatus,
+  ActionView,
+  BlockPos,
+  GameClockReader,
+  GratitudeSource,
+  Room,
+  Vec3,
+} from '../types';
 import type { CollisionWorld } from '../voxel/collision';
 
 /**
  * Action 이 결과를 확정하거나 소유자 상태를 확인하는 좁은 변경 포트 (ARCHITECTURE 13.4).
- * 전체 시스템 객체를 노출하지 않는다. 감사·수리 포트는 해당 Task(035·048)에서 더한다.
+ * 전체 시스템 객체를 노출하지 않는다. 수리 포트는 TASK-048 에서 더한다.
  */
 export interface ActionServices {
+  /** 감사 포인트 (GratitudeSystem, TASK-035). at 은 +N 연출 좌표다. 중복이면 false */
+  readonly gratitude: {
+    gain(source: GratitudeSource, amount: number, at: Vec3): boolean;
+  };
   readonly sleep: {
     /** 이 침대가 지금도 이 주민에게 배정되어 있는가. 침대 배정은 SleepSystem 만 소유한다 */
     isAssigned(npcId: string, bedObjectId: string): boolean;
@@ -27,13 +39,13 @@ export interface ActionServices {
     begin(npcId: string, stoveId: string): boolean;
     /** 예약이 살아 있는가(주방 해제·화덕 파괴·재료 부족이면 false) */
     isCooking(npcId: string, stoveId: string): boolean;
-    /** crop −2, food +3 을 한 번에 확정한다. 조리 중이 아니거나 모자라면 false */
-    complete(npcId: string, stoveId: string): boolean;
+    /** crop −2, food +3, 감사 +3(at 위에)을 한 번에 확정한다. 조리 중이 아니거나 모자라면 false */
+    complete(npcId: string, stoveId: string, at: Vec3): boolean;
   };
   /** 식사 확정 (MealSystem, TASK-032) */
   readonly meal: {
-    /** food 1 을 소비하고 이번 끼니를 먹었다고 기록한다. seatId 가 null 이면 광장. 못 먹으면 false */
-    eat(npcId: string, seatId: string | null): boolean;
+    /** food 1 을 소비하고 이번 끼니를 먹었다고 기록한다. 식당 의자면 감사 +2(at 위에). seatId 가 null 이면 광장(포인트 없음). 못 먹으면 false */
+    eat(npcId: string, seatId: string | null, at: Vec3): boolean;
     /** 이 의자가 아직 DiningRoom 의 의자인가 */
     isSeatUsable(seatId: string): boolean;
     /** 지금 식사 구간인가 */
@@ -75,4 +87,10 @@ export interface Action extends ActionView {
   update(ctx: ActionContext, dt: number): ActionStatus;
   /** 외부 사유(판단 변경·방 해제 등)로 끝낼 때 한 번. done / failed 뒤에는 부르지 않는다 */
   cancel(ctx: ActionContext): void;
+}
+
+/** 주민 머리 위 +N 연출 좌표. */
+export function aboveHead(ctx: ActionContext): Vec3 {
+  const b = ctx.npc.body;
+  return { x: b.pos.x, y: b.pos.y + b.height + 0.4, z: b.pos.z };
 }

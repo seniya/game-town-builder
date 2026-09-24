@@ -1,10 +1,10 @@
 // 화덕에서 요리한다 (MVP_SPEC 16, ARCHITECTURE 13.2 / 13.4, TASK-031). 이동은 MoveAction 이 먼저 끝냈다(복합 Action 금지).
-// 시작할 때 CookingSystem 포트로 재료를 예약하고(소비하지 않는다), 게임 시간 1 시간 뒤 완료를 요청해 crop −2, food +3 을 확정한다.
+// 시작할 때 CookingSystem 포트로 재료를 예약하고(소비하지 않는다), 게임 시간 1 시간 뒤 완료를 요청해 crop −2, food +3, 감사 +3 을 확정한다.
 // 주방이 해제되거나 화덕이 부서져 재료 예약이 사라지면 failed 다. 끝나면 NPCSystem 이 화덕 예약과 재료 예약을 푼다.
 import { balance } from '../data/balance';
 import { standStill } from '../nav/MovementController';
 import type { ActionStatus, Facility, FacilityUse, Vec3 } from '../types';
-import type { Action, ActionContext } from './Action';
+import { aboveHead, type Action, type ActionContext } from './Action';
 
 /** 조리 계획의 판단 키. */
 export function cookKey(stoveObjectId: string): string {
@@ -48,7 +48,7 @@ export class CookAction implements Action {
     const cooking = ctx.services.cooking;
     if (!this.ok || !cooking.isCooking(ctx.npc.id, this.stove.objectId)) return 'failed';
     if (ctx.clock.gameMinutes - this.startedAt < balance.cooking.cookHours * 60) return 'running';
-    return cooking.complete(ctx.npc.id, this.stove.objectId) ? 'done' : 'failed';
+    return cooking.complete(ctx.npc.id, this.stove.objectId, aboveHead(ctx)) ? 'done' : 'failed';
   }
 
   /** 재료는 아직 소비하지 않았으므로 되돌릴 것이 없다. 예약은 NPCSystem 이 푼다(취소·완료·실패 모두). */

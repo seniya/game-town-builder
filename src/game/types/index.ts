@@ -387,3 +387,13 @@ export interface RaidResult {
   readonly reached: number;
   readonly endedAtGameMinutes: number;
 }
+
+// ── 감사 포인트 (MVP_SPEC 22, ARCHITECTURE 16) ────────────────────────────────
+
+/** 포인트의 출처. gameEvent 의 id 는 진행 이벤트(TASK-041)의 id 다. */
+export type GratitudeSource =
+  | { readonly kind: 'sleep'; readonly npcId: string }
+  | { readonly kind: 'cook'; readonly npcId: string }
+  | { readonly kind: 'eat'; readonly npcId: string }
+  | { readonly kind: 'firstRoom'; readonly roomType: RoomType }
+  | { readonly kind: 'gameEvent'; readonly id: string };

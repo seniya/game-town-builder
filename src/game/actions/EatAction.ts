@@ -5,7 +5,7 @@
 import { balance } from '../data/balance';
 import { standStill } from '../nav/MovementController';
 import type { ActionStatus, DiningSeat, FacilityUse, Vec3 } from '../types';
-import type { Action, ActionContext } from './Action';
+import { aboveHead, type Action, type ActionContext } from './Action';
 
 /** 식사 계획의 판단 키. 의자가 없으면 광장이다. */
 export function eatKey(seatObjectId: string | null): string {
@@ -39,7 +39,11 @@ export class EatAction implements Action {
   /** 음식을 먹는다(food −1). 구간 밖·food 부족·의자를 쓸 수 없으면 다음 update 에서 failed. */
   start(ctx: ActionContext): void {
     this.startedAt = ctx.clock.gameMinutes;
-    this.ok = ctx.services.meal.eat(ctx.npc.id, this.seat?.objectId ?? null);
+    // +2 는 식탁 위(의자에 앉은 머리 높이)에 띄운다. 몸체는 접근 셀이므로 의자 위치를 쓴다
+    const at = this.seat
+      ? { x: this.seat.usePosition.x, y: this.seat.usePosition.y + 1.6, z: this.seat.usePosition.z }
+      : aboveHead(ctx);
+    this.ok = ctx.services.meal.eat(ctx.npc.id, this.seat?.objectId ?? null, at);
   }
 
   /**

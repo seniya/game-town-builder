@@ -62,6 +62,8 @@ export interface GameDebugSnapshot {
   readonly food: number | null;
   /** 식사 계측 (TASK-032) */
   readonly meal: MealStats | null;
+  /** 감사 포인트 합계 (TASK-035) */
+  readonly gratitude: number | null;
   /** 파생 지표 네 개 (TASK-039) */
   readonly worldState: WorldStateData | null;
   /** 방: 인식 수 / 타입별 / 재판정 큐 길이 / 마지막 판정 소요 ms (ARCHITECTURE 26) */
@@ -86,6 +88,8 @@ export class DebugSystem {
     readonly cooking: () => CookingStats;
     readonly storage: VillageStorage;
   } | null = null;
+  /** 감사 포인트 조회. GameWorld 가 연결한다 */
+  gratitudeSource: (() => number) | null = null;
   /** 파생 지표 조회. GameWorld 가 연결한다 */
   worldStateSource: (() => WorldStateData) | null = null;
   /** 식사 계측 대상. GameWorld 가 연결한다 */
@@ -176,6 +180,7 @@ export class DebugSystem {
       food: this.cookingSources ? this.cookingSources.storage.get('food') : null,
       meal: this.mealSources ? this.mealSources.meal() : null,
       worldState: this.worldStateSource ? this.worldStateSource() : null,
+      gratitude: this.gratitudeSource ? this.gratitudeSource() : null,
       rooms: this.rooms ? this.rooms.stats : null,
       showRoomBounds: this.showRoomBounds,
       diagnosisActive: this.roomSystem?.diagnosisActive ?? false,

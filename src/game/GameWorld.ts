@@ -18,6 +18,7 @@ import { CookingSystem } from './systems/CookingSystem';
 import { CraftingSystem } from './systems/CraftingSystem';
 import { DebugSystem } from './systems/DebugSystem';
 import { FarmSystem } from './systems/FarmSystem';
+import { GratitudeSystem } from './systems/GratitudeSystem';
 import { GameClockSystem } from './systems/GameClockSystem';
 import { InputSystem } from './systems/InputSystem';
 import { InventorySystem } from './systems/InventorySystem';
@@ -114,6 +115,8 @@ export class GameWorld {
   readonly paths: PathScheduler;
   /** 농사: crop 성장 상태·밭 후보·예약 (update 7 번) */
   readonly farm: FarmSystem;
+  /** 감사 포인트의 유일한 소유자 (update 13 번) */
+  readonly gratitude: GratitudeSystem;
   /** 조리: 화덕 목록·화덕/재료 예약·결과 확정 (update 10 번, 판단 전에 목록 갱신) */
   readonly cooking: CookingSystem;
   /** 식사 구간·식사 플래그·식당 의자 후보 (update 10 번, 판단 전) */
@@ -211,12 +214,19 @@ export class GameWorld {
     this.attach('farm', this.farm);
     this.debug.farmSources = { farm: () => this.farm.stats, storage: this.storage };
     const npcs = (): Iterable<NPC<Action>> => this.registry.npcs.values();
+    this.gratitude = new GratitudeSystem({
+      events: this.events,
+      clock: this.clock,
+      room: (id) => this.rooms.getById(id),
+    });
+    const gain = this.gratitude.gain.bind(this.gratitude);
     this.cooking = new CookingSystem({
       rooms: () => this.rooms.getAll(),
       storage: this.storage,
       events: this.events,
       blockAt: (p) => this.voxels.getBlock(p.x, p.y, p.z),
       facilityTaken: (o, n) => this.npcSystem.facilityTaken(o, n),
+      gratitude: gain,
     });
     this.debug.cookingSources = { cooking: () => this.cooking.stats, storage: this.storage };
     this.meal = new MealSystem({
@@ -228,6 +238,7 @@ export class GameWorld {
       rooms: () => this.rooms.getAll(),
       blockAt: (p) => this.voxels.getBlock(p.x, p.y, p.z),
       facilityTaken: (o, n) => this.npcSystem.facilityTaken(o, n),
+      gratitude: gain,
     });
     this.debug.mealSources = { meal: () => this.meal.stats };
     this.sleep = new SleepSystem({
@@ -247,15 +258,16 @@ export class GameWorld {
       clock: this.clock,
       events: this.events,
       services: {
+        gratitude: { gain },
         sleep: { isAssigned: (n, b) => this.sleep.isAssigned(n, b) },
         farm: { plant: (t) => this.farm.plant(t), harvest: (t) => this.farm.harvest(t) },
         cooking: {
           begin: (n, s) => this.cooking.begin(n, s),
           isCooking: (n, s) => this.cooking.isCooking(n, s),
-          complete: (n, s) => this.cooking.complete(n, s),
+          complete: (n, s, at) => this.cooking.complete(n, s, at),
         },
         meal: {
-          eat: (n, s) => this.meal.eat(n, s),
+          eat: (n, s, at) => this.meal.eat(n, s, at),
           isSeatUsable: (s) => this.meal.isSeatUsable(s),
           active: () => this.meal.active,
         },
@@ -285,6 +297,8 @@ export class GameWorld {
     );
     this.attach('npcDecision', this.npcDecision);
     this.attach('npc', this.npcSystem);
+    this.attach('gratitude', this.gratitude);
+    this.debug.gratitudeSource = () => this.gratitude.total;
     this.worldStateSystem = new WorldStateSystem({
       events: this.events,
       population: () => this.registry.npcs.size,

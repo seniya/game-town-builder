@@ -233,7 +233,8 @@ export class DebugPanel {
       g.worldState
         ? `WorldState: 식량 ${g.worldState.foodLevel} · 주거 ${g.worldState.housingLevel} · 안전 ${g.worldState.safetyLevel} · 행복 ${g.worldState.happinessLevel} (주민 ${g.worldState.population})`
         : 'WorldState —',
-      `몬스터 / 감사 / 레벨: 해당 Task 에서 추가`,
+      `감사 포인트 ${g.gratitude ?? '—'}`,
+      `몬스터 / 레벨: 해당 Task 에서 추가`,
     ].join('\n');
     for (const [scale, b] of this.scaleButtons)
       b.style.fontWeight = scale === g.timeScale ? 'bold' : 'normal';

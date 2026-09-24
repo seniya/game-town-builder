@@ -1,7 +1,8 @@
 // 침대에서 잔다 (MVP_SPEC 18.2, ARCHITECTURE 13.3 / 28.3, TASK-033). RestAction 과 별개의 Action 이다.
 // body.pos 는 접근 셀에 그대로 두고 렌더가 facilityUse 로 침대 위에 눕는 자세를 그린다 (ARCHITECTURE 12.3).
-// 감사 포인트 +5 는 GratitudeSystem(TASK-035) 이 생기면 ctx.services 포트로 요청한다. 지금은 보상이 없다.
+// 잠들 때 감사 포인트 +5 를 침대 위에 요청한다. 같은 밤 같은 주민은 GratitudeSystem 이 한 번만 준다 (MVP_SPEC 22.1).
 import { standStill } from '../nav/MovementController';
+import { balance } from '../data/balance';
 import type { ActionStatus, Facility, FacilityUse } from '../types';
 import type { Action, ActionContext } from './Action';
 
@@ -18,8 +19,16 @@ export class SleepAction implements Action {
     this.facilityUse = { objectId: bed.objectId, usePosition: bed.usePosition, pose: 'lie' };
   }
 
-  /** 시작할 때 할 일은 없다(보상은 TASK-035). */
-  start(): void {}
+  /** 잠든다: 배정이 살아 있으면 침대 위에 +5 를 요청한다. */
+  start(ctx: ActionContext): void {
+    if (!ctx.services.sleep.isAssigned(ctx.npc.id, this.bed.objectId)) return;
+    const u = this.bed.usePosition;
+    ctx.services.gratitude.gain({ kind: 'sleep', npcId: ctx.npc.id }, balance.gratitude.onSleep, {
+      x: u.x,
+      y: u.y + 1,
+      z: u.z,
+    });
+  }
 
   /**
    * 누워 있는다. 배정이 풀렸으면(침대 파괴·방 해제·타입 변경) 깨어나 failed,

@@ -7,7 +7,7 @@ import { balance } from '../data/balance';
 import { BlockId } from '../data/blocks';
 import type { EventBus } from '../EventBus';
 import type { SlotSystem } from '../GameWorld';
-import type { BlockPos, Facility, Room } from '../types';
+import type { BlockPos, Facility, GratitudeSource, Room, Vec3 } from '../types';
 import type { VillageStorage } from '../VillageStorage';
 
 /** 요리사 한 명에게 좁힌 후보 (ARCHITECTURE 14 의 CookCandidate). */
@@ -28,6 +28,8 @@ export interface CookingDeps {
   readonly blockAt: (pos: BlockPos) => number;
   /** 이 시설을 다른 주민이 예약했는가 (NPCSystem 의 시설 예약 조회) */
   readonly facilityTaken: (objectId: string, npcId: string) => boolean;
+  /** 감사 포인트 (GratitudeSystem.gain). 없으면 포인트가 없는 시험 월드다 */
+  readonly gratitude?: (source: GratitudeSource, amount: number, at: Vec3) => boolean;
 }
 
 /** 계측값 (F3). */
@@ -135,9 +137,9 @@ export class CookingSystem implements SlotSystem {
   /**
    * 조리를 끝낸다: 예약한 crop 을 한 번에 소비하고 food 를 만든다 (MVP_SPEC 16).
    * 조리 중이 아니거나 crop 이 모자라면 아무것도 바꾸지 않고 false. 성공하면 재료 예약을 지운다.
-   * 감사 포인트 +3 은 GratitudeSystem(TASK-035) 이 생기면 ActionServices 포트로 요청한다.
+   * 같은 트랜잭션에서 감사 포인트 +3 을 at(요리사 머리 위)에 요청한다 (MVP_SPEC 22.1).
    */
-  complete(npcId: string, stoveId: string): boolean {
+  complete(npcId: string, stoveId: string, at: Vec3): boolean {
     if (!this.isCooking(npcId, stoveId)) return false;
     const c = balance.cooking;
     const s = this.deps.storage;
@@ -147,6 +149,7 @@ export class CookingSystem implements SlotSystem {
       this.reserved.delete(npcId);
       s.take('crop', c.cropPerCook);
       s.add('food', c.foodPerCook);
+      this.deps.gratitude?.({ kind: 'cook', npcId }, balance.gratitude.onCook, at);
       return true;
     });
     return ok;

@@ -6,6 +6,8 @@ import type {
   PlacedObjectSnapshot,
   RoomFailure,
   RoomType,
+  GratitudeSource,
+  Vec3,
   VillageStorageData,
   WorldStateData,
 } from './types';
@@ -35,6 +37,8 @@ export interface GameEventMap {
   ROOM_TYPE_CHANGED: { roomId: string; from: RoomType; to: RoomType };
   ROOM_UNREGISTERED: { roomId: string; reason: RoomUnregisterReason };
   STORAGE_CHANGED: VillageStorageData;
+  /** 감사 포인트를 얻었다. at 은 +N 연출 좌표, total 은 얻은 뒤 합계다 (MVP_SPEC 22.2) */
+  GRATITUDE_GAINED: { amount: number; source: GratitudeSource; at: Vec3; total: number };
   /** 정본의 void payload. lint 규칙(no-invalid-void-type) 때문에 undefined 로 표기한다. */
   INVENTORY_CHANGED: undefined;
   /** NPC 의 현재 Action 이 바뀌었다. label 은 Action 이 제공하는 표시용 이름이다 (MVP_SPEC 19.3) */

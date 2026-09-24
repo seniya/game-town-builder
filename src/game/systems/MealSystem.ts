@@ -7,7 +7,15 @@ import { BlockId } from '../data/blocks';
 import type { NPC } from '../entities/NPC';
 import type { EventBus } from '../EventBus';
 import type { SlotSystem } from '../GameWorld';
-import type { ActionView, BlockPos, DiningSeat, GameClockReader, Room } from '../types';
+import type {
+  ActionView,
+  BlockPos,
+  DiningSeat,
+  GameClockReader,
+  GratitudeSource,
+  Room,
+  Vec3,
+} from '../types';
 import type { VillageStorage } from '../VillageStorage';
 
 /** MealSystem 이 읽고 쓰는 것. */
@@ -23,6 +31,8 @@ export interface MealDeps {
   readonly blockAt: (pos: BlockPos) => number;
   /** 이 시설을 다른 주민이 예약했는가 (NPCSystem 의 시설 예약 조회) */
   readonly facilityTaken: (objectId: string, npcId: string) => boolean;
+  /** 감사 포인트 (GratitudeSystem.gain). 없으면 포인트가 없는 시험 월드다 */
+  readonly gratitude?: (source: GratitudeSource, amount: number, at: Vec3) => boolean;
 }
 
 /** 계측값 (F3). */
@@ -127,9 +137,9 @@ export class MealSystem implements SlotSystem {
   /**
    * 먹는다: food 1 을 소비하고 이번 구간에 먹었다고 기록한다 (MVP_SPEC 17). 한 트랜잭션이다.
    * 구간 밖·이미 먹음·food 부족·(의자면) 쓸 수 없는 의자이면 아무것도 바꾸지 않고 false.
-   * 식당 의자에서 먹으면 감사 포인트 +2 를 GratitudeSystem(TASK-035) 이 생기면 여기서 요청한다. 광장은 포인트가 없다.
+   * 식당 의자에서 먹으면 같은 트랜잭션에서 감사 포인트 +2 를 at 에 요청한다. 광장은 포인트가 없다 (MVP_SPEC 12.5 / 22.1).
    */
-  eat(npcId: string, seatId: string | null): boolean {
+  eat(npcId: string, seatId: string | null, at: Vec3): boolean {
     const mealId = currentMealId(this.deps.clock);
     if (mealId === null) return false;
     const npc = this.deps.npcById(npcId);
@@ -143,6 +153,9 @@ export class MealSystem implements SlotSystem {
       if (!s.take('food', need)) return false;
       npc.mealId = mealId;
       npc.hasEatenThisMeal = true;
+      if (seatId !== null) {
+        this.deps.gratitude?.({ kind: 'eat', npcId }, balance.gratitude.onEatInDiningRoom, at);
+      }
       return true;
     });
   }

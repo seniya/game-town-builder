@@ -24,6 +24,7 @@ import { Highlight } from './render/Highlight';
 import { createItemIconProvider } from './render/itemIcons';
 import { Renderer } from './render/Renderer';
 import { RoomLabelView } from './render/RoomLabelView';
+import { GratitudePopupView } from './render/GratitudePopupView';
 import { DayNightVisual } from './render/DayNightVisual';
 import { NavOverlayView } from './render/NavOverlayView';
 import { NpcViews } from './render/NpcView';
@@ -35,6 +36,7 @@ import { RoomOverlayView } from './render/RoomOverlayView';
 import { blockItem } from './game/systems/InventorySystem';
 import type { BlockPos } from './game/types';
 import { ClockHud } from './ui/ClockHud';
+import { GratitudeHud } from './ui/GratitudeHud';
 import { Crosshair } from './ui/Crosshair';
 import { DebugPanel } from './ui/DebugPanel';
 import { itemLabel } from './ui/itemLabels';
@@ -537,6 +539,8 @@ function start(): void {
   const roomOverlay = new RoomOverlayView(world.rooms, world.events);
   renderer.scene.add(roomOverlay.object3d);
   const roomLabels = new RoomLabelView(document.body, world.rooms, world.events, renderer.camera);
+  const gratitudePopups = new GratitudePopupView(document.body, world.events, renderer.camera);
+  const gratitudeHud = new GratitudeHud(document.body, () => world.gratitude.total, world.events);
   new RoomSound(world.events);
   const clockHud = new ClockHud(document.body, world.clock, formatClock);
   if (params.get('bounds') === '1') world.debug.showRoomBounds = true;
@@ -657,6 +661,8 @@ function start(): void {
       diagnosing ? world.rooms.getDiagnosis().result : null,
     );
     roomLabels.update(frameMs / 1000, diagnosing);
+    gratitudePopups.update(frameMs / 1000);
+    gratitudeHud.update(frameMs / 1000);
     npcViews.update(frameMs / 1000);
     props.update(frameMs / 1000);
     crops.update(frameMs / 1000);
