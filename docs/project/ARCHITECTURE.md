@@ -1490,6 +1490,10 @@ export type MonsterAction =
   | { kind: 'wander' };
 ```
 
+구현(TASK-044): `systems/RaidSystem.ts` 가 습격 예약(조건이 참이 된 시각보다 엄격히 뒤인 첫 21:00)·스폰(두 스폰 칸 번갈아)·
+05:00 소멸·전멸 종료·결과 이력·도달 기록(`markReached`)·파괴 예산(`spendDestroyCells`, 16)을 소유한다. 끝난 프레임에 다음 습격을 곧바로 예약한다.
+몬스터 엔티티는 `entities/Monster.ts`(action 은 위 MonsterAction), 모형은 `render/MonsterView.ts`. WorldState 의 lastRaid·이벤트의 raidResults 는 RaidSystem 을 읽는다.
+
 ## 18.1 판단 순서
 
 1. findPath(goal: radius, 종 중심·반경 6)를 호출한다.

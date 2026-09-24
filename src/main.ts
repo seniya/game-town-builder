@@ -28,6 +28,7 @@ import { GratitudePopupView } from './render/GratitudePopupView';
 import { DayNightVisual } from './render/DayNightVisual';
 import { NavOverlayView } from './render/NavOverlayView';
 import { NpcViews } from './render/NpcView';
+import { MonsterViews } from './render/MonsterView';
 import { PropView } from './render/PropView';
 import { CropView } from './render/CropView';
 import { DishView } from './render/DishView';
@@ -161,6 +162,7 @@ const islandScene: VisualFixture = {
   quarryCandidates: islandData.quarryRespawnCandidates,
   plazaCenter: islandData.bellPos,
   arrivalCell: islandData.residentArrival,
+  monsterSpawns: islandData.monsterSpawns,
   residents: [
     { role: 'farmer', cell: islandData.npcSpawns.farmer },
     { role: 'cook', cell: islandData.npcSpawns.cook },
@@ -212,6 +214,7 @@ function createWorld(
     startGameMinutes,
     ...(fixture.plazaCenter ? { plazaCenter: fixture.plazaCenter } : {}),
     ...(fixture.arrivalCell ? { arrivalCell: fixture.arrivalCell } : {}),
+    ...(fixture.monsterSpawns ? { monsterSpawns: fixture.monsterSpawns } : {}),
     ...(fixture.quarryCandidates ? { quarryCandidates: fixture.quarryCandidates } : {}),
     ...(play && fixture.playerSpawn ? { playerSpawn: fixture.playerSpawn } : {}),
   });
@@ -631,6 +634,8 @@ function start(): void {
     talkable: (npc) => world.dialogue.hasDialogue(npc),
   });
   renderer.scene.add(npcViews.object3d);
+  const monsterViews = new MonsterViews(() => world.registry.monsters.values());
+  renderer.scene.add(monsterViews.object3d);
   const props = new PropView(world.voxels.placements, () => world.characterBodies());
   renderer.scene.add(props.object3d);
   const crops = new CropView(() => world.farm.crops());
@@ -743,6 +748,7 @@ function start(): void {
     gratitudePopups.update(frameMs / 1000);
     gratitudeHud.update(frameMs / 1000);
     npcViews.update(frameMs / 1000);
+    monsterViews.update(frameMs / 1000);
     props.update(frameMs / 1000);
     crops.update(frameMs / 1000);
     bellRing.update(frameMs / 1000);

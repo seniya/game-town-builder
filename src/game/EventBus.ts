@@ -4,6 +4,7 @@ import type {
   BlockPos,
   DayPhase,
   PlacedObjectSnapshot,
+  RaidResult,
   RoomFailure,
   RoomType,
   GameEventId,
@@ -41,6 +42,9 @@ export interface GameEventMap {
   /** 대화가 시작됐다 / 끝났다 (ARCHITECTURE 21) */
   DIALOGUE_STARTED: { npcId: string; dialogueId: string; lines: string[] };
   DIALOGUE_ENDED: { npcId: string; dialogueId: string };
+  /** 습격이 시작됐다 / 끝났다 (MVP_SPEC 24.5) */
+  RAID_STARTED: { raidId: number; count: number };
+  RAID_ENDED: RaidResult;
   /** 진행 이벤트가 발생했다 (MVP_SPEC 27) */
   GAME_EVENT_FIRED: { id: GameEventId };
   /** 이벤트가 연출(도착 확인·엔딩)을 요청했다. 연출 완성은 TASK-052 */

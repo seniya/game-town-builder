@@ -187,6 +187,11 @@ export function createCeilingCapMaterial(): THREE.Material {
   return new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x2e261e });
 }
 
+/** 조명과 무관하게 빛나는 단색 재질(몬스터의 눈, TASK-044). 밤에도 보인다. */
+export function createEmissiveMaterial(color: number): THREE.Material {
+  return new THREE.MeshBasicMaterial({ color });
+}
+
 /** 종 연출의 빛 번짐 재질 (TASK-036). 가산 합성, 깊이 쓰기 없음. 투명도는 연출이 매 프레임 바꾼다. */
 export function createGlowMaterial(color: number): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({

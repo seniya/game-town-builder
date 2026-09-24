@@ -2,6 +2,7 @@
 // 렌더는 여기서 호출하지 않는다. main.ts 가 world.update 뒤에 renderer.render 를 부른다.
 import type { Action } from './actions/Action';
 import { IdleAction } from './actions/IdleAction';
+import type { Monster } from './entities/Monster';
 import { createNPC, type NPC } from './entities/NPC';
 import type { Player } from './entities/Player';
 import { EntityRegistry } from './EntityRegistry';
@@ -32,6 +33,7 @@ import { NPCSystem } from './systems/NPCSystem';
 import { SleepSystem } from './systems/SleepSystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
 import { QuarryRespawnSystem } from './systems/QuarryRespawnSystem';
+import { RaidSystem } from './systems/RaidSystem';
 import { ResidentArrivalSystem } from './systems/ResidentArrivalSystem';
 import { RoomSystem } from './systems/RoomSystem';
 import { VillageLevelSystem } from './systems/VillageLevelSystem';
@@ -88,6 +90,8 @@ export interface GameWorldInit {
   readonly plazaCenter?: BlockPos;
   /** 새 주민이 나타나는 섬 가장자리 칸 (MVP_SPEC 19.6). 없으면 광장 남쪽에서 찾는다 */
   readonly arrivalCell?: BlockPos;
+  /** 몬스터 스폰 칸(어두운 외곽). 없으면 습격하지 않는 시험 월드다 (MVP_SPEC 24.1) */
+  readonly monsterSpawns?: readonly BlockPos[];
   /** 진행 이벤트 정의. 기본은 MVP_SPEC 27.1 의 8 개. 빈 배열이면 진행 이벤트가 없는 시험 월드다 */
   readonly gameEvents?: readonly GameEventDefinition[];
 }
@@ -96,7 +100,7 @@ export interface GameWorldInit {
 export class GameWorld {
   readonly events = new EventBus();
   /** 엔티티 목록. population 은 registry.npcs.size 다 (ARCHITECTURE 27) */
-  readonly registry = new EntityRegistry<NPC<Action>>();
+  readonly registry = new EntityRegistry<NPC<Action>, Monster>();
   /** 게임 시계 (update 1 번). 모든 판단의 기준이다 */
   readonly clock: GameClockSystem;
   /** 채석장 하루 재생 (MVP_SPEC 14.3). update 4 번의 편집 뒤 */
@@ -143,6 +147,8 @@ export class GameWorld {
   readonly npcDecision: NPCDecisionSystem;
   /** NPC Action 실행 (update 11 번) */
   readonly npcSystem: NPCSystem;
+  /** 습격 예약·시작·종료와 이력 (update 8 번, 도착보다 먼저) */
+  readonly raids: RaidSystem;
   /** 새 주민 도착 예약·스폰 (update 8 번) */
   readonly arrivals: ResidentArrivalSystem;
   /** 마을 레벨의 유일한 소유자. 종 패널이 evaluate / ring 을 부른다 */
@@ -326,13 +332,20 @@ export class GameWorld {
     this.attach('gratitude', this.gratitude);
     this.attach('objectiveSave', this.objectives);
     this.debug.gratitudeSource = () => this.gratitude.total;
+    this.raids = new RaidSystem({
+      events: this.events,
+      clock: this.clock,
+      villageLevel: () => this.village.level,
+      monsters: this.registry.monsters,
+      spawnCells: init.monsterSpawns ?? [],
+    });
     this.worldStateSystem = new WorldStateSystem({
       events: this.events,
       population: () => this.registry.npcs.size,
       food: () => this.storage.get('food'),
       accessibleBeds: () =>
         this.rooms.getByType('Bedroom').reduce((n, r) => n + r.facilities.beds.length, 0),
-      lastRaid: () => null,
+      lastRaid: () => this.raids.lastResult,
     });
     this.attach('worldState', this.worldStateSystem);
     this.debug.worldStateSource = () => this.worldStateSystem.current;
@@ -343,6 +356,8 @@ export class GameWorld {
       arrivalCells: () => this.arrivalCells(arrivalCell),
       spawn: (id, cell) => void this.spawnResident('villager', cell, id),
     });
+    // 8 번 슬롯: 습격 다음 도착 순서 (ARCHITECTURE 4.1)
+    this.attach('raidArrival', this.raids);
     this.attach('raidArrival', this.arrivals);
     const bell = this.plazaCenter;
     this.gameEvents = new GameEventSystem({
@@ -358,7 +373,7 @@ export class GameWorld {
           ? { x: bell.x + 0.5, y: bell.y + 1.6, z: bell.z + 0.5 }
           : { x: 0, y: 0, z: 0 },
         villageLevel: this.village.level,
-        raidResults: [],
+        raidResults: this.raids.results,
         dialogueCompleted: this.dialogue.completedIds(),
       }),
       ports: {
