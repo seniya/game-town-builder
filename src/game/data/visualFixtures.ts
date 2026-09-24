@@ -20,6 +20,8 @@ export interface VisualFixture {
   readonly quarryCandidates?: readonly BlockPos[];
   /** 광장 중심(종 칸). 주민이 쉬고 모이는 칸의 기준이다 */
   readonly plazaCenter?: BlockPos;
+  /** 새 주민이 나타나는 칸 (MVP_SPEC 19.6). 없으면 GameWorld 가 광장 남쪽에서 찾는다 */
+  readonly arrivalCell?: BlockPos;
   /** 처음부터 사는 주민과 시작 칸 */
   readonly residents?: readonly { readonly role: NPCRole; readonly cell: BlockPos }[];
   /** 시작 저장소(관찰용). 없는 값은 게임 초기값이다. 조리·식사 관찰에서 수확을 기다리지 않게 한다 */
@@ -317,6 +319,7 @@ export const sleepLabFixture: VisualFixture = {
   size: { sizeX: 64, sizeY: 28, sizeZ: 64 },
   playerSpawn: { x: 32, y: 11, z: 41 },
   plazaCenter: { x: 32, y: 11, z: 32 },
+  arrivalCell: { x: 32, y: 11, z: 61 },
   residents: [
     { role: 'farmer', cell: { x: 30, y: 11, z: 35 } },
     { role: 'cook', cell: { x: 35, y: 11, z: 34 } },

@@ -268,8 +268,15 @@ function fallback(ctx: NPCContext): ActionPlan {
   const spot = ctx.plazaSpot;
   const wake = ctx.phase === 'dawn';
   const free = within(ctx.minuteOfDay, C.freeTimeStartHour, C.sleepStartHour);
-  if (spot && (wake || free) && !arrivedAt(ctx, [spot], plazaKey(spot))) {
-    return toPlaza(spot, wake ? '일어나 광장으로 가는 중' : '광장으로 모이는 중');
+  // 역할 없는 주민(Villager)은 역할 작업 시간에 광장에서 지낸다 (MVP_SPEC 19.5, ADR 034)
+  const villagerDay = ctx.npc.role === 'villager' && isWorkTime(ctx.minuteOfDay);
+  if (spot && (wake || free || villagerDay) && !arrivedAt(ctx, [spot], plazaKey(spot))) {
+    const label = wake
+      ? '일어나 광장으로 가는 중'
+      : villagerDay
+        ? '광장으로 가는 중'
+        : '광장으로 모이는 중';
+    return toPlaza(spot, label);
   }
   return { kind: 'idle', key: 'idle', label: '대기' };
 }

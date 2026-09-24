@@ -1357,7 +1357,7 @@ MealSystem            식사 구간(mealId) 판정. hasEatenThisMeal 리셋·기
 SleepSystem           침대 배정 / 해제. 후보 침대까지 실제 경로가 나오면 확정한다 (update 10 번, 판단 전)
 GratitudeSystem       포인트 누적. 최초 인식 보너스 중복 방지
 VillageLevelSystem    게이트 평가. 종 상호작용 처리. 해금 적용
-ResidentArrivalSystem 레벨별 도착 예약과 실제 스폰의 유일한 소유자
+ResidentArrivalSystem 레벨별 도착 예약과 실제 스폰의 유일한 소유자. update 8 번. VILLAGE_LEVEL_UP → 다음 07:00 예약, 도착 칸에 Villager 스폰 + NPC_ARRIVED (ADR 034)
 RaidSystem            습격 스케줄. 몬스터 스폰 / 소멸
 MonsterSystem         몬스터 AI. 블록 파괴
 RepairSystem          DamageLog 관리. 목수 수리 할당
@@ -2248,6 +2248,7 @@ DI 컨테이너
 031  요리: 화덕 후보·예약, 재료 예약·완료 소비, 조리 자세   Accepted (화덕 예약 소유자는 032 에서 보완)
 032  식사: mealId·의자 후보, NPCSystem 시설 예약, 식탁 음식 연출 Accepted
 033  상호작용 대상(READY-07)·종 패널·마을 레벨          Accepted
+034  새 주민 도착과 Villager 의 낮 생활                 Accepted
 ```
 
 ---

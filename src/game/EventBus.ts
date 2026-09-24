@@ -37,6 +37,8 @@ export interface GameEventMap {
   ROOM_TYPE_CHANGED: { roomId: string; from: RoomType; to: RoomType };
   ROOM_UNREGISTERED: { roomId: string; reason: RoomUnregisterReason };
   STORAGE_CHANGED: VillageStorageData;
+  /** 새 주민이 도착했다 (MVP_SPEC 19.6) */
+  NPC_ARRIVED: { npcId: string };
   /** 종을 쳐 마을 레벨이 올랐다. unlocked 는 새로 해금된 블록 id (MVP_SPEC 23.3) */
   VILLAGE_LEVEL_UP: { level: number; unlocked: number[] };
   /** 감사 포인트를 얻었다. at 은 +N 연출 좌표, total 은 얻은 뒤 합계다 (MVP_SPEC 22.2) */

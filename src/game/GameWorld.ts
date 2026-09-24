@@ -28,6 +28,7 @@ import { NPCSystem } from './systems/NPCSystem';
 import { SleepSystem } from './systems/SleepSystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
 import { QuarryRespawnSystem } from './systems/QuarryRespawnSystem';
+import { ResidentArrivalSystem } from './systems/ResidentArrivalSystem';
 import { RoomSystem } from './systems/RoomSystem';
 import { VillageLevelSystem } from './systems/VillageLevelSystem';
 import { WorldStateSystem } from './systems/WorldStateSystem';
@@ -81,6 +82,8 @@ export interface GameWorldInit {
   readonly startGameMinutes?: number;
   /** 광장 중심(종 칸). 주민이 쉬고 모이는 칸의 기준이다. 없으면 광장이 없는 시험 월드다 */
   readonly plazaCenter?: BlockPos;
+  /** 새 주민이 나타나는 섬 가장자리 칸 (MVP_SPEC 19.6). 없으면 광장 남쪽에서 찾는다 */
+  readonly arrivalCell?: BlockPos;
 }
 
 /** 게임 상태의 루트. 순수 TypeScript 이며 three 를 모른다. */
@@ -128,6 +131,8 @@ export class GameWorld {
   readonly npcDecision: NPCDecisionSystem;
   /** NPC Action 실행 (update 11 번) */
   readonly npcSystem: NPCSystem;
+  /** 새 주민 도착 예약·스폰 (update 8 번) */
+  readonly arrivals: ResidentArrivalSystem;
   /** 마을 레벨의 유일한 소유자. 종 패널이 evaluate / ring 을 부른다 */
   readonly village: VillageLevelSystem;
   /** 파생 지표 (update 14 번). 저장하지 않는다 */
@@ -312,6 +317,14 @@ export class GameWorld {
     });
     this.attach('worldState', this.worldStateSystem);
     this.debug.worldStateSource = () => this.worldStateSystem.current;
+    const arrivalCell = init.arrivalCell ?? null;
+    this.arrivals = new ResidentArrivalSystem({
+      events: this.events,
+      clock: this.clock,
+      arrivalCells: () => this.arrivalCells(arrivalCell),
+      spawn: (id, cell) => void this.spawnResident('villager', cell, id),
+    });
+    this.attach('raidArrival', this.arrivals);
     this.village = new VillageLevelSystem({
       events: this.events,
       gratitude: this.gratitude,
@@ -337,12 +350,41 @@ export class GameWorld {
    * 주민 한 명을 칸에 세운다. 주민 수를 제한하지 않는다(콘텐츠의 정원은 VillageLevelSystem 이 정한다).
    * 새 주민에게는 다음 판단에서 침대를 찾는다 (MVP_SPEC 18.1).
    */
-  spawnResident(role: NPCRole, cell: BlockPos): NPC<Action> {
+  spawnResident(role: NPCRole, cell: BlockPos, id?: string): NPC<Action> {
     this.residentCounter += 1;
-    const npc = createNPC(`${role}-${this.residentCounter}`, role, cell, new IdleAction());
+    const npc = createNPC(id ?? `${role}-${this.residentCounter}`, role, cell, new IdleAction());
     this.registry.npcs.add(npc);
     this.sleep.markDirty();
     return npc;
+  }
+
+  /**
+   * 도착 칸과 그 옆 칸(같은 아침 두 번째 주민). 지정이 없으면 광장 중심 남쪽 8 칸 부근의 설 수 있는 칸, 그것도 없으면 광장 칸 (ADR 034).
+   */
+  private arrivalCells(given: BlockPos | null): BlockPos[] {
+    const base = given ?? this.defaultArrival();
+    if (!base) return [];
+    const out = [base];
+    for (const [dx, dz] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+    ] as const) {
+      const c = { x: base.x + dx, y: base.y, z: base.z + dz };
+      if (this.nav.isStandable(c, 'npc')) out.push(c);
+    }
+    return out;
+  }
+
+  /** 광장 남쪽 8 칸 부근의 설 수 있는 칸. 없으면 첫 광장 칸. */
+  private defaultArrival(): BlockPos | null {
+    const c = this.plazaCenter;
+    if (!c) return null;
+    for (const dy of [0, 1, -1, 2, -2]) {
+      const p = { x: c.x, y: c.y + dy, z: c.z + 8 };
+      if (this.nav.isStandable(p, 'npc')) return p;
+    }
+    return this.currentPlazaSpots()[0] ?? null;
   }
 
   /** 광장 칸 목록. 통행이 바뀌었을 때만 다시 계산한다. */

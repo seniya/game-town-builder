@@ -39,6 +39,7 @@ import { BellPanel } from './ui/BellPanel';
 import { BellSound } from './ui/BellSound';
 import { ClockHud } from './ui/ClockHud';
 import { InteractPrompt } from './ui/InteractPrompt';
+import { ArrivalToast } from './ui/ArrivalToast';
 import { BellRingView } from './render/BellRingView';
 import { donate } from './game/systems/donation';
 import { findInteractTarget, type InteractTarget } from './game/systems/interaction';
@@ -157,6 +158,7 @@ const islandScene: VisualFixture = {
   views: ISLAND_VIEWS,
   quarryCandidates: islandData.quarryRespawnCandidates,
   plazaCenter: islandData.bellPos,
+  arrivalCell: islandData.residentArrival,
   residents: [
     { role: 'farmer', cell: islandData.npcSpawns.farmer },
     { role: 'cook', cell: islandData.npcSpawns.cook },
@@ -207,6 +209,7 @@ function createWorld(
     worldSize: fixture.size,
     startGameMinutes,
     ...(fixture.plazaCenter ? { plazaCenter: fixture.plazaCenter } : {}),
+    ...(fixture.arrivalCell ? { arrivalCell: fixture.arrivalCell } : {}),
     ...(fixture.quarryCandidates ? { quarryCandidates: fixture.quarryCandidates } : {}),
     ...(play && fixture.playerSpawn ? { playerSpawn: fixture.playerSpawn } : {}),
   });
@@ -571,6 +574,7 @@ function start(): void {
   const gratitudeHud = new GratitudeHud(document.body, () => world.gratitude.total, world.events);
   new RoomSound(world.events);
   new BellSound(world.events);
+  new ArrivalToast(document.body, world.events);
   const bellRing = new BellRingView(world.plazaCenter, world.events);
   renderer.scene.add(bellRing.object3d);
   const clockHud = new ClockHud(document.body, world.clock, formatClock);

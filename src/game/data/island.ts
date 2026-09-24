@@ -157,6 +157,8 @@ export interface IslandData {
     readonly cook: BlockPos;
     readonly carpenter: BlockPos;
   };
+  /** 새 주민이 나타나는 섬 가장자리 칸: 종에서 남쪽으로 해안 세 칸 안쪽 땅 (MVP_SPEC 19.6, ADR 034) */
+  readonly residentArrival: BlockPos;
   /** 어두운 외곽의 몬스터 스폰 칸 2 곳 */
   readonly monsterSpawns: readonly BlockPos[];
   /** 나무 밑동(첫 log 칸) 24 개 */
@@ -368,5 +370,17 @@ export function buildIsland(write: WriteBlock): IslandData {
     ],
     treeBases,
     quarryRespawnCandidates: candidates,
+    residentArrival: arrivalCell(bellPos),
   };
+}
+
+/** 종에서 남쪽(+z)으로 가다 처음 만나는 바다 칸의 세 칸 안쪽 땅. 연못·해변을 지나도 된다. */
+function arrivalCell(bell: BlockPos): BlockPos {
+  let lastLand = bell.z;
+  for (let z = bell.z; z < W.sizeZ; z++) {
+    const col = columnAt(bell.x, z);
+    if (col.kind === 'sea') break;
+    if (col.kind === 'land') lastLand = z;
+  }
+  return standOn(bell.x, Math.max(bell.z, lastLand - 3));
 }
