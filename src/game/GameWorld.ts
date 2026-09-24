@@ -98,7 +98,7 @@ export class GameWorld {
   readonly input = new InputSystem();
   /** 플레이어 인벤토리 / 핫바. 핫바 선택은 입력 슬롯에서 InputSystem 뒤에 반영한다 */
   readonly inventory: InventorySystem;
-  /** 제작. 마을 레벨은 VillageLevelSystem(TASK-037) 전까지 시작 레벨로 읽는다 */
+  /** 제작. 해금은 VillageLevelSystem 의 현재 레벨로 읽는다 (TASK-037) */
   readonly crafting: CraftingSystem;
   /** F3 계측과 디버그 명령 (ARCHITECTURE 26) */
   readonly debug: DebugSystem;
@@ -152,8 +152,8 @@ export class GameWorld {
     this.clock = new GameClockSystem(this.events, init.startGameMinutes ?? 0);
     this.attach('clock', this.clock);
     this.inventory = new InventorySystem(this.events, this.input);
-    const startLevel = balance.village.levels[0].level;
-    this.crafting = new CraftingSystem(this.inventory, () => startLevel);
+    // 제작 해금은 VillageLevelSystem 의 현재 레벨로 판단한다 (TASK-037). village 는 아래에서 만들며 호출은 그 뒤다
+    this.crafting = new CraftingSystem(this.inventory, () => this.village.level);
     this.attach('input', this.input);
     this.attach('input', this.inventory);
     this.player = init.playerSpawn ? createPlayer(init.playerSpawn) : null;

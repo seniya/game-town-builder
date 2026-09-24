@@ -1261,14 +1261,16 @@ TASK-015에서 만든 unlocks.ts를 VillageLevelSystem의 실제 레벨 전이�
 CraftingSystem이 현재 레벨의 해금을 확인
 ```
 
+결과: [TASK-037 기록](../state/2026-09-24_2030-task-037-unlocks.md). CraftingSystem 의 레벨 조회를 VillageLevelSystem.level 에 연결했다.
+
 Acceptance Criteria:
 
-- [ ] 레벨 1 에서 `window` / `chest` 이 회색이다
-- [ ] 회색 항목에 필요 레벨이 표시된다
-- [ ] 레벨 2 를 달성하면 즉시 활성화된다
-- [ ] 해금되지 않은 블록은 디버그 모드에서도 제작되지 않는다
-- [ ] 레벨이 오른 뒤 다시 잠기지 않는다
-- [ ] cooking_stove / water_pot은 레벨 1부터 제작 가능하다
+- [x] 레벨 1 에서 `window` / `chest` 이 회색이다
+- [x] 회색 항목에 필요 레벨이 표시된다
+- [x] 레벨 2 를 달성하면 즉시 활성화된다
+- [x] 해금되지 않은 블록은 디버그 모드에서도 제작되지 않는다
+- [x] 레벨이 오른 뒤 다시 잠기지 않는다
+- [x] cooking_stove / water_pot은 레벨 1부터 제작 가능하다
 
 ---
 

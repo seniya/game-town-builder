@@ -89,6 +89,10 @@ export class InventoryPanel implements ModalView {
     events.on('INVENTORY_CHANGED', () => {
       if (this.visible) this.render();
     });
+    // 해금은 레벨이 오르는 즉시 보인다 (TASK-037)
+    events.on('VILLAGE_LEVEL_UP', () => {
+      if (this.visible) this.render();
+    });
   }
 
   /** 연다. */

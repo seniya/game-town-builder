@@ -29,7 +29,7 @@ function outputOf(recipe: Recipe): ItemAmount[] {
   return [{ item: blockItem(recipe.output.blockId), count: recipe.output.count }];
 }
 
-/** 제작. 마을 레벨은 VillageLevelSystem(TASK-037) 이 생기기 전까지 주입된 조회로 읽는다. */
+/** 제작. 마을 레벨은 주입된 조회(GameWorld 에서는 VillageLevelSystem.level)로 읽는다 (TASK-037). */
 export class CraftingSystem {
   /** 인벤토리와 현재 마을 레벨 조회를 받는다. */
   constructor(
