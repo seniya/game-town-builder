@@ -154,6 +154,10 @@ export const balance = {
     attackHeight: 1.5,
     /** 추적 반경 (주민 위협 반경과 같다) */
     chaseRadius: 12,
+    /** 추적 탐색 한 번의 누적 확장 상한 (MVP_SPEC 24.3 의 5, ADR 040) */
+    chaseMaxNodes: 800,
+    /** 상한·NO_PATH 로 포기한 대상을 다시 쫓기까지 실초 (MVP_SPEC 24.3 의 5) */
+    chaseRetrySeconds: 3,
   },
 
   combat: {

@@ -351,6 +351,13 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
   bindDomInput(canvas, world.input);
   const camera = new CameraController(renderer.camera, world.voxels, player, renderer.lighting);
   const body = new PlayerView();
+  // 플레이어 동작(TASK-ANIM-001): 직접 놓은 블록·몬스터 타격에 한 번 휘두른다
+  world.events.on('BLOCK_CHANGED', (c) => {
+    if (c.by === 'player' && c.to !== BlockId.air) body.playSwing('place');
+  });
+  world.events.on('COMBAT_HIT', (h) => {
+    if (h.target === 'monster') body.playSwing('attack');
+  });
   const caps = new CeilingCapView(world.voxels);
   renderer.scene.add(caps.object3d);
   let lastUpdate = performance.now();
@@ -487,7 +494,9 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
       else camera.update(realDt);
       caps.update(realDt, camera.ceilingCut);
       lastUpdate = now;
-      body.syncFrom(player, camera.distance >= HIDE_PLAYER_BELOW);
+      body.syncFrom(player, camera.distance >= HIDE_PLAYER_BELOW, realDt, {
+        breaking: blockEdit.breakingPos !== null,
+      });
       const target = screen.state.kind === 'playing' ? blockEdit.target : null;
       highlight.show(target ? target.pos : null, world.voxels.placements, blockEdit.breakProgress);
       crosshair.update(target !== null, screen.state.kind === 'playing');

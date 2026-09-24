@@ -1,6 +1,7 @@
 // 몬스터 모형 (MVP_SPEC 24, TASK-044). 게임 상태는 읽기만 한다. 어두운 보라 몸통에 빛나는 눈, 걸을 때 통통 튄다.
 // 파괴 중에는 앞으로 몸을 부딪치고, 공격받아 체력이 줄면 잠깐 붉게 번쩍인다(TASK-045 / 046 에서 쓰는 표현).
 import * as THREE from 'three';
+import { balance } from '../game/data/balance';
 import type { Monster } from '../game/entities/Monster';
 import { CRACK_STAGES, createCrackTexture } from './crackTexture';
 import { createCharacterMaterial, createCrackMaterial, createEmissiveMaterial } from './materials';
@@ -26,6 +27,17 @@ function box(w: number, h: number, d: number, color: number, x = 0, y = 0, z = 0
   return mesh;
 }
 
+/**
+ * 공격 동작: 공격 간격(1.5 초)마다 뒤로 움츠렸다가(−) 앞으로 달려든다(+). 1 이 가장 앞이다.
+ * 실제 타격 시각은 CombatSystem 이 정하며 이 박자는 표현이다.
+ */
+function attackLunge(time: number): number {
+  const t = (time % balance.monster.attackIntervalSeconds) / balance.monster.attackIntervalSeconds;
+  if (t < 0.55) return -Math.sin((t / 0.55) * Math.PI) * 0.3;
+  if (t < 0.7) return Math.sin(((t - 0.55) / 0.15) * (Math.PI / 2));
+  return 1 - (t - 0.7) / 0.3;
+}
+
 /** 몬스터 한 마리의 모형. */
 class MonsterView {
   readonly object3d = new THREE.Group();
@@ -36,6 +48,9 @@ class MonsterView {
   private lastHealth = -1;
   private flash = 0;
   private readonly hurt: THREE.Mesh;
+  /** 부수기·공격 동작의 비중(0~1) */
+  private breakWeight = 0;
+  private attackWeight = 0;
 
   /** 모형을 만든다. */
   constructor() {
@@ -77,11 +92,16 @@ class MonsterView {
     this.flash = Math.max(0, this.flash - dt);
     this.hurt.visible = this.flash > 0;
     const hop = moving ? Math.abs(Math.sin(this.time * 9)) * 0.12 : Math.sin(this.time * 2) * 0.02;
-    const bash = m.action.kind === 'break' ? Math.max(0, Math.sin(this.time * 6)) * 0.35 : 0;
+    // 부수기·공격 동작의 비중을 부드럽게 옮겨 동작이 시작·끝날 때 몸이 튀지 않게 한다 (TASK-ANIM-001)
+    const k = Math.min(1, dt * 10);
+    this.breakWeight += ((m.action.kind === 'break' ? 1 : 0) - this.breakWeight) * k;
+    this.attackWeight += ((m.action.kind === 'attack' ? 1 : 0) - this.attackWeight) * k;
+    const bash = Math.max(0, Math.sin(this.time * 6)) * 0.35 * this.breakWeight;
+    const lunge = attackLunge(this.time) * this.attackWeight;
     this.object3d.position.set(p.x, p.y, p.z);
     this.object3d.rotation.set(0, this.yaw, 0);
-    this.body.position.set(0, hop, -bash);
-    this.body.rotation.set(-bash * 0.6, 0, 0);
+    this.body.position.set(0, hop + Math.max(0, lunge) * 0.08, -bash - lunge * 0.45);
+    this.body.rotation.set(-bash * 0.6 - lunge * 0.5, 0, 0);
   }
 }
 

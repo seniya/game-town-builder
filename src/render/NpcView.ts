@@ -1,10 +1,12 @@
 // 주민 모형 (ARCHITECTURE 12.2 / 12.3, MVP_SPEC 31, TASK-028 / 033). 엔티티를 읽어서 그리고 고치지 않는다.
-// 역할마다 옷과 모자가 달라 라벨 없이 같은 주민을 알아볼 수 있다. 정지·걷기·눕기·앉기 자세를 이 파일이 그린다.
+// 역할마다 옷과 모자가 달라 라벨 없이 같은 주민을 알아볼 수 있다. 자세 계산·전환 보간은 characterPose.ts(TASK-ANIM-001)이고
+// 이 파일은 모형을 만들고 계산한 자세를 입힌다.
 // 몸체 위치(body.pos)는 게임 위치 그대로다. 눕는 자세의 위치는 침대 배치를 읽어 렌더에서만 계산한다.
 import * as THREE from 'three';
 import type { NPC } from '../game/entities/NPC';
 import type { ActionView, BlockPos, NPCRole, PlacedObjectSnapshot } from '../game/types';
 import { facingOffset } from '../game/voxel/PlacementIndex';
+import { MOVING_SPEED, npcPose, PoseBlender, type CharacterPose } from './characterPose';
 import { createCharacterMaterial, createCharacterSpriteMaterial } from './materials';
 import { BED_SURFACE } from './PropView';
 
@@ -144,7 +146,10 @@ export interface NpcViewWorld {
   readonly talkable?: (npc: NPC<ActionView>) => boolean;
 }
 
-/** 주민 한 명의 모형과 자세. */
+/** 한 프레임에 이만큼 넘게 움직이면 순간 이동(로드·도착)으로 보고 보간하지 않는다. */
+const TELEPORT_DISTANCE = 3;
+
+/** 주민 한 명의 모형과 자세. 자세 계산은 characterPose.ts 이고 여기서는 모형에 입힌다. */
 export class NpcView {
   readonly object3d = new THREE.Group();
   private readonly figure = new THREE.Group();
@@ -153,6 +158,8 @@ export class NpcView {
   private readonly armL: THREE.Group;
   private readonly armR: THREE.Group;
   private readonly head = new THREE.Group();
+  /** 두 눈(깜빡임·잠든 눈은 높이를 줄인다) */
+  private readonly eyes: THREE.Mesh[] = [];
   /** 모자. 누울 때는 벗는다 */
   private readonly hat = new THREE.Group();
   private readonly bedding = new THREE.Group();
@@ -161,15 +168,18 @@ export class NpcView {
   private readonly steam: THREE.Sprite[] = [];
   /** 머리 위 대화 표시 */
   private readonly bubble: THREE.Sprite;
+  private readonly blender = new PoseBlender();
+  private readonly seed: number;
   private yaw = 0;
   private walk = 0;
   private time: number;
   private last: THREE.Vector3 | null = null;
   private speed = 0;
 
-  /** 역할에 맞춰 모형을 만든다. seed 는 걸음·숨쉬기 박자를 주민마다 조금씩 어긋나게 한다. */
+  /** 역할에 맞춰 모형을 만든다. seed 는 걸음·숨쉬기·깜빡임 박자를 주민마다 조금씩 어긋나게 한다. */
   constructor(role: NPCRole, seed: number) {
     const o = OUTFITS[role];
+    this.seed = seed;
     this.time = seed * 1.7;
     // 다리(엉덩이 피벗 y 0.42)
     this.legL = limb(0.17, 0.42, 0.19, o.trousers, -0.11, 0.42);
@@ -192,14 +202,23 @@ export class NpcView {
     this.armL = limb(0.13, 0.44, 0.15, o.shirt, -0.31, 0.9);
     this.armR = limb(0.13, 0.44, 0.15, o.shirt, 0.31, 0.9);
     for (const arm of [this.armL, this.armR]) arm.add(box(0.12, 0.1, 0.14, SKIN, 0, -0.52, 0));
-    // 머리(목 피벗 y 0.92). 앞은 −z 다
+    // 목수는 오른손에 망치를 든다(수리 동작이 읽히게)
+    if (role === 'carpenter') {
+      this.armR.add(box(0.05, 0.05, 0.3, 0x8a6a45, 0, -0.52, -0.1));
+      this.armR.add(box(0.12, 0.09, 0.09, 0x9aa0a8, 0, -0.54, -0.26));
+    }
+    // 머리(목 피벗 y 0.92). 앞은 −z 다. 눈은 가운데를 기준으로 줄어들도록 따로 둔다
     this.head.position.set(0, 0.92, 0);
+    for (const x of [-0.11, 0.11]) {
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.09, 0.02), mat(EYE));
+      eye.position.set(x, 0.245, -0.235);
+      this.eyes.push(eye);
+    }
     this.head.add(
       box(0.5, 0.46, 0.46, SKIN, 0, 0, 0),
       box(0.54, 0.14, 0.5, o.hair, 0, 0.36, 0.01),
       box(0.54, 0.3, 0.12, o.hair, 0, 0.14, 0.2),
-      box(0.07, 0.09, 0.02, EYE, -0.11, 0.2, -0.235),
-      box(0.07, 0.09, 0.02, EYE, 0.11, 0.2, -0.235),
+      ...this.eyes,
       box(0.08, 0.04, 0.02, CHEEK, -0.17, 0.12, -0.235),
       box(0.08, 0.04, 0.02, CHEEK, 0.17, 0.12, -0.235),
     );
@@ -245,19 +264,29 @@ export class NpcView {
     this.object3d.add(this.bedding);
   }
 
-  /** 엔티티를 읽어 위치·방향·자세를 맞춘다. dt 는 렌더 프레임 초다. */
+  /**
+   * 엔티티를 읽어 위치·방향·자세를 맞춘다. dt 는 렌더 프레임 초다.
+   * 목표 자세를 계산하고(characterPose), 자세 종류가 바뀌면 직전 자세에서 보간한다. 게임 상태는 고치지 않는다.
+   */
   syncFrom(npc: NPC<ActionView>, dt: number, world: NpcViewWorld): void {
     this.time += dt;
     const p = npc.body.pos;
     const now = new THREE.Vector3(p.x, p.y, p.z);
+    let snap = this.last === null;
     if (this.last && dt > 0) {
       const dx = now.x - this.last.x;
       const dz = now.z - this.last.z;
-      const s = Math.hypot(dx, dz) / dt;
-      this.speed += (s - this.speed) * Math.min(1, dt * 12);
-      if (Math.hypot(dx, dz) > 1e-4) this.turnToward(Math.atan2(-dx, -dz), dt);
+      const moved = Math.hypot(dx, dz);
+      if (moved > TELEPORT_DISTANCE) {
+        snap = true;
+        this.speed = 0;
+      } else {
+        this.speed += (moved / dt - this.speed) * Math.min(1, dt * 12);
+        if (moved > 1e-4) this.turnToward(Math.atan2(-dx, -dz), dt);
+      }
     }
     this.last = now;
+    this.walk += dt * (this.speed > MOVING_SPEED ? this.speed * 3.2 : 0);
     const a = npc.action;
     const use = a.facilityUse;
     const placed = use ? world.placement(use.objectId) : undefined;
@@ -265,62 +294,98 @@ export class NpcView {
     const talk = (world.talkable?.(npc) ?? false) && a.kind !== 'sleep';
     this.bubble.visible = talk;
     if (talk) this.bubble.position.set(0, 2.35 + Math.sin(this.time * 2.4) * 0.05, 0);
-    if (a.kind === 'talk') this.poseTalking(p, a.lookAt ?? null, dt);
-    else if (use?.pose === 'lie' && placed) this.poseLying(placed);
-    else if (use?.pose === 'sit' && a.lookAt) {
-      this.poseSittingOnChair(use.usePosition, a.lookAt, a.kind === 'eat');
-    } else if (a.pose === 'sit' || use?.pose === 'sit') {
-      this.poseSitting(p, world.plazaCenter, dt, a.kind === 'eat');
-    } else if (a.pose === 'work') this.poseWorking(p, a.lookAt ?? null, dt);
-    else if (a.pose === 'cook' || use?.pose === 'cook') this.poseCooking(p, a.lookAt ?? null, dt);
-    else this.poseStanding(p, dt);
+
+    // 자세 종류·뿌리 위치·바라볼 방향을 게임 상태에서 읽는다
+    // 침대 배치를 못 읽으면(부서진 직후 등) 눕지 않고 선다
+    const pose = use?.pose === 'lie' ? (placed ? 'lie' : a.pose) : (use?.pose ?? a.pose);
+    const onChair = use?.pose === 'sit' && a.lookAt !== undefined;
+    const root = { x: 0, y: 0, z: 0 };
+    let faceYaw: number | null = null;
+    let turnRate = 2;
+    const look = a.lookAt ?? null;
+    if (pose === 'lie' && placed) {
+      const o = facingOffset(placed.facing);
+      const an = placed.anchor;
+      // 침대 두 칸의 가운데, 매트리스 윗면 높이. 머리는 anchor 칸(베개) 쪽이다
+      root.x = an.x + 0.5 + o.dx * 0.5 - p.x;
+      root.y = an.y + BED_SURFACE - p.y;
+      root.z = an.z + 0.5 + o.dz * 0.5 - p.z;
+      faceYaw = Math.atan2(-o.dx, -o.dz);
+      turnRate = 1.2;
+    } else if (onChair && use && look) {
+      const seat = use.usePosition;
+      root.x = seat.x - p.x;
+      root.y = seat.y - p.y;
+      root.z = seat.z - p.z;
+      faceYaw = Math.atan2(-(look.x - seat.x), -(look.z - seat.z));
+      turnRate = 1.5;
+    } else if (pose === 'sit' && a.kind !== 'talk' && npc.action.key !== 'stunned') {
+      const c = world.plazaCenter;
+      if (c) faceYaw = Math.atan2(-(c.x + 0.5 - p.x), -(c.z + 0.5 - p.z));
+      turnRate = 1;
+    } else if (look) {
+      faceYaw = Math.atan2(-(look.x - p.x), -(look.z - p.z));
+    }
+    if (faceYaw !== null) this.turnToward(faceYaw, dt * turnRate);
+    if (snap && faceYaw !== null) this.yaw = faceYaw;
+
+    const target = npcPose({
+      kind: a.kind,
+      key: a.key,
+      ...(pose ? { pose } : {}),
+      onChair,
+      rootOffset: root,
+      lookHeight: look ? look.y - p.y : null,
+      lookDistance: look ? Math.hypot(look.x - p.x, look.z - p.z) : 0,
+      speed: this.speed,
+      phase: this.walk,
+      time: this.time,
+      seed: this.seed,
+    });
+    const drawn = this.blender.apply(target, dt, snap);
+    this.applyPose(drawn, p);
+
+    // 자세에 딸린 소품: 이불·z·모자는 눕기가 거의 끝났을 때, 김은 조리 중에만
+    const lying = target.key === 'lie' && this.blender.weight > 0.6;
+    this.bedding.visible = lying;
+    this.hat.visible = !lying;
+    this.bedding.position.set(0, 0.1 + Math.sin(this.time * 1.2) * 0.008, 0);
+    this.zs.forEach((s, i) => {
+      s.visible = lying;
+      if (!lying) return;
+      // z 가 머리 위로 천천히 떠오르며 사라진다
+      const t = (this.time * 0.45 + i / 3) % 1;
+      s.position.set(0.18 + t * 0.2, 0.55 + t * 0.7, 0.8);
+      s.scale.setScalar(0.16 + t * 0.18);
+      (s.material as THREE.SpriteMaterial).opacity = Math.sin(t * Math.PI) * 0.9;
+    });
+    this.updateSteam(target.key === 'cook' ? look : null, p);
   }
 
-  /**
-   * 밭일(심기·수확): 밭 칸을 바라보고 허리를 굽혀 두 팔로 땅을 고른다. 걷기·정지와 구별된다 (TASK-030).
-   */
-  private poseWorking(
-    p: { x: number; y: number; z: number },
-    lookAt: { x: number; z: number } | null,
-    dt: number,
-  ): void {
-    this.resetSpecial();
-    if (lookAt) this.turnToward(Math.atan2(-(lookAt.x - p.x), -(lookAt.z - p.z)), dt * 2);
-    const dig = Math.sin(this.time * 9);
-    this.legL.rotation.x = 0.25;
-    this.legR.rotation.x = -0.15;
-    this.armL.rotation.set(-1.1 + dig * 0.35, 0, 0.1);
-    this.armR.rotation.set(-1.1 + dig * 0.35, 0, -0.1);
-    this.object3d.position.set(p.x, p.y, p.z);
+  /** 계산한 자세를 관절에 입힌다. 뿌리는 게임 위치 + rootOffset 이다. */
+  private applyPose(d: CharacterPose, p: { x: number; y: number; z: number }): void {
+    this.object3d.position.set(p.x + d.rootOffset.x, p.y + d.rootOffset.y, p.z + d.rootOffset.z);
     this.object3d.rotation.set(0, this.yaw, 0);
-    this.figure.position.set(0, -0.04, 0);
-    this.figure.rotation.set(-0.42, 0, 0);
-    this.head.rotation.set(-0.35, 0, 0);
+    this.figure.position.set(d.figurePos.x, d.figurePos.y, d.figurePos.z);
+    this.figure.rotation.set(d.figureRot.x, d.figureRot.y, d.figureRot.z);
+    this.legL.rotation.set(d.legL.x, d.legL.y, d.legL.z);
+    this.legR.rotation.set(d.legR.x, d.legR.y, d.legR.z);
+    this.armL.rotation.set(d.armL.x, d.armL.y, d.armL.z);
+    this.armR.rotation.set(d.armR.x, d.armR.y, d.armR.z);
+    this.head.rotation.set(d.head.x, d.head.y, d.head.z);
+    for (const eye of this.eyes) eye.scale.y = Math.max(0.1, d.eyes);
   }
 
-  /**
-   * 조리: 화덕을 바라보고 곧게 서서 한 팔로 냄비를 젓고 다른 팔은 앞으로 받친다. 화덕 위로 김이 오른다.
-   * 밭일(허리를 굽힘)·걷기·대기와 구별된다 (TASK-031). 몸체 위치는 접근 셀 그대로다.
-   */
-  private poseCooking(
-    p: { x: number; y: number; z: number },
+  /** 조리 중 화덕 위의 김: 화덕 윗면에서 천천히 오르며 퍼지고 사라진다. lookAt 이 없으면 숨긴다. */
+  private updateSteam(
     lookAt: { x: number; y: number; z: number } | null,
-    dt: number,
+    p: { x: number; y: number; z: number },
   ): void {
-    this.resetSpecial();
-    if (lookAt) this.turnToward(Math.atan2(-(lookAt.x - p.x), -(lookAt.z - p.z)), dt * 2);
-    const stir = this.time * 5;
-    this.legL.rotation.x = 0;
-    this.legR.rotation.x = 0;
-    this.armL.rotation.set(-0.9, 0, 0.15);
-    this.armR.rotation.set(-1.2 + Math.sin(stir) * 0.18, 0, -0.1 + Math.cos(stir) * 0.2);
-    this.object3d.position.set(p.x, p.y, p.z);
-    this.object3d.rotation.set(0, this.yaw, 0);
-    this.figure.position.set(0, Math.sin(this.time * 2.4) * 0.01, 0);
-    this.figure.rotation.set(-0.08, Math.sin(stir) * 0.04, 0);
-    this.head.rotation.set(-0.3, 0, 0);
-    if (!lookAt) return;
-    // 김: 화덕 윗면에서 천천히 오르며 퍼지고 사라진다. 모형 기준 좌표로 옮긴다(모형은 yaw 로 돌아 있다)
+    if (!lookAt) {
+      for (const s of this.steam) s.visible = false;
+      return;
+    }
+    // 모형 기준 좌표로 옮긴다(모형은 yaw 로 돌아 있다)
     const dx = lookAt.x - p.x;
     const dz = lookAt.z - p.z;
     const c = Math.cos(-this.yaw);
@@ -336,142 +401,9 @@ export class NpcView {
     });
   }
 
-  /** 대화: 서서 상대(플레이어)를 보고 한 팔로 가볍게 손짓한다. */
-  private poseTalking(
-    p: { x: number; y: number; z: number },
-    lookAt: { x: number; z: number } | null,
-    dt: number,
-  ): void {
-    this.poseStanding(p, dt);
-    if (lookAt) this.turnToward(Math.atan2(-(lookAt.x - p.x), -(lookAt.z - p.z)), dt * 2);
-    this.object3d.rotation.set(0, this.yaw, 0);
-    this.armR.rotation.set(-0.6 + Math.sin(this.time * 3) * 0.25, 0, -0.15);
-    this.head.rotation.set(0, 0, 0);
-  }
-
-  /** 걸음 방향으로 부드럽게 돈다. */
+  /** 목표 방향으로 부드럽게 돈다. */
   private turnToward(target: number, dt: number): void {
     this.yaw += wrapAngle(target - this.yaw) * Math.min(1, dt * 10);
-  }
-
-  /** 서 있기·걷기. 속도가 있으면 팔다리를 흔들고 살짝 튄다. 멈춰 있으면 숨을 쉰다. */
-  private poseStanding(p: { x: number; y: number; z: number }, dt: number): void {
-    this.resetSpecial();
-    const moving = this.speed > 0.4;
-    this.walk += dt * (moving ? this.speed * 3.2 : 0);
-    const swing = moving ? Math.sin(this.walk) * 0.65 : 0;
-    this.legL.rotation.x = swing;
-    this.legR.rotation.x = -swing;
-    this.armL.rotation.x = -swing * 0.8;
-    this.armR.rotation.x = swing * 0.8;
-    this.armL.rotation.z = 0;
-    this.armR.rotation.z = 0;
-    const bob = moving ? Math.abs(Math.sin(this.walk)) * 0.05 : Math.sin(this.time * 2.1) * 0.008;
-    this.object3d.position.set(p.x, p.y, p.z);
-    this.object3d.rotation.set(0, this.yaw, 0);
-    this.figure.position.set(0, bob, 0);
-    this.figure.rotation.set(0, 0, 0);
-    // 멈춰 있을 때 가끔 고개를 돌려 둘러본다
-    const look = moving
-      ? 0
-      : Math.sin(this.time * 0.45) * Math.max(0, Math.sin(this.time * 0.17)) * 0.5;
-    this.head.rotation.set(0, look, 0);
-  }
-
-  /**
-   * 식당 의자에 앉기: 의자 윗면(usePosition)에 앉아 식탁을 바라본다. 다리는 의자 앞으로 내린다.
-   * 게임 위치는 접근 셀이고 이 자세는 렌더에서만 의자 위로 옮긴다 (ARCHITECTURE 12.3). 먹는 중이면 숟가락질을 한다.
-   */
-  private poseSittingOnChair(
-    seat: { x: number; y: number; z: number },
-    table: { x: number; z: number },
-    eating: boolean,
-  ): void {
-    this.resetSpecial();
-    this.yaw = Math.atan2(-(table.x - seat.x), -(table.z - seat.z));
-    this.legL.rotation.x = 1.25;
-    this.legR.rotation.x = 1.25;
-    this.eatingArms(eating);
-    this.object3d.position.set(seat.x, seat.y, seat.z);
-    this.object3d.rotation.set(0, this.yaw, 0);
-    this.figure.position.set(0, -0.36 + Math.sin(this.time * 1.6) * 0.006, 0.05);
-    this.figure.rotation.set(0, 0, 0);
-    this.head.rotation.set(eating ? -0.25 : 0, 0, 0);
-  }
-
-  /** 먹는 팔: 왼팔은 앞으로 받치고 오른팔은 가끔 입으로 가져간다. 먹지 않으면 무릎 위에 둔다. */
-  private eatingArms(eating: boolean): void {
-    if (!eating) {
-      this.armL.rotation.set(-0.5, 0, 0);
-      this.armR.rotation.set(-0.5, 0, 0);
-      return;
-    }
-    const lift = Math.max(0, Math.sin(this.time * 2.2));
-    this.armL.rotation.set(-0.9, 0, 0.2);
-    this.armR.rotation.set(-0.8 - lift * 1.3, 0, -0.25 * lift);
-  }
-
-  /** 광장에 앉기: 다리를 앞으로 뻗고 광장 중심을 바라본다. 먹는 중이면 숟가락질을 한다. */
-  private poseSitting(
-    p: { x: number; y: number; z: number },
-    center: BlockPos | null,
-    dt: number,
-    eating = false,
-  ): void {
-    this.resetSpecial();
-    if (center) this.turnToward(Math.atan2(-(center.x + 0.5 - p.x), -(center.z + 0.5 - p.z)), dt);
-    this.legL.rotation.x = Math.PI / 2;
-    this.legR.rotation.x = Math.PI / 2;
-    this.eatingArms(eating);
-    this.object3d.position.set(p.x, p.y, p.z);
-    this.object3d.rotation.set(0, this.yaw, 0);
-    this.figure.position.set(0, -0.36 + Math.sin(this.time * 1.6) * 0.006, 0);
-    this.figure.rotation.set(0, 0, 0);
-    this.head.rotation.set(Math.sin(this.time * 0.5) * 0.08, 0, 0);
-  }
-
-  /**
-   * 침대에 눕기. 머리는 anchor 칸 쪽(베개), 발은 facing 쪽이다. 매트리스 윗면(BED_SURFACE)에 등을 대고 눕는다.
-   * 게임 위치는 접근 셀에 있고, 이 자세는 렌더에서만 침대 위로 옮긴다 (ARCHITECTURE 12.3).
-   */
-  private poseLying(bed: PlacedObjectSnapshot): void {
-    const o = facingOffset(bed.facing);
-    const a = bed.anchor;
-    // 침대 두 칸의 가운데, 윗면 높이
-    const cx = a.x + 0.5 + o.dx * 0.5;
-    const cz = a.z + 0.5 + o.dz * 0.5;
-    const top = a.y + BED_SURFACE;
-    // 머리 방향 h = 발 칸 → anchor 칸 = −facing
-    const headYaw = Math.atan2(-o.dx, -o.dz);
-    this.object3d.position.set(cx, top, cz);
-    this.object3d.rotation.set(0, headYaw, 0);
-    // 서 있는 모형(+y 가 머리, −z 가 앞)을 등으로 눕힌다: +y → +z(머리 쪽), 앞 → 위
-    this.figure.rotation.set(Math.PI / 2, 0, 0);
-    this.figure.position.set(0, 0.17, -0.62);
-    this.legL.rotation.x = 0;
-    this.legR.rotation.x = 0;
-    this.armL.rotation.set(0, 0, 0.12);
-    this.armR.rotation.set(0, 0, -0.12);
-    this.head.rotation.set(-0.25, 0, 0);
-    this.bedding.visible = true;
-    this.hat.visible = false;
-    this.bedding.position.set(0, 0.1 + Math.sin(this.time * 1.2) * 0.008, 0);
-    // z 가 머리 위로 천천히 떠오르며 사라진다
-    this.zs.forEach((s, i) => {
-      const t = (this.time * 0.45 + i / 3) % 1;
-      s.visible = true;
-      s.position.set(0.18 + t * 0.2, 0.55 + t * 0.7, 0.8);
-      s.scale.setScalar(0.16 + t * 0.18);
-      (s.material as THREE.SpriteMaterial).opacity = Math.sin(t * Math.PI) * 0.9;
-    });
-  }
-
-  /** 눕기 전용 소품을 숨긴다. */
-  private resetSpecial(): void {
-    this.bedding.visible = false;
-    this.hat.visible = true;
-    for (const s of this.zs) s.visible = false;
-    for (const s of this.steam) s.visible = false;
   }
 }
 

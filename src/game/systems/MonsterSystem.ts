@@ -2,6 +2,7 @@
 // 판단 순서: 종 반경 6 의 발 위치로 경로를 찾는다 → 있으면 걷는다 → 탐색이 이어지는 중(NODE_LIMIT)이면 서서 기다린다
 // → NO_PATH 이면 도달 가능 경계의 파괴 후보(비지형·파괴 가능·예산 이하)로 걸어가 부순다 → 후보·예산이 없으면 배회한다.
 // 종은 부수지 않는다(파괴 시간이 없다). 파괴는 VoxelWorld 편집 API 로 하며 두 칸 객체는 통째로 부순다. 습격당 16 칸까지다.
+// 추적 탐색은 요청 하나당 chaseMaxNodes 까지이고, 닿지 못한 대상은 chaseRetrySeconds 동안 건너뛴다 (ADR 040, TASK-PERF-003).
 import { balance } from '../data/balance';
 import { BlockId, getBlockDef } from '../data/blocks';
 import type { Monster } from '../entities/Monster';
@@ -36,7 +37,10 @@ export interface MonsterDeps {
   /** 공격 대상 조회 (CombatSystem). 없으면 공격·추적하지 않는 시험 월드다 */
   readonly combat?: {
     targetInRange(m: Monster): { readonly kind: string; readonly id?: string } | null;
-    chaseTarget(m: Monster): Vec3 | null;
+    chaseTarget(
+      m: Monster,
+      skip?: (id: string) => boolean,
+    ): { readonly id: string; readonly pos: Vec3 } | null;
   };
 }
 
@@ -45,6 +49,12 @@ interface Runtime {
   mode: 'seek' | 'approach' | 'break' | 'wander' | 'arrived' | 'chase';
   /** 추적 경로를 다시 찾을 때까지 남은 초 */
   chaseRepath: number;
+  /** 지금 쫓는 대상 id. 추적 중이 아니면 null */
+  chaseId: string | null;
+  /** 추적 전 모드. 쫓을 대상이 없어지면 여기로 돌아간다 */
+  chaseFrom: 'arrived' | 'wander';
+  /** 포기한 대상 id → 다시 쫓기까지 남은 실초 */
+  giveUp: Map<string, number>;
   request: PathRequest | null;
   controller: MovementController;
   unwatch: (() => void) | null;
@@ -104,11 +114,12 @@ export class MonsterSystem implements SlotSystem {
       m.action = { kind: 'attack', targetId: target.id ?? 'player' };
       return;
     }
-    // 종에 도달했거나 부술 것이 없으면 가까운 플레이어·주민을 쫓는다 (MVP_SPEC 24.3 의 5)
+    this.tickGiveUp(rt, dt);
+    // 종에 도달했거나 부술 것이 없으면 가까운 플레이어·주민을 쫓는다 (MVP_SPEC 24.3 의 5). 포기한 대상은 건너뛴다
     if (rt.mode === 'arrived' || rt.mode === 'wander' || rt.mode === 'chase') {
-      const chase = this.deps.combat?.chaseTarget(m) ?? null;
+      const chase = this.deps.combat?.chaseTarget(m, (id) => rt.giveUp.has(id)) ?? null;
       if (chase) return this.chase(m, rt, chase, dt);
-      if (rt.mode === 'chase') rt.mode = 'arrived';
+      if (rt.mode === 'chase') this.endChase(m, rt);
     }
     switch (rt.mode) {
       case 'seek':
@@ -126,28 +137,71 @@ export class MonsterSystem implements SlotSystem {
     }
   }
 
-  /** 대상 쪽으로 걷는다. 1 초마다 대상의 현재 칸으로 경로를 다시 찾는다. */
-  private chase(m: Monster, rt: Runtime, to: Vec3, dt: number): void {
+  /**
+   * 대상 쪽으로 걷는다. 1 초마다 대상의 현재 칸으로 경로를 다시 찾는다(요청 하나당 chaseMaxNodes 까지).
+   * 경로가 없거나 상한에 걸리면 그 대상을 chaseRetrySeconds 동안 포기하고 다음 프레임에 다른 대상을 본다.
+   */
+  private chase(
+    m: Monster,
+    rt: Runtime,
+    to: { readonly id: string; readonly pos: Vec3 },
+    dt: number,
+  ): void {
     if (rt.mode !== 'chase') {
       this.release(rt);
+      rt.chaseFrom = rt.mode === 'wander' ? 'wander' : 'arrived';
       rt.mode = 'chase';
       rt.chaseRepath = 0;
       rt.target = null;
+    } else if (rt.chaseId !== to.id) {
+      // 대상이 바뀌면 이전 대상으로 가는 요청을 버리고 곧바로 새로 찾는다
+      if (rt.request) this.deps.paths.cancel(rt.request);
+      rt.request = null;
+      rt.chaseRepath = 0;
     }
+    rt.chaseId = to.id;
     rt.chaseRepath -= dt;
     const req = rt.request;
     if (req && req.status !== 'pending') {
       rt.request = null;
       if (req.result?.path) this.setPath(rt, req.result.path);
+      else {
+        // NO_PATH 또는 상한(continuation 없는 NODE_LIMIT): 닿을 수 없는 대상으로 보고 잠시 쫓지 않는다
+        rt.giveUp.set(to.id, M.chaseRetrySeconds);
+        this.stopWatching(rt);
+        rt.controller.setPath([]);
+      }
     }
-    if (rt.chaseRepath <= 0 && !rt.request) {
+    if (rt.chaseRepath <= 0 && !rt.request && !rt.giveUp.has(to.id)) {
       rt.chaseRepath = 1;
       const from = this.startCell(m);
-      const cell = { x: Math.floor(to.x), y: Math.floor(to.y + 0.01), z: Math.floor(to.z) };
-      if (from) rt.request = this.deps.paths.request(from, { kind: 'cell', pos: cell }, 'monster');
+      const p = to.pos;
+      const cell = { x: Math.floor(p.x), y: Math.floor(p.y + 0.01), z: Math.floor(p.z) };
+      if (from) {
+        rt.request = this.deps.paths.request(from, { kind: 'cell', pos: cell }, 'monster', {
+          maxNodes: M.chaseMaxNodes,
+        });
+      }
     }
     rt.controller.update(dt, m.body, M.moveSpeed);
     m.action = { kind: 'move', path: rt.controller.remaining };
+  }
+
+  /** 추적을 끝내고 추적 전 모드로 돌아간다(배회 중이었으면 배회, 아니면 종 옆 대기). */
+  private endChase(m: Monster, rt: Runtime): void {
+    rt.chaseId = null;
+    if (rt.chaseFrom === 'wander') return this.toWander(m, rt);
+    this.release(rt);
+    rt.controller.setPath([]);
+    rt.mode = 'arrived';
+  }
+
+  /** 포기한 대상의 남은 시간을 줄이고 다 된 것을 지운다. */
+  private tickGiveUp(rt: Runtime, dt: number): void {
+    for (const [id, left] of rt.giveUp) {
+      if (left - dt <= 0) rt.giveUp.delete(id);
+      else rt.giveUp.set(id, left - dt);
+    }
   }
 
   /** 종 반경으로 경로를 찾는다. 결과가 오기 전(이어 탐색 포함)에는 서서 기다린다. */
@@ -343,6 +397,9 @@ export class MonsterSystem implements SlotSystem {
         reseek: 0,
         wanderStep: 0,
         chaseRepath: 0,
+        chaseId: null,
+        chaseFrom: 'arrived',
+        giveUp: new Map(),
       };
       this.runtime.set(m.id, rt);
     }

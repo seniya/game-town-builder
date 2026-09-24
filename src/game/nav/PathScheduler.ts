@@ -28,6 +28,15 @@ export interface PathRequest {
   readonly waitedFrames: number;
 }
 
+/** 요청 선택 사항. */
+export interface PathRequestOptions {
+  /**
+   * 이 요청의 누적 확장 상한. 넘으면 이어 가지 않고 끝낸다(result.reason 'NODE_LIMIT', continuation null).
+   * 없으면 목표나 NO_PATH 까지 이어 간다. 프레임 예산(budgetPerFrame)과는 별개다 (ADR 040)
+   */
+  readonly maxNodes?: number;
+}
+
 /** 내부 가변 요청. */
 interface Entry {
   id: number;
@@ -43,6 +52,8 @@ interface Entry {
   waitedFrames: number;
   /** 이번 세션 이후 영향 범위 안의 변경이 있었다 */
   stale: boolean;
+  /** 누적 확장 상한. 없으면 무한 */
+  maxNodes: number;
 }
 
 /** 계측값 (F3). */
@@ -86,8 +97,13 @@ export class PathScheduler implements SlotSystem {
     };
   }
 
-  /** 경로를 요청한다. 결과는 다음 nav 슬롯 이후에 나온다. */
-  request(from: BlockPos, goal: PathGoal, actor: ActorKind): PathRequest {
+  /** 경로를 요청한다. 결과는 다음 nav 슬롯 이후에 나온다. options.maxNodes 로 누적 확장을 묶을 수 있다. */
+  request(
+    from: BlockPos,
+    goal: PathGoal,
+    actor: ActorKind,
+    options: PathRequestOptions = {},
+  ): PathRequest {
     const entry: Entry = {
       id: this.nextId++,
       from,
@@ -101,6 +117,7 @@ export class PathScheduler implements SlotSystem {
       search: undefined,
       waitedFrames: 0,
       stale: false,
+      maxNodes: options.maxNodes ?? Number.POSITIVE_INFINITY,
     };
     this.queue.push(entry);
     return entry;
@@ -133,17 +150,25 @@ export class PathScheduler implements SlotSystem {
         unfinished.push(entry);
         continue;
       }
-      const share = Math.max(1, Math.floor(budget / (count - i)));
       if (entry.stale) {
         entry.search = undefined;
         entry.stale = false;
         entry.restarts += 1;
       }
+      const left = entry.maxNodes - entry.explored;
+      const share = Math.max(1, Math.min(left, Math.floor(budget / (count - i))));
       const r = findPath(this.graph, entry.from, entry.goal, entry.actor, share, entry.search);
       budget -= r.nodesExplored;
       used += r.nodesExplored;
       entry.explored += r.nodesExplored;
-      if (r.reason === 'NODE_LIMIT' && r.continuation) {
+      if (r.reason === 'NODE_LIMIT' && r.continuation && entry.explored >= entry.maxNodes) {
+        // 상한: 이어 가지 않고 끝낸다. 요청자는 continuation 없는 NODE_LIMIT 을 "포기" 로 읽는다
+        entry.status = 'done';
+        entry.result = { ...r, continuation: null };
+        entry.search = undefined;
+        this.completed += 1;
+        this.maxCompletedWait = Math.max(this.maxCompletedWait, entry.waitedFrames);
+      } else if (r.reason === 'NODE_LIMIT' && r.continuation) {
         entry.search = r.continuation;
         entry.partialPath = r.partialPath;
         unfinished.push(entry);

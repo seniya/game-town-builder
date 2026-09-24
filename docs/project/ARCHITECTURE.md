@@ -1117,6 +1117,10 @@ MVP에서는 `GameWorld.update`와 `render`가 같은 프레임에 돌므로 직
 그린다. 사용 취소 후에는 접근 위치로 돌아오며, 그 위치가 파괴되었다면 충돌·이동
 처리가 현재 월드를 다시 검사한다. SaveData에 렌더용 사용 위치를 NPC 위치로 쓰지 않는다.
 
+구현(TASK-ANIM-001, ADR 041): 동작은 render 가 읽기만 해서 만든다. 뷰는 매 프레임 Action·자세·속도·접지·이벤트에서
+**목표 자세**(관절 각도·몸 위치)를 계산하고, 현재 자세를 그쪽으로 지수 감쇠 보간한다. 게임 상태에 애니메이션 상태를 두지 않는다.
+플레이어 동작 입력(파괴 중·설치·공격)은 main 이 BlockEditSystem·이벤트에서 읽어 PlayerView 에 넘긴다.
+
 ---
 
 # 13. Action
@@ -1515,6 +1519,9 @@ export type MonsterAction =
 NO_PATH 의 reachableBoundary 에서 후보를 고르고(18.2 조건 + 남은 예산), 접근 경로를 따라간 뒤 breakSeconds × 2 동안 부수고
 RaidSystem.spendDestroyCells 뒤 편집 API(by 'monster')로 없앤다. 후보가 없으면 결정적 배회를 하며 4 초마다 다시 탐색한다.
 파괴 연출은 render/MonsterView 의 흔들리는 균열 상자다. 플레이어·NPC 추적(18.1 의 5)은 TASK-046 에서 붙인다.
+추적(TASK-046, 비용 보완 TASK-PERF-003 / ADR 040): 반경 12 안의 가장 가까운 대상 칸으로 1 초마다 요청하되
+`PathScheduler.request(..., { maxNodes: chaseMaxNodes })` 로 요청 하나의 누적 확장을 묶는다. 상한(`reason: 'NODE_LIMIT'`, continuation 없음)이나
+NO_PATH 인 대상은 몬스터별로 chaseRetrySeconds 동안 제외하고 다음 대상을 본다. 대상이 없으면 추적 전 모드(arrived / wander)로 돌아간다.
 
 ## 18.2 파괴 가능 블록 탐색
 
@@ -2292,6 +2299,8 @@ DI 컨테이너
 037  역할 후보 캐시·같은 프레임 예약 충돌 거절(PERF-002)  Accepted
 038  저장 슬롯·자동 저장·이어하기(TASK-051)             Accepted
 039  엔딩 연출을 모달로·게임은 계속 진행(TASK-052)        Accepted
+040  몬스터 추적 탐색 상한과 대상 포기(PERF-003)          Accepted
+041  캐릭터 동작: 목표 자세 보간·렌더 전용(ANIM-001)      Accepted
 ```
 
 ---

@@ -23,6 +23,12 @@ export type CombatTarget =
   | { readonly kind: 'player'; readonly body: AabbBody }
   | { readonly kind: 'npc'; readonly id: string; readonly body: AabbBody };
 
+/** 추적 대상. id 는 'player' 또는 주민 id 다. */
+export interface ChaseTarget {
+  readonly id: string;
+  readonly pos: Vec3;
+}
+
 /** CombatSystem 이 읽고 쓰는 것. */
 export interface CombatDeps {
   readonly events: EventBus;
@@ -92,14 +98,19 @@ export class CombatSystem implements SlotSystem {
     return best?.t ?? null;
   }
 
-  /** 추적할 대상의 발 위치: 반경 12 안 가장 가까운 대상(가림 무관). 없으면 null. */
-  chaseTarget(m: Monster): Vec3 | null {
-    let best: { p: Vec3; d: number } | null = null;
+  /**
+   * 추적할 대상: 반경 12 안 가장 가까운 대상(가림 무관)의 id('player' 또는 주민 id)와 발 위치. 없으면 null.
+   * skip 이 참인 id 는 건너뛴다(MonsterSystem 이 포기한 대상, MVP_SPEC 24.3 의 5).
+   */
+  chaseTarget(m: Monster, skip?: (id: string) => boolean): ChaseTarget | null {
+    let best: { t: ChaseTarget; d: number } | null = null;
     for (const t of this.targets()) {
+      const id = t.kind === 'player' ? 'player' : t.id;
+      if (skip?.(id)) continue;
       const d = flat(m.body.pos, t.body.pos);
-      if (d <= M.chaseRadius && (!best || d < best.d)) best = { p: t.body.pos, d };
+      if (d <= M.chaseRadius && (!best || d < best.d)) best = { t: { id, pos: t.body.pos }, d };
     }
-    return best?.p ?? null;
+    return best?.t ?? null;
   }
 
   /** 12 번 슬롯: 기절 회복 → 플레이어 공격 → 몬스터 공격. */
