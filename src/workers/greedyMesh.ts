@@ -1,5 +1,8 @@
 // 청크 그리디 메싱 — 순수 함수 (ARCHITECTURE 9.3, MVP_SPEC 33.2). Worker 도 three 도 모른다.
 // 입력은 경계 1 칸을 포함한 18³ padded 뷰다. padded 인덱스 = px + pz * 18 + py * 324.
+// 모양 블록(가구·소품, ADR 028 보완)은 그리디 마스크에서 빼고 모양 표의 상자마다 면을 낸다. 같은 청크 메시에 들어간다.
+import { BlockId } from '../game/data/blocks';
+import { BLOCK_SHAPES, type BlockShape, type ShapeBox } from '../game/data/blockShapes';
 import type { BlockDefinition, MeshBuffers, MeshData } from '../game/types';
 
 /** padded 한 변 (16 + 경계 2). */
@@ -17,6 +20,8 @@ export interface GreedyMeshOptions {
   readonly ao?: boolean;
   /** false 면 병합 없이 면마다 쿼드를 만든다 (면 컬링만의 결과 측정용) */
   readonly greedy?: boolean;
+  /** 모양 표. 기본은 BLOCK_SHAPES. 빈 Map 이면 모든 블록을 정육면체로 그린다 */
+  readonly shapes?: ReadonlyMap<number, BlockShape>;
 }
 
 /** padded 좌표 → 배열 인덱스. */
@@ -94,6 +99,7 @@ export function greedyMesh(
   }
   const useAo = options.ao ?? true;
   const useGreedy = options.greedy ?? true;
+  const shapes = options.shapes ?? BLOCK_SHAPES;
   const opaque = new MeshBuilder();
   const transparent = new MeshBuilder();
   let visibleFaces = 0;
@@ -109,8 +115,11 @@ export function greedyMesh(
     const def = id === 0 ? undefined : defs[id];
     return def?.prop ? undefined : def;
   };
-  /** AO·컬링의 가림 판정. 불투명 블록만 가린다. */
-  const occludes = (index: number): boolean => defAtIndex(index)?.opaque === true;
+  /** AO·컬링의 가림 판정. 불투명 블록만 가린다. 모양 블록은 칸을 다 채우지 않으므로 가리지 않는다. */
+  const occludes = (index: number): boolean => {
+    const def = defAtIndex(index);
+    return def?.opaque === true && !shapes.has(def.id);
+  };
 
   // 한 슬라이스의 면 정보. blockId 0 은 면 없음.
   const maskBlock = new Int32Array(S * S);
@@ -137,10 +146,10 @@ export function greedyMesh(
           for (let i = 0; i < S; i++) {
             const bi = (slice + 1) * sd + (i + 1) * su + (j + 1) * sv;
             const bd = defAtIndex(bi);
-            if (!bd) continue;
+            if (!bd || shapes.has(bd.id)) continue;
             const ni = bi + s * sd;
             const nd = defAtIndex(ni);
-            if (nd?.opaque) continue;
+            if (occludes(ni)) continue;
             // 같은 종류끼리 맞닿은 면은 반투명(water / window)만 지운다. 잎처럼 구멍 뚫린 블록은 안쪽 면도 그려
             // 나무 속에서 봐도 잎이 차 있어 보이게 한다 (HR 기타 의견 2, ADR 027)
             if (bd.translucent && nd?.id === bd.id) continue;
@@ -236,9 +245,140 @@ export function greedyMesh(
     }
   }
 
+  // 3) 모양 블록: 상자마다 여섯 면. 칸 경계의 면은 이웃이 (모양이 아닌) 불투명 블록일 때만 지운다. AO 는 1 이다
+  for (let y = 0; y < S; y++) {
+    for (let z = 0; z < S; z++) {
+      for (let x = 0; x < S; x++) {
+        const bi = paddedIndex(x + 1, y + 1, z + 1);
+        const def = defAtIndex(bi);
+        const shape = def ? shapes.get(def.id) : undefined;
+        if (!def || !shape) continue;
+        const target = def.translucent ? transparent : opaque;
+        const turns = orientTurns(shape, bi, padded, defs, shapes);
+        // 반투명 모양(판유리)은 같은 블록과 맞닿은 경계 면도 지운다. 이어진 창문 사이에 선이 비치지 않게 한다
+        const hidden = (n: number): boolean =>
+          occludes(n) || (def.translucent && (padded[n] ?? 0) === def.id);
+        for (const raw of shape.boxes) {
+          const b = rotateBox(raw, turns);
+          const tile = (raw.tileFrom ?? def.id) * 3;
+          visibleFaces += emitBox(target, b, [x, y, z], bi, tile, stride, hidden);
+        }
+      }
+    }
+  }
+
   return {
     opaque: opaque.build(),
     transparent: transparent.quads > 0 ? transparent.build() : null,
     stats: { visibleFaces, quads: opaque.quads + transparent.quads },
   };
+}
+
+/** 수평 방향 [dx, dz] → padded 보폭. */
+function paddedOffset(dx: number, dz: number): number {
+  return dx + dz * P;
+}
+
+/**
+ * 방향 규칙에 따른 y 축 ¼ 회전 수 (ADR 028 보완 2). 0 = 모양 표 그대로.
+ *   pane     ±z 쪽 벽 이웃이 ±x 쪽보다 많으면 판유리를 z 방향으로 돌린다(1)
+ *   backrest 맞닿은 식탁의 반대쪽에 등받이: 식탁이 남(+z) 0 / 서(−x) 1 / 북(−z) 2 / 동(+x) 3. 식탁이 없으면 0
+ */
+function orientTurns(
+  shape: BlockShape,
+  bi: number,
+  padded: Uint16Array,
+  defs: readonly BlockDefinition[],
+  shapes: ReadonlyMap<number, BlockShape>,
+): number {
+  const idAt = (dx: number, dz: number): number => padded[bi + paddedOffset(dx, dz)] ?? 0;
+  if (shape.orient === 'pane') {
+    const wall = (id: number): boolean => {
+      if (id === BlockId.window) return true;
+      const d = defs[id];
+      return d !== undefined && (d.kind === 'door' || (d.solid && !d.prop && !shapes.has(id)));
+    };
+    const xs = Number(wall(idAt(1, 0))) + Number(wall(idAt(-1, 0)));
+    const zs = Number(wall(idAt(0, 1))) + Number(wall(idAt(0, -1)));
+    return zs > xs ? 1 : 0;
+  }
+  if (shape.orient === 'backrest') {
+    const T = BlockId.table;
+    if (idAt(0, 1) === T) return 0;
+    if (idAt(-1, 0) === T) return 1;
+    if (idAt(0, -1) === T) return 2;
+    if (idAt(1, 0) === T) return 3;
+  }
+  return 0;
+}
+
+/**
+ * 상자를 칸 가운데를 축으로 y 축 ¼ 회전 turns 번 돌린다. 한 번은 (x, z) → (16 − z, x):
+ * 북쪽(−z)에 있던 부분이 동쪽(+x)으로 간다.
+ */
+function rotateBox(b: ShapeBox, turns: number): ShapeBox {
+  let x0 = b.min[0];
+  let z0 = b.min[2];
+  let x1 = b.max[0];
+  let z1 = b.max[2];
+  for (let t = 0; t < turns % 4; t++) {
+    const nx0 = 16 - z1;
+    const nx1 = 16 - z0;
+    z0 = x0;
+    z1 = x1;
+    x0 = nx0;
+    x1 = nx1;
+  }
+  return { ...b, min: [x0, b.min[1], z0], max: [x1, b.max[1], z1] };
+}
+
+/**
+ * 상자 하나의 면을 낸다. cell 은 청크 로컬 칸, 상자 좌표는 1/16 단위다. 낸 면 수를 반환한다.
+ * 칸 경계에 닿은 면은 그 이웃 칸이 hidden 이면 지운다. 정점 AO 는 1, UV 는 칸 로컬 좌표(0~1)다.
+ */
+function emitBox(
+  target: MeshBuilder,
+  b: ShapeBox,
+  cell: readonly [number, number, number],
+  bi: number,
+  tileBase: number,
+  stride: readonly number[],
+  hidden: (index: number) => boolean,
+): number {
+  let faces = 0;
+  for (let d = 0; d < 3; d++) {
+    const u = (d + 1) % 3;
+    const v = (d + 2) % 3;
+    for (const s of [1, -1] as const) {
+      const at = s === 1 ? (b.max[d] ?? 16) : (b.min[d] ?? 0);
+      const onBoundary = s === 1 ? at === 16 : at === 0;
+      if (onBoundary && hidden(bi + s * (stride[d] ?? 0))) continue;
+      const normal: [number, number, number] = [0, 0, 0];
+      normal[d] = s;
+      const faceClass = d === 1 ? (s === 1 ? 0 : 1) : 2;
+      const u0 = b.min[u] ?? 0;
+      const u1 = b.max[u] ?? 16;
+      const v0 = b.min[v] ?? 0;
+      const v1 = b.max[v] ?? 16;
+      const corner = (cu: number, cv: number): [number, number, number] => {
+        const p: [number, number, number] = [0, 0, 0];
+        p[d] = (cell[d] ?? 0) + at / 16;
+        p[u] = (cell[u] ?? 0) + cu / 16;
+        p[v] = (cell[v] ?? 0) + cv / 16;
+        return p;
+      };
+      // greedy 와 같은 텍스처 방향: x 면은 (v, u), 나머지는 (u, v). 타일 위쪽이 월드 +y 를 향한다
+      const tex = (cu: number, cv: number): [number, number] =>
+        d === 0 ? [cv / 16, cu / 16] : [cu / 16, cv / 16];
+      let corners = [corner(u0, v0), corner(u1, v0), corner(u1, v1), corner(u0, v1)];
+      let uv = [tex(u0, v0), tex(u1, v0), tex(u1, v1), tex(u0, v1)];
+      if (s === -1) {
+        corners = [corners[0], corners[3], corners[2], corners[1]] as typeof corners;
+        uv = [uv[0], uv[3], uv[2], uv[1]] as typeof uv;
+      }
+      target.addQuad(corners, normal, uv, [AO_MAX, AO_MAX, AO_MAX, AO_MAX], tileBase + faceClass);
+      faces += 1;
+    }
+  }
+  return faces;
 }

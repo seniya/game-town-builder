@@ -1,6 +1,7 @@
 // 방 타입과 시설 결정 (MVP_SPEC 12, ARCHITECTURE 10.2). 순수 모듈이다.
 // 가구 접근성은 문 아래 셀에서 방 내부로 이어진 보행 셀(isStandableCell)로 판정한다.
 // 외부 경로·NPC 고립은 보장하지 않는다(문까지의 국소 접근성, MVP_SPEC 12.2).
+import { CHAIR_SEAT_HEIGHT } from '../data/blockShapes';
 import { BlockId, getBlockDef, isFurniture } from '../data/blocks';
 import { FURNITURE_NAMES, roomDisplayName } from '../data/roomRecipes';
 import {
@@ -122,7 +123,7 @@ export function analyzeRoom(read: RoomBlockReader, shape: RoomShape): RoomAnalys
 }
 
 /**
- * 렌더의 사용 자세 위치. 침대·의자는 점유 칸 윗면 가운데(눕기·앉기),
+ * 렌더의 사용 자세 위치. 침대는 점유 칸 윗면 가운데(눕기), 의자는 앉는 판 높이(ADR 028 보완 7)의 가운데,
  * 화덕·상자는 첫 접근 셀의 발밑(서서 사용)이다. 충돌·저장 위치로 쓰지 않는다 (MVP_SPEC 12.2).
  */
 function usePosition(f: FurnitureInfo): Vec3 {
@@ -130,7 +131,8 @@ function usePosition(f: FurnitureInfo): Vec3 {
     const n = f.cells.length;
     const sx = f.cells.reduce((s, c) => s + c.x + 0.5, 0) / n;
     const sz = f.cells.reduce((s, c) => s + c.z + 0.5, 0) / n;
-    return { x: sx, y: f.anchor.y + 1, z: sz };
+    const top = f.blockId === BlockId.chair ? CHAIR_SEAT_HEIGHT : 1;
+    return { x: sx, y: f.anchor.y + top, z: sz };
   }
   return standCellToWorldFeet(f.approachCells[0] ?? f.anchor);
 }

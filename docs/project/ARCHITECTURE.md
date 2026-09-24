@@ -657,6 +657,7 @@ padded 전용 배열의 ArrayBuffer를 transferable로 보낸다. 월드 원본 
 export function greedyMesh(
   padded: Uint16Array,       // 18³
   defs: readonly BlockDefinition[],
+  options?: { ao?: boolean; greedy?: boolean; shapes?: ReadonlyMap<number, BlockShape> },
 ): MeshData;
 ```
 
@@ -675,6 +676,12 @@ render/CeilingCapView 가 단면 판으로 그린다. door / bed 는 메시에�
 
 면 컬링(ADR 027): 이웃이 불투명이면 면을 지운다. 같은 종류끼리 맞닿은 면은 반투명(water / window)일 때만 지운다.
 잎처럼 불투명하지 않은 알파 컷 블록은 맞닿은 안쪽 면도 그린다.
+
+모양 블록(ADR 028 보완, TASK-SHAPE-001): 옵션 `shapes`(기본 `data/blockShapes.ts` 의 BLOCK_SHAPES)에 있는 블록
+(torch / window / table / chair / chest / cooking_stove / water_pot / bell)은 그리디 마스크에서 빠지고 상자마다 면을 낸다.
+같은 청크 메시에 들어가 드로우콜이 늘지 않는다. 모양 블록은 이웃 면·AO 를 가리지 않고(블록 정의의 opaque 는 그대로),
+자기 상자 면은 칸 경계에서 모양이 아닌 불투명 이웃에 붙을 때만 지운다(반투명 판유리는 같은 블록과 맞닿은 면도). 상자 AO 는 1,
+UV 는 칸 로컬 좌표다. window 판유리 방향과 chair 등받이 방향은 padded 이웃으로 정한다. 조준 테두리·균열은 1 칸 그대로다.
 
 ## 9.4 materials.ts
 

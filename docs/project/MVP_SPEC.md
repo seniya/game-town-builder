@@ -1798,6 +1798,8 @@ DOM 오버레이로 구현한다. three 를 import 하지 않는다.
 TASK-033에서 감사 포인트 구현 전에도 장면 자체의 만족감을 확인한다.
 침대·문은 렌더 모형으로 그린다(ADR 026). 나머지 기존 블록(torch·window·가구·crop·bell)의 비정육면체 모양은
 TASK-SHAPE-001(식사 뒤)에서 그린다(ADR 028). 새 블록 종류를 만들지 않으며 게임 규칙은 모양과 무관하다.
+구현(2026-09-24): torch·window·table·chair·chest·cooking_stove·water_pot·bell 은 청크 메시 안의 상자 모양,
+crop 은 작물 모형(ADR 030)이다. 의자 앉는 높이는 9/16 칸이고 식탁 윗면은 칸 윗면이다.
 
 ```text
 블록 파괴 진행      블록 표면에 균열 텍스처 8 단계
