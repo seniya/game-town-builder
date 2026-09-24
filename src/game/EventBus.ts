@@ -61,8 +61,10 @@ export interface GameEventMap {
   SAVE_FAILED: { reason: string };
   /** 진행 이벤트가 발생했다 (MVP_SPEC 27) */
   GAME_EVENT_FIRED: { id: GameEventId };
-  /** 이벤트가 연출(도착 확인·엔딩)을 요청했다. 연출 완성은 TASK-052 */
+  /** 이벤트가 연출(도착 확인·엔딩)을 요청했다. 엔딩은 EndingSystem 이 받는다 */
   CUTSCENE_REQUESTED: { id: string };
+  /** 엔딩 연출이 끝났다(끝까지 보았거나 건너뛰었다, TASK-052). 정본의 void payload */
+  ENDING_FINISHED: undefined;
   /** 목표 표시가 바뀌었다 (MVP_SPEC 29, ARCHITECTURE 21.3) */
   OBJECTIVE_CHANGED: { text: string; progress?: { current: number; total: number } };
   /** 새 주민이 도착했다 (MVP_SPEC 19.6) */

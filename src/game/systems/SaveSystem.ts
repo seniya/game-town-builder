@@ -1,4 +1,4 @@
-// 자동 저장 (ARCHITECTURE 4.1 의 16 번 / 23.3, TASK-051). 매일 07:00 과 종을 친 직후 저장 요청을 큐에 넣고,
+// 자동 저장 (ARCHITECTURE 4.1 의 16 번 / 23.3, TASK-051). 매일 07:00 과 종을 친 직후·엔딩을 본 직후 저장 요청을 큐에 넣고,
 // 프레임 끝(16 번 슬롯, 목표 갱신 뒤)의 커밋된 상태를 캡처해 저장소에 넘긴다. 저장 자체는 Action·예약을 바꾸지 않는다.
 // 같은 슬롯의 쓰기는 순서대로 하나씩 한다. 쓰는 동안 새 요청이 오면 최신 스냅샷 하나로 합쳐 마지막에 쓴다.
 // 실패하면 이전 슬롯을 그대로 두고(저장소가 트랜잭션으로 교체한다) SAVE_FAILED 를 알린다. 성공 전에는 완료로 알리지 않는다.
@@ -31,12 +31,14 @@ export class SaveSystem implements SlotSystem {
   private okCount = 0;
   private failCount = 0;
 
-  /** 종 치기를 구독한다. 시작 시각이 07:00 뒤면 그날 아침은 지난 것으로 본다. */
+  /** 종 치기·엔딩 끝을 구독한다. 시작 시각이 07:00 뒤면 그날 아침은 지난 것으로 본다. */
   constructor(private readonly deps: SaveDeps) {
     // 07:00 전에 시작했으면 그날 아침은 아직 오지 않았다
     const c = deps.clock;
     this.lastMorningDay = c.minuteOfDay >= balance.clock.workStartHour * 60 ? c.day : c.day - 1;
     deps.events.on('VILLAGE_LEVEL_UP', () => this.request());
+    // 엔딩을 본 뒤에도 이어 할 수 있게 저장한다 (TASK-052)
+    deps.events.on('ENDING_FINISHED', () => this.request());
   }
 
   /** 성공·실패 횟수(계측·시험). */

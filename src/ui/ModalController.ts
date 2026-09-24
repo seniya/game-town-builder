@@ -1,8 +1,8 @@
 // 화면 상태: 조작 중 / 모달 / 메뉴 (MVP_SPEC 29.0, READY-03). UI 상태이며 게임 상태가 아니다. 저장하지 않는다.
 // 상태 전이는 DOM 을 모르는 ScreenStateMachine 이 하고, bindModalKeys 가 DOM 이벤트를 연결한다.
 
-/** 모달 이름. 종·저장소·대사·피해 보고는 해당 Task(036 / 040 / 049 / 051)에서 연결한다. */
-export type ModalName = 'inventory' | 'bell' | 'storage' | 'dialogue' | 'damageReport';
+/** 모달 이름. 종·저장소·대사·피해 보고·엔딩은 해당 Task(036 / 040 / 049 / 052)에서 연결한다. */
+export type ModalName = 'inventory' | 'bell' | 'storage' | 'dialogue' | 'damageReport' | 'ending';
 
 /** 화면 상태. resuming 은 모달을 닫고 포인터 락을 다시 기다리는 중이다. */
 export type ScreenState =

@@ -5,6 +5,7 @@ import type * as THREE from 'three';
 import { balance } from '../game/data/balance';
 import type { Player } from '../game/entities/Player';
 import { aimRay, cameraBoomDistance, ceilingCutFor, type CeilingCut } from '../game/systems/aim';
+import type { Vec3 } from '../game/types';
 import type { CollisionWorld } from '../game/voxel/collision';
 import type { VoxelLightingUniforms } from './materials';
 
@@ -35,6 +36,18 @@ export class CameraController {
   /** 짧게 흔든다(렌더 표현). 게임 상태·조준에는 영향이 없다. */
   shake(seconds: number): void {
     this.shakeLeft = Math.max(this.shakeLeft, seconds);
+  }
+
+  /**
+   * 연출 샷의 자세로 둔다(엔딩, TASK-052). 플레이어를 따라가지 않고 천장 걷어 내기를 끈다.
+   * 끝나면 update 가 다시 플레이어 뒤로 돌아온다.
+   */
+  showPose(eye: Vec3, target: Vec3): void {
+    this.ceilingCut = null;
+    this.distance = balance.player.cameraDistance;
+    this.lighting?.cutParams.value.set(0, 0, 0);
+    this.camera.position.set(eye.x, eye.y, eye.z);
+    this.camera.lookAt(target.x, target.y, target.z);
   }
 
   /** 카메라 위치와 방향을 갱신한다. 게임 update 뒤, 렌더 전에 부른다. dt 는 흔들림 진행에만 쓴다. */

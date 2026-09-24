@@ -6,6 +6,7 @@ import { createMonster } from '../entities/Monster';
 import type { GameWorld } from '../GameWorld';
 import type { BedAssignment } from '../systems/SleepSystem';
 import type { CropRecord } from '../systems/FarmSystem';
+import type { EndingSnapshot } from '../systems/EndingSystem';
 import type { DialogueSnapshot } from '../systems/DialogueSystem';
 import type { GratitudeSnapshot } from '../systems/GratitudeSystem';
 import type { ItemStack } from '../systems/InventorySystem';
@@ -69,7 +70,7 @@ export interface SaveData {
   readonly damage: RepairSnapshot;
   readonly crops: readonly CropRecord[];
   readonly quarry: { readonly respawnedThroughDay: number };
-  readonly ending: { readonly pending: boolean; readonly played: boolean };
+  readonly ending: EndingSnapshot;
 }
 
 /** 버전이 맞지 않거나 형식이 잘못된 저장. 조용히 깨지지 않고 거부한다. */
@@ -121,7 +122,7 @@ export function captureSave(w: GameWorld): SaveData {
     damage: w.repair.snapshot(),
     crops: w.farm.snapshot(),
     quarry: w.quarry.snapshot(),
-    ending: { pending: false, played: false },
+    ending: w.ending.snapshot(),
   };
   return structuredClone(data);
 }
@@ -180,6 +181,7 @@ export function applySave(w: GameWorld, raw: unknown): void {
   w.repair.restore(d.damage);
   w.farm.restore(d.crops);
   w.quarry.restore(d.quarry);
+  w.ending.restore(d.ending);
   w.cooking.resetForLoad();
 }
 

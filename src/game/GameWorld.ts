@@ -41,6 +41,7 @@ import { RaidSystem } from './systems/RaidSystem';
 import { RepairSystem } from './systems/RepairSystem';
 import { ResidentArrivalSystem } from './systems/ResidentArrivalSystem';
 import { RoomSystem } from './systems/RoomSystem';
+import { EndingSystem } from './systems/EndingSystem';
 import { VillageLevelSystem } from './systems/VillageLevelSystem';
 import { WorldStateSystem } from './systems/WorldStateSystem';
 import type {
@@ -147,6 +148,8 @@ export class GameWorld {
   readonly dialogue: DialogueSystem;
   /** 진행 이벤트 (update 15 번) */
   readonly gameEvents: GameEventSystem;
+  /** 엔딩 연출 상태(보여 줄 차례·보았음). 슬롯 없이 이벤트로 바뀐다 (TASK-052) */
+  readonly ending: EndingSystem;
   /** 자동 저장 (update 16 번, 목표 뒤) */
   readonly saves: SaveSystem;
   /** 현재 목표 (update 16 번) */
@@ -371,6 +374,7 @@ export class GameWorld {
     this.attach('npc', this.npcSystem);
     this.attach('gratitude', this.gratitude);
     this.attach('objectiveSave', this.objectives);
+    this.ending = new EndingSystem(this.events);
     this.saves = new SaveSystem({
       events: this.events,
       clock: this.clock,

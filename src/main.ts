@@ -41,7 +41,9 @@ import { BellPanel } from './ui/BellPanel';
 import { DialogueBox } from './ui/DialogueBox';
 import { ClockHud } from './ui/ClockHud';
 import { InteractPrompt } from './ui/InteractPrompt';
+import { endingPose, type EndingScene } from './game/ending/endingShot';
 import { ArrivalToast } from './ui/ArrivalToast';
+import { EndingOverlay } from './ui/EndingOverlay';
 import { ObjectivePanel } from './ui/ObjectivePanel';
 import { IndexedDbSaveStore } from './ui/IndexedDbSaveStore';
 import { SaveIndicator } from './ui/SaveIndicator';
@@ -288,6 +290,21 @@ function createEditDriver(world: GameWorld, editsPerSecond: number): (dt: number
 }
 
 /** 조작 모드의 프레임 훅. update 는 world.update 뒤·렌더 전, paused 면 world.update 를 건너뛴다. */
+/** 엔딩 샷에 쓸 장면 좌표(종·목수·주민). 렌더는 게임 상태를 읽기만 한다. */
+function endingScene(world: GameWorld): EndingScene {
+  const c = world.plazaCenter;
+  const bell = c
+    ? { x: c.x + 0.5, y: c.y, z: c.z + 0.5 }
+    : (world.player?.body.pos ?? { x: 0, y: 0, z: 0 });
+  const npcs = [...world.registry.npcs.values()];
+  const carpenter = npcs.find((n) => n.role === 'carpenter');
+  return {
+    bell,
+    carpenter: carpenter ? carpenter.body.pos : null,
+    residents: npcs.map((n) => n.body.pos),
+  };
+}
+
 interface PlayView {
   readonly update: () => void;
   readonly paused: () => boolean;
@@ -343,6 +360,11 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
   const damageReport = new DamageReportPanel(document.body, world.events, () =>
     machine?.close(true),
   );
+  const endingOverlay = new EndingOverlay(
+    document.body,
+    () => machine?.close(true),
+    () => world.ending.finish(),
+  );
   /** F 로 고른 대화 상대. DialogueBox 가 열릴 때 읽는다 */
   let talkTarget: string | null = null;
   const speakerNames: Record<string, string> = {
@@ -383,6 +405,7 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
       storage: bellPanel.storageView,
       dialogue: dialogueBox,
       damageReport,
+      ending: endingOverlay,
     },
     () => {
       const t = interactTarget();
@@ -428,8 +451,15 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
     },
     update: () => {
       const now = performance.now();
-      camera.update((now - lastUpdate) / 1000);
-      caps.update((now - lastUpdate) / 1000, camera.ceilingCut);
+      const realDt = (now - lastUpdate) / 1000;
+      // 엔딩 연출 중에는 샷 계산이 카메라를 옮긴다 (TASK-052)
+      endingOverlay.update(realDt);
+      const pose = endingOverlay.isOpen
+        ? endingPose(endingOverlay.elapsed, endingScene(world))
+        : null;
+      if (pose) camera.showPose(pose.eye, pose.target);
+      else camera.update(realDt);
+      caps.update(realDt, camera.ceilingCut);
       lastUpdate = now;
       body.syncFrom(player, camera.distance >= HIDE_PLAYER_BELOW);
       const target = screen.state.kind === 'playing' ? blockEdit.target : null;
@@ -446,8 +476,9 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
               : null,
       );
       bellPanel.update(now);
-      // 아침 피해 보고는 조작 중일 때 연다 (MVP_SPEC 25.4)
-      if (damageReport.pending && screen.state.kind === 'playing') screen.open('damageReport');
+      // 엔딩은 조작 중일 때 연다. 같은 아침의 피해 보고는 엔딩 뒤에 연다 (MVP_SPEC 25.4 / 28)
+      if (world.ending.pending && screen.state.kind === 'playing') screen.open('ending');
+      else if (damageReport.pending && screen.state.kind === 'playing') screen.open('damageReport');
       healthHud.update();
       diagnosticPanel.update();
     },
@@ -824,6 +855,9 @@ async function start(): Promise<void> {
       if (editDriver) probe.edits += editDriver(dt);
     }
     if (!playView?.paused()) world.update(dt);
+    // 메뉴(일시정지) 중에는 다른 시스템이 돌지 않아 상태가 이미 커밋되어 있다. 엔딩을 Esc 로 닫아 메뉴로 간 직후처럼
+    // 일시정지 중에 들어온 저장 요청은 여기서 처리한다 (TASK-052)
+    else world.saves.update();
     const t = (now - startedAt) / 1000;
     if (playView) playView.update();
     else {

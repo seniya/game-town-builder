@@ -1,11 +1,10 @@
 // 새 주민 도착·진행 연출 알림 (MVP_SPEC 19.6 / 27.1, ADR 034, TASK-038 / 043). 화면 상단 가운데에 잠깐 보인다. DOM 만 쓴다.
-// 도착 확인·엔딩 연출의 완성(카메라·음악)은 TASK-052 에서 한다. 지금은 문구로만 알린다.
+// 엔딩은 EndingOverlay 가 연출하고, 여기서는 연출 뒤 게임이 이어진다는 것만 알린다 (TASK-052).
 import type { EventBus } from '../game/EventBus';
 
 /** 연출 id 의 알림 문구. */
 const CUTSCENE_TEXT: Record<string, string> = {
   new_resident: '식구가 다섯이 됐어요',
-  slice_end: '작은 마을이 다시 살아났어요',
 };
 
 /** 보이는 시간(ms). */
@@ -37,6 +36,7 @@ export class ArrivalToast {
     });
     parent.append(this.root);
     events.on('NPC_ARRIVED', () => this.show('새 주민이 마을에 왔어요'));
+    events.on('ENDING_FINISHED', () => this.show('마을의 하루는 계속된다'));
     events.on('CUTSCENE_REQUESTED', (c) => {
       const text = CUTSCENE_TEXT[c.id];
       if (text) this.show(text);
