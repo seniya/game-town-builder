@@ -1503,6 +1503,12 @@ export type MonsterAction =
 5. 후보·예산이 없으면 경로가 있는 NPC/플레이어를 추적하고 없으면 배회한다.
 6. 05:00에는 모두 소멸한다.
 
+구현(TASK-045): `systems/MonsterSystem.ts`. 몬스터마다 실행 상태(seek / approach / break / wander / arrived)를 두고 저장하지 않는다.
+경로는 PathScheduler(actor 'monster', 목표 radius)로 요청하며 NODE_LIMIT 동안은 스케줄러가 이어 탐색하고 몬스터는 서서 기다린다.
+NO_PATH 의 reachableBoundary 에서 후보를 고르고(18.2 조건 + 남은 예산), 접근 경로를 따라간 뒤 breakSeconds × 2 동안 부수고
+RaidSystem.spendDestroyCells 뒤 편집 API(by 'monster')로 없앤다. 후보가 없으면 결정적 배회를 하며 4 초마다 다시 탐색한다.
+파괴 연출은 render/MonsterView 의 흔들리는 균열 상자다. 플레이어·NPC 추적(18.1 의 5)은 TASK-046 에서 붙인다.
+
 ## 18.2 파괴 가능 블록 탐색
 
 ```ts

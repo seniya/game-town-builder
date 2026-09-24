@@ -27,6 +27,7 @@ import { GameClockSystem } from './systems/GameClockSystem';
 import { InputSystem } from './systems/InputSystem';
 import { InventorySystem } from './systems/InventorySystem';
 import { MealSystem } from './systems/MealSystem';
+import { MonsterSystem } from './systems/MonsterSystem';
 import { ObjectiveSystem } from './systems/ObjectiveSystem';
 import { NPCDecisionSystem, plazaSpots } from './systems/NPCDecisionSystem';
 import { NPCSystem } from './systems/NPCSystem';
@@ -149,6 +150,8 @@ export class GameWorld {
   readonly npcSystem: NPCSystem;
   /** 습격 예약·시작·종료와 이력 (update 8 번, 도착보다 먼저) */
   readonly raids: RaidSystem;
+  /** 몬스터 판단·이동·파괴 (update 9 번) */
+  readonly monsterSystem: MonsterSystem;
   /** 새 주민 도착 예약·스폰 (update 8 번) */
   readonly arrivals: ResidentArrivalSystem;
   /** 마을 레벨의 유일한 소유자. 종 패널이 evaluate / ring 을 부른다 */
@@ -349,6 +352,15 @@ export class GameWorld {
     });
     this.attach('worldState', this.worldStateSystem);
     this.debug.worldStateSource = () => this.worldStateSystem.current;
+    this.monsterSystem = new MonsterSystem({
+      monsters: () => this.registry.monsters.values(),
+      world: this.voxels,
+      nav: this.nav,
+      paths: this.paths,
+      bell: this.plazaCenter,
+      raid: this.raids,
+    });
+    this.attach('monster', this.monsterSystem);
     const arrivalCell = init.arrivalCell ?? null;
     this.arrivals = new ResidentArrivalSystem({
       events: this.events,

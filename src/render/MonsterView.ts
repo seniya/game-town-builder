@@ -2,7 +2,8 @@
 // 파괴 중에는 앞으로 몸을 부딪치고, 공격받아 체력이 줄면 잠깐 붉게 번쩍인다(TASK-045 / 046 에서 쓰는 표현).
 import * as THREE from 'three';
 import type { Monster } from '../game/entities/Monster';
-import { createCharacterMaterial, createEmissiveMaterial } from './materials';
+import { CRACK_STAGES, createCrackTexture } from './crackTexture';
+import { createCharacterMaterial, createCrackMaterial, createEmissiveMaterial } from './materials';
 
 /** 색 → 재질(몬스터 모형끼리 공유). */
 const cache = new Map<number, THREE.Material>();
@@ -84,19 +85,63 @@ class MonsterView {
   }
 }
 
-/** 모든 몬스터 모형. 새로 나온 몬스터를 만들고 사라진 몬스터를 뺀다. */
+/** 몬스터가 부수는 칸의 균열 상자 하나(단계는 파괴 진행도, 칸이 조금 흔들린다). */
+class BreakMark {
+  readonly mesh: THREE.Mesh;
+  private readonly texture: THREE.Texture;
+
+  /** 자기 균열 텍스처를 가진 상자를 만든다(단계 오프셋이 몬스터마다 다르다). */
+  constructor() {
+    this.texture = createCrackTexture();
+    this.texture.repeat.set(1 / CRACK_STAGES, 1);
+    this.mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(1.01, 1.01, 1.01),
+      createCrackMaterial(this.texture),
+    );
+    this.mesh.visible = false;
+  }
+
+  /** 칸과 진행도(0~1)를 보인다. time 은 흔들림 위상이다. */
+  show(cell: { x: number; y: number; z: number }, progress: number, time: number): void {
+    const stage = Math.min(CRACK_STAGES, Math.floor(progress * CRACK_STAGES) + 1);
+    this.texture.offset.set((stage - 1) / CRACK_STAGES, 0);
+    const j = 0.025 + progress * 0.04;
+    this.mesh.position.set(
+      cell.x + 0.5 + Math.sin(time * 41) * j,
+      cell.y + 0.5,
+      cell.z + 0.5 + Math.cos(time * 37) * j,
+    );
+    this.mesh.visible = true;
+  }
+}
+
+/** 모든 몬스터 모형. 새로 나온 몬스터를 만들고 사라진 몬스터를 뺀다. 부수는 칸에는 균열이 흔들린다. */
 export class MonsterViews {
   readonly object3d = new THREE.Group();
   private readonly views = new Map<string, MonsterView>();
+  private readonly marks: BreakMark[] = [];
+  private time = 0;
 
   /** 몬스터 목록 조회를 받는다. */
   constructor(private readonly monsters: () => Iterable<Monster>) {}
 
   /** 매 프레임 부른다. */
   update(dt: number): void {
+    this.time += dt;
     const seen = new Set<string>();
+    let marks = 0;
     for (const m of this.monsters()) {
       seen.add(m.id);
+      if (m.action.kind === 'break') {
+        let mark = this.marks[marks];
+        if (!mark) {
+          mark = new BreakMark();
+          this.marks.push(mark);
+          this.object3d.add(mark.mesh);
+        }
+        mark.show(m.action.target, m.action.progress, this.time + marks);
+        marks += 1;
+      }
       let v = this.views.get(m.id);
       if (!v) {
         v = new MonsterView();
@@ -105,6 +150,8 @@ export class MonsterViews {
       }
       v.sync(m, dt);
     }
+    for (let i = marks; i < this.marks.length; i++)
+      (this.marks[i] as BreakMark).mesh.visible = false;
     for (const [id, v] of this.views) {
       if (seen.has(id)) continue;
       this.object3d.remove(v.object3d);
