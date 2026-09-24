@@ -37,6 +37,8 @@ export interface GameEventMap {
   ROOM_TYPE_CHANGED: { roomId: string; from: RoomType; to: RoomType };
   ROOM_UNREGISTERED: { roomId: string; reason: RoomUnregisterReason };
   STORAGE_CHANGED: VillageStorageData;
+  /** 종을 쳐 마을 레벨이 올랐다. unlocked 는 새로 해금된 블록 id (MVP_SPEC 23.3) */
+  VILLAGE_LEVEL_UP: { level: number; unlocked: number[] };
   /** 감사 포인트를 얻었다. at 은 +N 연출 좌표, total 은 얻은 뒤 합계다 (MVP_SPEC 22.2) */
   GRATITUDE_GAINED: { amount: number; source: GratitudeSource; at: Vec3; total: number };
   /** 정본의 void payload. lint 규칙(no-invalid-void-type) 때문에 undefined 로 표기한다. */

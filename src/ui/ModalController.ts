@@ -36,6 +36,8 @@ export class ScreenStateMachine {
   constructor(
     private readonly effects: ScreenEffects,
     private readonly views: Partial<Record<ModalName, ModalView>>,
+    /** F 를 눌렀을 때 열 모달(조준 대상, READY-07). 없으면 F 는 아무것도 하지 않는다 */
+    private readonly interactTarget: () => ModalName | null = () => null,
   ) {
     effects.setGameplayBlocked(true);
     effects.showMenu();
@@ -100,9 +102,19 @@ export class ScreenStateMachine {
     void this.relock();
   }
 
-  /** 키 입력. E 는 인벤토리 열기·닫기, Esc 는 모달 닫기(→ 메뉴). 처리했으면 true. */
+  /** 키 입력. E 는 인벤토리 열기·닫기, F 는 조준 대상의 패널 열기, Esc 는 모달 닫기(→ 메뉴). 처리했으면 true. */
   key(code: string): boolean {
     const s = this.current;
+    if (code === 'KeyF') {
+      // 종·저장소 패널은 F 로도 닫는다(E 가 인벤토리를 닫는 것과 같다)
+      if (s.kind === 'modal' && (s.name === 'bell' || s.name === 'storage')) {
+        this.close(true);
+        return true;
+      }
+      if (s.kind !== 'playing') return false;
+      const target = this.interactTarget();
+      return target !== null && this.open(target);
+    }
     if (code === 'KeyE') {
       if (s.kind === 'playing') return this.open('inventory');
       if (s.kind === 'modal' && s.name === 'inventory') {

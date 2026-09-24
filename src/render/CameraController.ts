@@ -20,6 +20,9 @@ export class CameraController {
   distance: number = balance.player.cameraDistance;
   /** 마지막 update 의 천장 걷어 내기 범위. 지붕 밑이 아니면 null (MVP_SPEC 9.3) */
   ceilingCut: CeilingCut | null = null;
+  /** 남은 흔들림(초). 종 연출이 켠다 (TASK-036) */
+  private shakeLeft = 0;
+  private shakeTime = 0;
 
   /** 제어할 카메라, 충돌을 읽을 월드, 따라갈 플레이어를 받는다. */
   constructor(
@@ -29,8 +32,13 @@ export class CameraController {
     private readonly lighting: VoxelLightingUniforms | null = null,
   ) {}
 
-  /** 카메라 위치와 방향을 갱신한다. 게임 update 뒤, 렌더 전에 부른다. */
-  update(): void {
+  /** 짧게 흔든다(렌더 표현). 게임 상태·조준에는 영향이 없다. */
+  shake(seconds: number): void {
+    this.shakeLeft = Math.max(this.shakeLeft, seconds);
+  }
+
+  /** 카메라 위치와 방향을 갱신한다. 게임 update 뒤, 렌더 전에 부른다. dt 는 흔들림 진행에만 쓴다. */
+  update(dt = 0): void {
     const { origin: o, direction: d } = aimRay(this.world, this.player);
     // 지붕 밑이면 천장을 걷어 낸다: 셰이더가 그리지 않고 카메라 충돌에서도 뺀다 (MVP_SPEC 9.3)
     const cut = ceilingCutFor(this.world, this.player);
@@ -46,5 +54,13 @@ export class CameraController {
       o.z - d.z * this.distance,
     );
     this.camera.lookAt(o.x + d.x, o.y + d.y, o.z + d.z);
+    if (this.shakeLeft > 0) {
+      // 잦아드는 작은 흔들림. 조준 광선(게임 쪽)은 그대로이고 화면만 흔들린다
+      this.shakeLeft = Math.max(0, this.shakeLeft - dt);
+      this.shakeTime += dt;
+      const a = 0.06 * Math.min(1, this.shakeLeft / 0.4);
+      this.camera.position.x += Math.sin(this.shakeTime * 47) * a;
+      this.camera.position.y += Math.sin(this.shakeTime * 61 + 1) * a;
+    }
   }
 }

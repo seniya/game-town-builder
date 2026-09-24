@@ -1455,6 +1455,11 @@ export class VillageLevelSystem {
 }
 ```
 
+구현(TASK-036, ADR 033): `systems/VillageLevelSystem.ts`. evaluate 는 `{ level, nextLevel, cost, gates, canRing }` 이며
+게이트는 감사 포인트 / 인식된 방(dirty 제외, EmptyRoom 포함) / foodLevel(현재 주민 수로 계산한 필요 food 를 `hint` 로) / housingLevel 이다.
+지표는 computeWorldState 로 그 자리에서 다시 계산한다. ring 은 GratitudeSystem.spend 뒤 level + 1 과 VILLAGE_LEVEL_UP.
+F 대상 선택은 `systems/interaction.ts`(READY-07), 기부는 `systems/donation.ts`, 패널은 `ui/BellPanel.ts`(종 = 성장·저장소, 상자 = 저장소).
+
 ## 17.1 evaluate 가 전부 반환하는 이유
 
 MVP_SPEC 23.4 가 미충족 조건을 전부 표시하라고 요구한다.
@@ -2242,6 +2247,7 @@ DI 컨테이너
 030  농사: 밭 목록·후보·예약, 작업 자세, 작물 모형        Accepted
 031  요리: 화덕 후보·예약, 재료 예약·완료 소비, 조리 자세   Accepted (화덕 예약 소유자는 032 에서 보완)
 032  식사: mealId·의자 후보, NPCSystem 시설 예약, 식탁 음식 연출 Accepted
+033  상호작용 대상(READY-07)·종 패널·마을 레벨          Accepted
 ```
 
 ---

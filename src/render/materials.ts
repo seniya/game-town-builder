@@ -187,6 +187,18 @@ export function createCeilingCapMaterial(): THREE.Material {
   return new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x2e261e });
 }
 
+/** 종 연출의 빛 번짐 재질 (TASK-036). 가산 합성, 깊이 쓰기 없음. 투명도는 연출이 매 프레임 바꾼다. */
+export function createGlowMaterial(color: number): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  });
+}
+
 /** 조준 블록 테두리 선 재질 (TASK-012). 깊이 검사를 켜 두어 가려진 모서리는 그리지 않는다. */
 export function createHighlightMaterial(): THREE.LineBasicMaterial {
   return new THREE.LineBasicMaterial({ color: 0x1b1f24, transparent: true, opacity: 0.85 });

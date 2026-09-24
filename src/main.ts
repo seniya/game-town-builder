@@ -35,7 +35,13 @@ import { CeilingCapView } from './render/CeilingCapView';
 import { RoomOverlayView } from './render/RoomOverlayView';
 import { blockItem } from './game/systems/InventorySystem';
 import type { BlockPos } from './game/types';
+import { BellPanel } from './ui/BellPanel';
+import { BellSound } from './ui/BellSound';
 import { ClockHud } from './ui/ClockHud';
+import { InteractPrompt } from './ui/InteractPrompt';
+import { BellRingView } from './render/BellRingView';
+import { donate } from './game/systems/donation';
+import { findInteractTarget, type InteractTarget } from './game/systems/interaction';
 import { GratitudeHud } from './ui/GratitudeHud';
 import { Crosshair } from './ui/Crosshair';
 import { DebugPanel } from './ui/DebugPanel';
@@ -297,6 +303,18 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
     },
     iconFor,
   );
+  const bellPanel = new BellPanel(document.body, {
+    evaluate: () => world.village.evaluate(),
+    ring: () => world.village.ring(),
+    storage: () => world.storage.snapshot(),
+    carried: (mat) => world.inventory.count({ kind: 'material', material: mat }),
+    donate: (mat, amount) => donate(world.inventory, world.storage, mat, amount),
+    requestClose: () => machine?.close(true),
+  });
+  const prompt = new InteractPrompt(document.body);
+  /** 지금 F 로 열 대상 (READY-07). */
+  const interactTarget = (): InteractTarget | null =>
+    findInteractTarget(world.voxels, player, world.registry.npcs.values());
   machine = new ScreenStateMachine(
     {
       requestLock: () => requestCanvasLock(canvas),
@@ -305,8 +323,15 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
       showMenu: () => menu.show(),
       hideMenu: () => menu.hide(),
     },
-    { inventory: inventoryPanel },
+    { inventory: inventoryPanel, bell: bellPanel.bellView, storage: bellPanel.storageView },
+    () => {
+      const t = interactTarget();
+      if (t?.kind === 'bell') return 'bell';
+      if (t?.kind === 'chest') return 'storage';
+      return null; // 주민 대화는 TASK-040
+    },
   );
+  world.events.on('VILLAGE_LEVEL_UP', () => camera.shake(0.9));
   bindModalKeys(canvas, machine);
   const diagnosticPanel = new RoomDiagnosticPanel(document.body, {
     active: () => world.roomSystem.diagnosisActive,
@@ -318,14 +343,17 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
   return {
     paused: () => screen.paused,
     update: () => {
-      camera.update();
       const now = performance.now();
+      camera.update((now - lastUpdate) / 1000);
       caps.update((now - lastUpdate) / 1000, camera.ceilingCut);
       lastUpdate = now;
       body.syncFrom(player, camera.distance >= HIDE_PLAYER_BELOW);
       const target = screen.state.kind === 'playing' ? blockEdit.target : null;
       highlight.show(target ? target.pos : null, world.voxels.placements, blockEdit.breakProgress);
       crosshair.update(target !== null, screen.state.kind === 'playing');
+      const it = screen.state.kind === 'playing' ? interactTarget() : null;
+      prompt.update(it?.kind === 'bell' ? '[F] 종' : it?.kind === 'chest' ? '[F] 저장소' : null);
+      bellPanel.update(now);
       diagnosticPanel.update();
     },
   };
@@ -542,6 +570,9 @@ function start(): void {
   const gratitudePopups = new GratitudePopupView(document.body, world.events, renderer.camera);
   const gratitudeHud = new GratitudeHud(document.body, () => world.gratitude.total, world.events);
   new RoomSound(world.events);
+  new BellSound(world.events);
+  const bellRing = new BellRingView(world.plazaCenter, world.events);
+  renderer.scene.add(bellRing.object3d);
   const clockHud = new ClockHud(document.body, world.clock, formatClock);
   if (params.get('bounds') === '1') world.debug.showRoomBounds = true;
   if (params.get('nav') === '1') world.debug.showNavCells = true;
@@ -666,6 +697,7 @@ function start(): void {
     npcViews.update(frameMs / 1000);
     props.update(frameMs / 1000);
     crops.update(frameMs / 1000);
+    bellRing.update(frameMs / 1000);
     dishes.update();
     dayNight.update(frameMs / 1000);
     navOverlay.update(

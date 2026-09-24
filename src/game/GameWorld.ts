@@ -29,6 +29,7 @@ import { SleepSystem } from './systems/SleepSystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
 import { QuarryRespawnSystem } from './systems/QuarryRespawnSystem';
 import { RoomSystem } from './systems/RoomSystem';
+import { VillageLevelSystem } from './systems/VillageLevelSystem';
 import { WorldStateSystem } from './systems/WorldStateSystem';
 import type { AabbBody, BlockPos, NPCRole, WorldStateData } from './types';
 import { VillageStorage, type VillageStorageInit } from './VillageStorage';
@@ -127,6 +128,8 @@ export class GameWorld {
   readonly npcDecision: NPCDecisionSystem;
   /** NPC Action 실행 (update 11 번) */
   readonly npcSystem: NPCSystem;
+  /** 마을 레벨의 유일한 소유자. 종 패널이 evaluate / ring 을 부른다 */
+  readonly village: VillageLevelSystem;
   /** 파생 지표 (update 14 번). 저장하지 않는다 */
   readonly worldStateSystem: WorldStateSystem;
   /** 광장 중심. 없으면 null */
@@ -309,6 +312,13 @@ export class GameWorld {
     });
     this.attach('worldState', this.worldStateSystem);
     this.debug.worldStateSource = () => this.worldStateSystem.current;
+    this.village = new VillageLevelSystem({
+      events: this.events,
+      gratitude: this.gratitude,
+      rooms: () => this.rooms.getAll(),
+      population: () => this.registry.npcs.size,
+      food: () => this.storage.get('food'),
+    });
     this.debug.npcSources = { npcs, sleep: this.sleep };
   }
 
