@@ -368,3 +368,22 @@ export interface ActionView {
   /** 이동 목적지(디버그 표시) */
   readonly destination?: BlockPos | null;
 }
+
+// ── 파생 지표 (MVP_SPEC 21, ARCHITECTURE 22, ADR 004) ─────────────────────────
+
+/** 파생 지표 네 개와 주민 수. 저장하지 않고 매 프레임 다시 계산한다. */
+export interface WorldStateData {
+  readonly foodLevel: number;
+  readonly safetyLevel: number;
+  readonly housingLevel: number;
+  readonly happinessLevel: number;
+  readonly population: number;
+}
+
+/** 끝난 습격 하나의 결과 (ARCHITECTURE 23.1). reached 는 마을 중심에 도달한 몬스터 수다. */
+export interface RaidResult {
+  readonly raidId: number;
+  readonly total: number;
+  readonly reached: number;
+  readonly endedAtGameMinutes: number;
+}

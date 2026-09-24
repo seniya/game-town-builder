@@ -1262,7 +1262,7 @@ eat / role / flee / talk + 판단 키 `key`)을 반환하고, NPCSystem(11 번)�
 그 사실을 적은 대기(IdleAction)로 선다. 계획의 key 가 현재 Action 의 key 와 같으면 null(유지)이다.
 이동 계획이 진행 중이면 목적 칸에 막 들어섰어도 이동이 칸 가운데에서 끝날 때까지 유지한다.
 Context 는 여기에 `minuteOfDay`, `mealActive`(MealSystem), `plazaSpot`(이 주민의 광장 칸)을 더하고,
-worldState 는 WorldStateSystem(TASK-039) 에서 더한다. NPCDecisionSystem 은 같은 슬롯에서 SleepSystem 을 먼저 돌린다.
+worldState 는 WorldStateSystem 의 직전 14 번 슬롯 값이다(TASK-039, 판단은 아직 쓰지 않는다). NPCDecisionSystem 은 같은 슬롯에서 SleepSystem 을 먼저 돌린다.
 기본 행동(5 단계)은 MVP_SPEC 19.5 를 따른다: 기상(05~07)·자유 행동(19~20)에는 광장 칸으로 가고 그 밖에는 대기다.
 실패한 계획은 재계산 최소 간격(0.5 초) 동안 같은 key 로 다시 시작하지 않는다.
 
@@ -1714,6 +1714,10 @@ export function computeWorldState(input: {
   balance: typeof balance;
 }): WorldStateData;
 ```
+
+구현(TASK-039): `src/game/systems/WorldStateSystem.ts`. 반올림은 마지막에 한 번이며 happinessLevel 도 반올림 전 세 값으로 계산한다.
+습격 결과의 total 이 0 이면 safetyLevel 100 이다. 값이 바뀔 때만 WORLD_STATE_CHANGED 를 발행하고 `GameWorld.worldState` 로 읽는다.
+lastRaid 는 RaidSystem(TASK-044~) 전까지 null 이다.
 
 ## 22.1 저장하지 않는다
 

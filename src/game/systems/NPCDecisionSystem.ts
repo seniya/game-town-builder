@@ -20,6 +20,7 @@ import {
   type NPCRole,
   type Vec3,
   type VillageStorageData,
+  type WorldStateData,
 } from '../types';
 
 /** 판단에 쓰는 NPC snapshot. 가변 Action 을 담지 않는다 (ARCHITECTURE 14). */
@@ -67,6 +68,8 @@ export interface NPCContext {
   /** 식사 구간이 열려 있는가 (MealSystem) */
   readonly mealActive: boolean;
   readonly storage: VillageStorageData;
+  /** 직전 14 번 슬롯의 파생 지표 (WorldStateSystem). 이번 범위의 판단은 쓰지 않는다 (MVP_SPEC 21.6) */
+  readonly worldState: WorldStateData;
   /** 이 주민이 광장에서 쉬거나 모일 칸. 광장이 없으면 null */
   readonly plazaSpot: BlockPos | null;
   readonly candidates: NPCCandidates;
@@ -300,6 +303,8 @@ export interface NPCDecisionDeps {
   readonly npcs: () => Iterable<NPC<ActionView>>;
   readonly clock: GameClockReader;
   readonly storage: () => VillageStorageData;
+  /** 직전에 계산한 파생 지표. 없으면(시험) 기본값 */
+  readonly worldState?: () => WorldStateData;
   /** SleepSystem 의 배정 조회 */
   readonly assignedBed: (npcId: string) => Readonly<Facility> | null;
   /** 광장 칸 목록 (plazaSpots). 광장이 없으면 빈 배열 */
@@ -315,6 +320,15 @@ export interface NPCDecisionDeps {
   /** CookingSystem 의 후보(요리사에게만, 역할 작업 시간에만 묻는다). 없으면 요리가 없는 월드다 */
   readonly cookCandidate?: (npcId: string, cell: BlockPos) => CookCandidate | null;
 }
+
+/** 지표 조회가 없는 시험 월드의 기본값(모두 100, 주민 0). */
+const NO_WORLD_STATE: WorldStateData = {
+  foodLevel: 100,
+  housingLevel: 100,
+  safetyLevel: 100,
+  happinessLevel: 100,
+  population: 0,
+};
 
 /** 빈 후보. 역할·식사 시스템(030~032·048)이 생기면 소유자가 채운다. */
 const NO_CANDIDATES: NPCCandidates = { diningSeat: null, farm: null, cooking: null, repair: null };
@@ -332,6 +346,7 @@ export class NPCDecisionSystem implements SlotSystem {
     for (const s of this.before) s.update(dt);
     const spots = this.deps.plazaSpots();
     const storage = this.deps.storage();
+    const worldState = this.deps.worldState?.() ?? NO_WORLD_STATE;
     let i = 0;
     const work = isWorkTime(this.deps.clock.minuteOfDay);
     const mealActive = this.deps.mealActive?.() ?? false;
@@ -367,6 +382,7 @@ export class NPCDecisionSystem implements SlotSystem {
         dialogueRequested: false,
         mealActive,
         storage,
+        worldState,
         plazaSpot: spots.length > 0 ? (spots[i % spots.length] ?? null) : null,
         candidates:
           farm || cooking || diningSeat

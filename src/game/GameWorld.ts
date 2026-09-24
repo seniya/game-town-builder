@@ -28,7 +28,8 @@ import { SleepSystem } from './systems/SleepSystem';
 import { createPlayer, PlayerMovementSystem } from './systems/PlayerMovementSystem';
 import { QuarryRespawnSystem } from './systems/QuarryRespawnSystem';
 import { RoomSystem } from './systems/RoomSystem';
-import type { AabbBody, BlockPos, NPCRole } from './types';
+import { WorldStateSystem } from './systems/WorldStateSystem';
+import type { AabbBody, BlockPos, NPCRole, WorldStateData } from './types';
 import { VillageStorage, type VillageStorageInit } from './VillageStorage';
 import { VoxelWorld, type WorldSize } from './voxel/VoxelWorld';
 
@@ -123,6 +124,8 @@ export class GameWorld {
   readonly npcDecision: NPCDecisionSystem;
   /** NPC Action 실행 (update 11 번) */
   readonly npcSystem: NPCSystem;
+  /** 파생 지표 (update 14 번). 저장하지 않는다 */
+  readonly worldStateSystem: WorldStateSystem;
   /** 광장 중심. 없으면 null */
   readonly plazaCenter: BlockPos | null;
   /** 슬롯별 마지막 update 소요(ms). profile 이 true 일 때만 잰다 (PERF-001) */
@@ -269,6 +272,7 @@ export class GameWorld {
         npcs,
         clock: this.clock,
         storage: () => this.storage.snapshot(),
+        worldState: () => this.worldStateSystem.current,
         assignedBed: (id) => this.sleep.assignedBed(id),
         plazaSpots: () => this.currentPlazaSpots(),
         assign: (id, plan) => this.npcSystem.assign(id, plan),
@@ -281,7 +285,22 @@ export class GameWorld {
     );
     this.attach('npcDecision', this.npcDecision);
     this.attach('npc', this.npcSystem);
+    this.worldStateSystem = new WorldStateSystem({
+      events: this.events,
+      population: () => this.registry.npcs.size,
+      food: () => this.storage.get('food'),
+      accessibleBeds: () =>
+        this.rooms.getByType('Bedroom').reduce((n, r) => n + r.facilities.beds.length, 0),
+      lastRaid: () => null,
+    });
+    this.attach('worldState', this.worldStateSystem);
+    this.debug.worldStateSource = () => this.worldStateSystem.current;
     this.debug.npcSources = { npcs, sleep: this.sleep };
+  }
+
+  /** 마지막으로 계산한 파생 지표 (ARCHITECTURE 3 의 worldState). 읽기 전용이다. */
+  get worldState(): WorldStateData {
+    return this.worldStateSystem.current;
   }
 
   /** 플레이어·NPC·몬스터의 현재 충돌 몸체. 설치·재생 칸 점유 검사에 쓴다. */

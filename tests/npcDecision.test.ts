@@ -45,6 +45,13 @@ function ctx(over: Partial<NPCContext> & { hour?: number } = {}): NPCContext {
     dialogueRequested: false,
     mealActive: false,
     storage: { seed: 3, crop: 0, food: 0 },
+    worldState: {
+      foodLevel: 0,
+      housingLevel: 0,
+      safetyLevel: 100,
+      happinessLevel: 30,
+      population: 1,
+    },
     plazaSpot: SPOT,
     candidates: { diningSeat: null, farm: null, cooking: null, repair: null },
   };

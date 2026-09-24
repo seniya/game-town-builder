@@ -1308,16 +1308,18 @@ WorldStateSystem — update 14 번 자리
 디버그 패널에 4 지표 표시
 ```
 
+결과: [TASK-039 기록](../state/2026-09-24_1900-task-039-world-state.md). `src/game/systems/WorldStateSystem.ts`(computeWorldState + 14 번 슬롯). 식사 연동(점심 뒤 foodLevel 하락)도 테스트로 확인했다.
+
 Acceptance Criteria:
 
-- [ ] 4 지표가 MVP_SPEC 21.1 대로 계산된다
-- [ ] `population === 0` 에서 0 으로 나누지 않는다
-- [ ] food 감소 입력에서 `foodLevel`이 내려간다. 실제 식사 연동은 TASK-032 이후 확인한다
-- [ ] 테스트 입력의 주민 수가 늘면 `housingLevel`이 내려간다. 실제 도착 연동은 TASK-038에서 확인한다
-- [ ] 습격 전에는 `safetyLevel` 이 100 이다
-- [ ] `WorldState` 에 변경 API 가 없다
-- [ ] `SaveData` 에 포함되지 않는다
-- [ ] `accessibleBeds` 가 `facilities.beds` 로만 계산된다
+- [x] 4 지표가 MVP_SPEC 21.1 대로 계산된다
+- [x] `population === 0` 에서 0 으로 나누지 않는다
+- [x] food 감소 입력에서 `foodLevel`이 내려간다. 실제 식사 연동은 TASK-032 이후 확인한다
+- [x] 테스트 입력의 주민 수가 늘면 `housingLevel`이 내려간다. 실제 도착 연동은 TASK-038에서 확인한다
+- [x] 습격 전에는 `safetyLevel` 이 100 이다
+- [x] `WorldState` 에 변경 API 가 없다
+- [x] `SaveData` 에 포함되지 않는다 (저장 형식은 아직 없다. WorldState 는 어떤 저장 대상 상태에도 들어가지 않으며 TASK-051 테스트에서 다시 확인한다)
+- [x] `accessibleBeds` 가 `facilities.beds` 로만 계산된다
 
 ---
 

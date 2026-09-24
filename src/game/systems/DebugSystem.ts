@@ -5,7 +5,7 @@ import type { Player } from '../entities/Player';
 import type { NavigationGraph, NavigationStats } from '../nav/NavigationGraph';
 import type { PathScheduler, PathSchedulerStats } from '../nav/PathScheduler';
 import type { RoomRegistry, RoomRegistryStats } from '../room/RoomRegistry';
-import type { ActionView, BlockPos, DayPhase, Vec3 } from '../types';
+import type { ActionView, BlockPos, DayPhase, Vec3, WorldStateData } from '../types';
 import type { BlockEditSystem } from './BlockEditSystem';
 import { formatClock, type GameClockSystem } from './GameClockSystem';
 import type { SleepStats, SleepSystem } from './SleepSystem';
@@ -62,6 +62,8 @@ export interface GameDebugSnapshot {
   readonly food: number | null;
   /** 식사 계측 (TASK-032) */
   readonly meal: MealStats | null;
+  /** 파생 지표 네 개 (TASK-039) */
+  readonly worldState: WorldStateData | null;
   /** 방: 인식 수 / 타입별 / 재판정 큐 길이 / 마지막 판정 소요 ms (ARCHITECTURE 26) */
   readonly rooms: RoomRegistryStats | null;
   /** "방 경계 상시 표시" 디버그 명령 */
@@ -84,6 +86,8 @@ export class DebugSystem {
     readonly cooking: () => CookingStats;
     readonly storage: VillageStorage;
   } | null = null;
+  /** 파생 지표 조회. GameWorld 가 연결한다 */
+  worldStateSource: (() => WorldStateData) | null = null;
   /** 식사 계측 대상. GameWorld 가 연결한다 */
   mealSources: { readonly meal: () => MealStats } | null = null;
   /** NPC 계측 대상. GameWorld 가 연결한다 */
@@ -171,6 +175,7 @@ export class DebugSystem {
       crop: this.cookingSources ? this.cookingSources.storage.get('crop') : null,
       food: this.cookingSources ? this.cookingSources.storage.get('food') : null,
       meal: this.mealSources ? this.mealSources.meal() : null,
+      worldState: this.worldStateSource ? this.worldStateSource() : null,
       rooms: this.rooms ? this.rooms.stats : null,
       showRoomBounds: this.showRoomBounds,
       diagnosisActive: this.roomSystem?.diagnosisActive ?? false,

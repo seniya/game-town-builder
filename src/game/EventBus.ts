@@ -7,6 +7,7 @@ import type {
   RoomFailure,
   RoomType,
   VillageStorageData,
+  WorldStateData,
 } from './types';
 
 /**
@@ -40,6 +41,8 @@ export interface GameEventMap {
   NPC_ACTION_CHANGED: { npcId: string; label: string };
   /** 시간대가 바뀌었다. 바뀔 때만 발행한다 (MVP_SPEC 20.1) */
   DAY_PHASE_CHANGED: { phase: DayPhase };
+  /** 파생 지표가 바뀌었다. 바뀔 때만 발행한다 (MVP_SPEC 21.5, TASK-039) */
+  WORLD_STATE_CHANGED: WorldStateData;
 }
 
 export type GameEventName = keyof GameEventMap;

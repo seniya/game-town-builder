@@ -230,7 +230,10 @@ export class DebugPanel {
           `  ${n.id}: ${n.label} · 목적지 ${fmtVec(n.destination, 0)} · 경로 ${n.pathLength} · 침대 ${n.bed ?? '—'}`,
       ),
       ...(this.extraLines ? this.extraLines() : []),
-      `몬스터 / 감사 / 레벨 / WorldState: 해당 Task 에서 추가`,
+      g.worldState
+        ? `WorldState: 식량 ${g.worldState.foodLevel} · 주거 ${g.worldState.housingLevel} · 안전 ${g.worldState.safetyLevel} · 행복 ${g.worldState.happinessLevel} (주민 ${g.worldState.population})`
+        : 'WorldState —',
+      `몬스터 / 감사 / 레벨: 해당 Task 에서 추가`,
     ].join('\n');
     for (const [scale, b] of this.scaleButtons)
       b.style.fontWeight = scale === g.timeScale ? 'bold' : 'normal';
