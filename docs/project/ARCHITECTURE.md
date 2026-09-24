@@ -1701,6 +1701,10 @@ MVP의 `ObjectiveSystem`은 매 프레임 원천 소유자의 인덱스/집계�
 목표 표시를 위해 전체 복셀을 다시 스캔하지 않는다. 장기에는 원천 변경에 따라 갱신할 수 있다.
 
 **"마을을 벽으로 둘러싸 주세요" 에는 수치를 붙이지 않는다.**
+
+구현(TASK-041): `systems/ObjectiveSystem.ts` 는 DIALOGUE_ENDED 의 nextObjective 를 `apply` 하고(같은 id·이른 단계는 무시),
+16 번 슬롯에서 원천 집계(farmland = FarmSystem 의 farmland 칸 수)를 읽어 표시가 바뀔 때만 OBJECTIVE_CHANGED 를 낸다.
+진행 순서는 `data/gameEventOrder.ts`. 좌측 상단 한 줄은 `ui/ObjectivePanel.ts` 이며 문구가 바뀌면 금빛으로 강조한다.
 벽을 채점하지 않는다는 ADR 015 의 결정 때문이다.
 
 ---

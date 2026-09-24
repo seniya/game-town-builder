@@ -40,6 +40,8 @@ export interface GameEventMap {
   /** 대화가 시작됐다 / 끝났다 (ARCHITECTURE 21) */
   DIALOGUE_STARTED: { npcId: string; dialogueId: string; lines: string[] };
   DIALOGUE_ENDED: { npcId: string; dialogueId: string };
+  /** 목표 표시가 바뀌었다 (MVP_SPEC 29, ARCHITECTURE 21.3) */
+  OBJECTIVE_CHANGED: { text: string; progress?: { current: number; total: number } };
   /** 새 주민이 도착했다 (MVP_SPEC 19.6) */
   NPC_ARRIVED: { npcId: string };
   /** 종을 쳐 마을 레벨이 올랐다. unlocked 는 새로 해금된 블록 id (MVP_SPEC 23.3) */

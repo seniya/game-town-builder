@@ -24,6 +24,7 @@ import { GameClockSystem } from './systems/GameClockSystem';
 import { InputSystem } from './systems/InputSystem';
 import { InventorySystem } from './systems/InventorySystem';
 import { MealSystem } from './systems/MealSystem';
+import { ObjectiveSystem } from './systems/ObjectiveSystem';
 import { NPCDecisionSystem, plazaSpots } from './systems/NPCDecisionSystem';
 import { NPCSystem } from './systems/NPCSystem';
 import { SleepSystem } from './systems/SleepSystem';
@@ -122,6 +123,8 @@ export class GameWorld {
   readonly farm: FarmSystem;
   /** 대화 표시·재생·완료 (TASK-040). 대화 중 주민은 판단 2 단계로 TalkAction 을 한다 */
   readonly dialogue: DialogueSystem;
+  /** 현재 목표 (update 16 번) */
+  readonly objectives: ObjectiveSystem;
   /** 감사 포인트의 유일한 소유자 (update 13 번) */
   readonly gratitude: GratitudeSystem;
   /** 조리: 화덕 목록·화덕/재료 예약·결과 확정 (update 10 번, 판단 전에 목록 갱신) */
@@ -226,6 +229,9 @@ export class GameWorld {
     this.debug.farmSources = { farm: () => this.farm.stats, storage: this.storage };
     const npcs = (): Iterable<NPC<Action>> => this.registry.npcs.values();
     this.dialogue = new DialogueSystem(this.events);
+    this.objectives = new ObjectiveSystem(this.events, {
+      farmland: () => this.farm.stats.farmland,
+    });
     this.gratitude = new GratitudeSystem({
       events: this.events,
       clock: this.clock,
@@ -312,6 +318,7 @@ export class GameWorld {
     this.attach('npcDecision', this.npcDecision);
     this.attach('npc', this.npcSystem);
     this.attach('gratitude', this.gratitude);
+    this.attach('objectiveSave', this.objectives);
     this.debug.gratitudeSource = () => this.gratitude.total;
     this.worldStateSystem = new WorldStateSystem({
       events: this.events,

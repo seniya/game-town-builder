@@ -41,6 +41,7 @@ import { BellSound } from './ui/BellSound';
 import { ClockHud } from './ui/ClockHud';
 import { InteractPrompt } from './ui/InteractPrompt';
 import { ArrivalToast } from './ui/ArrivalToast';
+import { ObjectivePanel } from './ui/ObjectivePanel';
 import { BellRingView } from './render/BellRingView';
 import { donate } from './game/systems/donation';
 import { findInteractTarget, type InteractTarget } from './game/systems/interaction';
@@ -616,6 +617,7 @@ function start(): void {
   new RoomSound(world.events);
   new BellSound(world.events);
   new ArrivalToast(document.body, world.events);
+  new ObjectivePanel(document.body, world.events);
   const bellRing = new BellRingView(world.plazaCenter, world.events);
   renderer.scene.add(bellRing.object3d);
   const clockHud = new ClockHud(document.body, world.clock, formatClock);

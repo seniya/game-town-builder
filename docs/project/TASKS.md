@@ -1367,14 +1367,16 @@ ObjectiveSystem + src/ui/ObjectivePanel.ts
 진행 수치가 있는 목표
 ```
 
+결과: [TASK-041 기록](../state/2026-09-24_2150-task-041-objectives.md). `systems/ObjectiveSystem.ts`(16 번 슬롯), `ui/ObjectivePanel.ts`, `data/gameEventOrder.ts`. setObjective 커맨드 연결은 TASK-042.
+
 Acceptance Criteria:
 
-- [ ] 목표가 좌측 상단에 한 줄로 보인다
-- [ ] "밭흙을 4 칸" 에 (2 / 4) 가 실시간으로 표시된다
-- [ ] "마을을 벽으로 둘러싸 주세요" 에는 수치가 없다
-- [ ] 목표가 바뀔 때 시각적으로 강조된다
-- [ ] 대사·커맨드·저장에 같은 ObjectiveDefinition을 쓰고 current는 FarmSystem 집계에서 계산한다
-- [ ] 늦게 읽은 이전 단계 대사가 목표를 되돌리지 않는다. 같은 목표 재적용도 수치를 초기화하지 않는다
+- [x] 목표가 좌측 상단에 한 줄로 보인다
+- [x] "밭흙을 4 칸" 에 (2 / 4) 가 실시간으로 표시된다
+- [x] "마을을 벽으로 둘러싸 주세요" 에는 수치가 없다
+- [x] 목표가 바뀔 때 시각적으로 강조된다
+- [x] 대사·커맨드·저장에 같은 ObjectiveDefinition을 쓰고 current는 FarmSystem 집계에서 계산한다
+- [x] 늦게 읽은 이전 단계 대사가 목표를 되돌리지 않는다. 같은 목표 재적용도 수치를 초기화하지 않는다
 
 ---
 
