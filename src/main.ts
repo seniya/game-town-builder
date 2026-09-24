@@ -39,7 +39,6 @@ import { blockItem } from './game/systems/InventorySystem';
 import type { BlockPos } from './game/types';
 import { BellPanel } from './ui/BellPanel';
 import { DialogueBox } from './ui/DialogueBox';
-import { BellSound } from './ui/BellSound';
 import { ClockHud } from './ui/ClockHud';
 import { InteractPrompt } from './ui/InteractPrompt';
 import { ArrivalToast } from './ui/ArrivalToast';
@@ -60,7 +59,8 @@ import { InventoryPanel } from './ui/InventoryPanel';
 import { bindModalKeys, requestCanvasLock, ScreenStateMachine } from './ui/ModalController';
 import { PauseMenu } from './ui/PauseMenu';
 import { RoomDiagnosticPanel } from './ui/RoomDiagnosticPanel';
-import { RoomSound } from './ui/RoomSound';
+import { AudioEngine } from './ui/audio/AudioEngine';
+import { GameSounds } from './ui/audio/GameSounds';
 
 /** 브라우저 검증에서 읽는 계측값. 콘솔과 window.__gtb 로 공개한다. */
 interface FrameProbe {
@@ -286,6 +286,8 @@ function createEditDriver(world: GameWorld, editsPerSecond: number): (dt: number
 interface PlayView {
   readonly update: () => void;
   readonly paused: () => boolean;
+  /** 일시정지 메뉴에 소리 켜기/끄기 버튼을 붙인다 (TASK-050) */
+  readonly addMuteToggle: (audio: AudioEngine) => void;
 }
 
 /**
@@ -408,6 +410,14 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
   (window as unknown as { __gtbScreen: unknown }).__gtbScreen = screen;
   return {
     paused: () => screen.paused,
+    addMuteToggle: (audio) => {
+      const render = menu.addToggle(
+        (on) => (on ? '소리 켜기 (M)' : '소리 끄기 (M)'),
+        () => audio.muted,
+        (on) => audio.setMuted(on),
+      );
+      audio.onMuteChange(() => render());
+    },
     update: () => {
       const now = performance.now();
       camera.update((now - lastUpdate) / 1000);
@@ -651,8 +661,14 @@ function start(): void {
   const roomLabels = new RoomLabelView(document.body, world.rooms, world.events, renderer.camera);
   const gratitudePopups = new GratitudePopupView(document.body, world.events, renderer.camera);
   const gratitudeHud = new GratitudeHud(document.body, () => world.gratitude.total, world.events);
-  new RoomSound(world.events);
-  new BellSound(world.events);
+  const audio = new AudioEngine();
+  const sounds = new GameSounds(audio, world.events);
+  sounds.setPhase(world.clock.phase);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyM' && !e.repeat) audio.setMuted(!audio.muted);
+  });
+  if (playView) playView.addMuteToggle(audio);
+  let lastFeet: { x: number; z: number } | null = null;
   new ArrivalToast(document.body, world.events);
   new ObjectivePanel(document.body, world.events);
   const bellRing = new BellRingView(world.plazaCenter, world.events);
@@ -793,6 +809,17 @@ function start(): void {
     props.update(frameMs / 1000);
     crops.update(frameMs / 1000);
     bellRing.update(frameMs / 1000);
+    // 발소리: 땅 위에서 걸은 수평 거리와 발밑 블록
+    const pl = world.player;
+    let walked = 0;
+    let ground: number | null = null;
+    if (pl) {
+      const p = pl.body.pos;
+      if (lastFeet && pl.body.onGround) walked = Math.hypot(p.x - lastFeet.x, p.z - lastFeet.z);
+      lastFeet = { x: p.x, z: p.z };
+      ground = world.voxels.getBlock(Math.floor(p.x), Math.floor(p.y - 0.05), Math.floor(p.z));
+    }
+    sounds.update(frameMs / 1000, walked < 1 ? walked : 0, ground);
     damageMarks.update(frameMs / 1000);
     dishes.update();
     dayNight.update(frameMs / 1000);

@@ -12,6 +12,7 @@ const CONTROLS: readonly [string, string][] = [
   ['1 ~ 9 / 휠', '핫바 선택'],
   ['E', '인벤토리 · 제작'],
   ['F', '종 · 상자 (조준한 것)'],
+  ['M', '소리 켜기 / 끄기'],
   ['F3', '디버그 패널'],
   ['Esc', '메뉴'],
 ];
@@ -20,6 +21,7 @@ const CONTROLS: readonly [string, string][] = [
 export class PauseMenu {
   private readonly root: HTMLDivElement;
   private readonly title: HTMLDivElement;
+  private readonly card: HTMLDivElement;
   private started = false;
 
   /** parent 에 오버레이를 붙인다. 오버레이를 클릭하면 onResume 을 부른다. */
@@ -37,6 +39,7 @@ export class PauseMenu {
       zIndex: '20',
     });
     const card = document.createElement('div');
+    this.card = card;
     Object.assign(card.style, {
       minWidth: '300px',
       padding: '22px 28px',
@@ -73,6 +76,37 @@ export class PauseMenu {
     });
     parent.append(this.root);
     this.renderTitle();
+  }
+
+  /**
+   * 켜고 끄는 버튼을 카드 아래에 더한다(소리 등). 버튼 클릭은 "계속" 으로 전달하지 않는다.
+   * label 은 현재 상태의 문구를 만든다.
+   */
+  addToggle(
+    label: (on: boolean) => string,
+    get: () => boolean,
+    set: (on: boolean) => void,
+  ): () => void {
+    const b = document.createElement('button');
+    Object.assign(b.style, {
+      marginTop: '14px',
+      font: '600 13px system-ui, sans-serif',
+      padding: '5px 12px',
+      borderRadius: '6px',
+      border: '1px solid #a88a60',
+      background: '#fff8ea',
+      color: '#3a2f25',
+      cursor: 'pointer',
+    });
+    const render = (): void => void (b.textContent = label(get()));
+    b.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      set(!get());
+      render();
+    });
+    render();
+    this.card.append(b);
+    return render;
   }
 
   /** 메뉴를 보인다. */
