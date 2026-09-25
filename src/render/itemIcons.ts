@@ -1,4 +1,4 @@
-// 아이템 아이콘 (TASK-014). 블록은 아틀라스와 같은 타일로 작은 입방체를 그린다.
+// 아이템 아이콘 (TASK-014, STYLE-004). 블록은 텍스처 배열과 같은 64 px 타일로 작은 입방체를 그린다.
 // 재료(seed / crop / food)는 픽셀 그림이다. UI 는 이 모듈을 모르며 main.ts 가 함수로 주입한다.
 import type { ItemRef } from '../game/types';
 import { blockTilePixels, TILE_PX } from './atlas';
@@ -32,7 +32,9 @@ function drawBlock(ctx: CanvasRenderingContext2D, blockId: number): void {
   const s = ICON_PX / 2 / TILE_PX; // 한 면 폭 = 아이콘 절반
   const cx = ICON_PX / 2;
   const q = ICON_PX / 4;
-  ctx.imageSmoothingEnabled = false;
+  // 64 px 손그림풍 타일을 줄여 그리므로 부드럽게 보간한다 (STYLE-004)
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   // 윗면: 마름모
   ctx.setTransform(s, s / 2, -s, s / 2, cx, 0);
   ctx.drawImage(tileCanvas(top, 1), 0, 0);

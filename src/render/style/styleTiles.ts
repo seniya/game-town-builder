@@ -9,20 +9,20 @@ export const STYLE_TILE_PX = 64;
 /** 시안 타일 종류. 풀은 윗면·옆면·아랫면(흙)이 다르다. */
 export type StyleTileKind = 'grassTop' | 'grassSide' | 'dirt' | 'plank' | 'stoneBrick' | 'leaves';
 
-type RGB = readonly [number, number, number];
+export type RGB = readonly [number, number, number];
 
 /** 16 진 색 → [r, g, b]. */
-function rgb(color: number): RGB {
+export function rgb(color: number): RGB {
   return [(color >> 16) & 255, (color >> 8) & 255, color & 255];
 }
 
 /** 색에 밝기 배율을 곱한다. */
-function shade(c: RGB, k: number): RGB {
+export function shade(c: RGB, k: number): RGB {
   return [c[0] * k, c[1] * k, c[2] * k];
 }
 
 /** 좌표 기반 결정적 해시(0~1). */
-function hash(x: number, y: number, seed: number): number {
+export function hash(x: number, y: number, seed: number): number {
   let h = (x * 374761393 + y * 668265263 + seed * 1442695041) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   h ^= h >>> 16;
@@ -35,7 +35,7 @@ function fade(t: number): number {
 }
 
 /** 감싸는 값 잡음(0~1). cell 픽셀 간격의 격자 값을 부드럽게 잇는다. 타일 경계에서 이어진다. */
-function valueNoise(x: number, y: number, cell: number, seed: number): number {
+export function valueNoise(x: number, y: number, cell: number, seed: number): number {
   const n = STYLE_TILE_PX / cell;
   const gx = x / cell;
   const gy = y / cell;
@@ -50,19 +50,34 @@ function valueNoise(x: number, y: number, cell: number, seed: number): number {
 }
 
 /** 두 겹 잡음(큰 얼룩 + 작은 얼룩, 0~1). */
-function blotch(x: number, y: number, seed: number): number {
+export function blotch(x: number, y: number, seed: number): number {
   return valueNoise(x, y, 16, seed) * 0.68 + valueNoise(x, y, 8, seed + 7) * 0.32;
 }
 
 /** 칠하는 판. 위쪽 행부터 RGBA. */
-class Canvas {
+export class Canvas {
   readonly data = new Uint8ClampedArray(STYLE_TILE_PX * STYLE_TILE_PX * 4);
 
   /** 픽셀 하나를 칠한다. 범위 밖 좌표는 타일을 감싸서 칠한다. */
-  set(x: number, y: number, c: RGB): void {
+  set(x: number, y: number, c: RGB, alpha = 255): void {
     const px = ((Math.round(x) % STYLE_TILE_PX) + STYLE_TILE_PX) % STYLE_TILE_PX;
     const py = ((Math.round(y) % STYLE_TILE_PX) + STYLE_TILE_PX) % STYLE_TILE_PX;
-    this.data.set([c[0], c[1], c[2], 255], (py * STYLE_TILE_PX + px) * 4);
+    this.data.set([c[0], c[1], c[2], alpha], (py * STYLE_TILE_PX + px) * 4);
+  }
+
+  /** 픽셀 하나의 알파. */
+  alpha(x: number, y: number): number {
+    return this.data[(y * STYLE_TILE_PX + x) * 4 + 3] ?? 0;
+  }
+
+  /** 판 전체를 알파와 함께 칠한다. f 가 null 이면 투명하게 둔다. */
+  eachA(f: (x: number, y: number) => readonly [RGB, number] | null): void {
+    for (let y = 0; y < STYLE_TILE_PX; y++)
+      for (let x = 0; x < STYLE_TILE_PX; x++) {
+        const v = f(x, y);
+        if (v) this.set(x, y, v[0], v[1]);
+        else this.set(x, y, [0, 0, 0], 0);
+      }
   }
 
   /** 픽셀 하나의 [r, g, b]. */
@@ -79,7 +94,7 @@ class Canvas {
 }
 
 /** 잡음을 세 단계 색으로 끊는다(넓은 색면). */
-function tones(n: number, dark: RGB, mid: RGB, light: RGB, lo = 0.4, hi = 0.64): RGB {
+export function tones(n: number, dark: RGB, mid: RGB, light: RGB, lo = 0.4, hi = 0.64): RGB {
   return n < lo ? dark : n < hi ? mid : light;
 }
 
@@ -91,7 +106,7 @@ const DIRT_MID = rgb(0xb47d4c);
 const DIRT_LIGHT = rgb(0xc4905e);
 
 /** 흙: 두 단계 얼룩과 작은 밝은 돌. */
-function paintDirt(c: Canvas, seed: number): void {
+export function paintDirt(c: Canvas, seed: number): void {
   c.each((x, y) => tones(blotch(x, y, seed), DIRT_DARK, DIRT_MID, DIRT_MID, 0.42, 0.9));
   for (let i = 0; i < 9; i++) {
     const cx = Math.floor(hash(i, 1, seed) * STYLE_TILE_PX);
@@ -103,7 +118,7 @@ function paintDirt(c: Canvas, seed: number): void {
 }
 
 /** 풀 윗면: 세 단계 초록 얼룩, 작은 풀 포기, 드문 밝은 점. */
-function paintGrassTop(c: Canvas, seed: number): void {
+export function paintGrassTop(c: Canvas, seed: number): void {
   c.each((x, y) => tones(blotch(x, y, seed), GRASS_DARK, GRASS_MID, GRASS_LIGHT));
   const tuft = shade(GRASS_DARK, 0.9);
   for (let i = 0; i < 12; i++) {
@@ -124,7 +139,7 @@ function paintGrassTop(c: Canvas, seed: number): void {
 }
 
 /** 풀 옆면: 흙 위로 윗면의 풀이 물결 모양으로 흘러내린다. */
-function paintGrassSide(c: Canvas, seed: number): void {
+export function paintGrassSide(c: Canvas, seed: number): void {
   paintDirt(c, seed);
   const scallop = 16;
   for (let x = 0; x < STYLE_TILE_PX; x++) {
@@ -142,7 +157,7 @@ function paintGrassSide(c: Canvas, seed: number): void {
 }
 
 /** 판자: 가로 판 세 장, 판마다 다른 결 색, 둥근 이음새, 엇갈린 세로 이음과 못. */
-function paintPlank(c: Canvas, seed: number): void {
+export function paintPlank(c: Canvas, seed: number): void {
   const boards = [0, 21, 42, 64];
   const bases = [rgb(0xd9a066), rgb(0xcf955b), rgb(0xdcaa70)];
   for (let b = 0; b < 3; b++) {
@@ -173,7 +188,7 @@ function paintPlank(c: Canvas, seed: number): void {
 }
 
 /** 돌벽돌: 엇갈린 둥근 벽돌, 밝은 줄눈, 벽돌마다 다른 돌 색과 윗면 밝힘·아랫면 그늘. */
-function paintStoneBrick(c: Canvas, seed: number): void {
+export function paintStoneBrick(c: Canvas, seed: number): void {
   const grout = rgb(0xd6ccbc);
   const stones = [rgb(0x9ea3a8), rgb(0xaaa69f), rgb(0x959aa1), rgb(0xb1aca3)];
   const rowH = 16;
@@ -202,7 +217,7 @@ function paintStoneBrick(c: Canvas, seed: number): void {
 }
 
 /** 잎: 어두운 바탕 위에 둥근 잎 덩어리들, 덩어리마다 왼쪽 위 밝힘. */
-function paintLeaves(c: Canvas, seed: number): void {
+export function paintLeaves(c: Canvas, seed: number): void {
   const deep = rgb(0x3f8a3d);
   const mid = rgb(0x58a84b);
   const light = rgb(0x7cc766);

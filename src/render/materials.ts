@@ -1,7 +1,6 @@
 // 재질 생성은 이 파일 한 곳에만 있다 (ARCHITECTURE 9.4, AGENTS 5). WebGPU 전환 범위를 줄이기 위해서다.
 import * as THREE from 'three';
 import { BlockId } from '../game/data/blocks';
-import { ATLAS_COLUMNS, ATLAS_ROWS } from './atlas';
 
 /** 복셀 셰이더가 받는 점광원 수의 상한 (MVP_SPEC 34 performance.maxPointLights 와 같다). */
 export const MAX_VOXEL_POINT_LIGHTS = 16;
@@ -87,8 +86,7 @@ const FRAGMENT = /* glsl */ `
 #include <packing>
 #include <fog_pars_fragment>
 #include <shadowmap_pars_fragment>
-uniform sampler2D atlas;
-uniform vec2 atlasGrid;
+uniform sampler2DArray atlas;
 uniform vec3 sunDirection;
 uniform vec3 sunColor;
 uniform vec3 skyAmbient;
@@ -110,6 +108,11 @@ varying float vAo;
 varying vec3 vNormal;
 varying vec3 vWorld;
 
+/** 격자 값 해시(0~1). */
+float hash12(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
 /** 해 그림자(1 = 빛, 0 = 그늘). 그림자 지도가 없으면 1 이다. */
 float sunShadow() {
   float shadow = 1.0;
@@ -128,12 +131,19 @@ void main() {
   }
   float t = floor(vTile + 0.5);
   float block = floor(t / 3.0 + 0.01);
-  float column = mod(t, atlasGrid.x);
-  float row = floor(t / atlasGrid.x);
-  // 병합된 쿼드에서도 타일이 블록마다 반복되도록 fract 한다. 경계 텍셀 번짐을 막기 위해 살짝 안쪽을 쓴다
-  vec2 local = clamp(fract(vUv), 0.001, 0.999);
-  vec4 texel = texture2D(atlas, (vec2(column, row) + local) / atlasGrid);
+  // 병합된 쿼드에서도 타일이 블록마다 반복되도록 fract 한다. 밉맵 단계는 fract 전의 uv 미분으로 골라
+  // 블록 경계에서 미분이 튀어 생기는 줄을 막는다 (STYLE-004)
+  vec2 local = fract(vUv);
+  vec4 texel = textureGrad(atlas, vec3(local, t), dFdx(vUv), dFdy(vUv));
   if (texel.a < alphaCut) discard;
+  // 넓은 땅의 같은 무늬 반복이 드러나지 않게 월드 좌표의 낮은 주파수로 밝기를 조금 흔든다
+  vec2 mp = vWorld.xz * 0.045 + vWorld.y * 0.03;
+  vec2 mi = floor(mp);
+  vec2 mf = fract(mp);
+  mf = mf * mf * (3.0 - 2.0 * mf);
+  float macro = mix(mix(hash12(mi), hash12(mi + vec2(1.0, 0.0)), mf.x),
+                    mix(hash12(mi + vec2(0.0, 1.0)), hash12(mi + vec2(1.0, 1.0)), mf.x), mf.y);
+  texel.rgb *= 0.93 + 0.14 * macro;
   // 면 방향별 기본 음영. 해가 없는 면도 형태가 읽히게 한다 (위 1.0 / 옆 0.8~0.9 / 아래 0.6)
   vec3 n = normalize(vNormal);
   float sun = max(dot(n, normalize(sunDirection)), 0.0) * sunShadow();
@@ -173,10 +183,12 @@ void main() {
     vec3 viewDir = normalize(cameraPosition - vWorld);
     float fresnel = pow(1.0 - max(dot(wn, viewDir), 0.0), 3.0);
     vec3 reflected = mix(skyHorizon, skyZenith, clamp(reflect(-viewDir, wn).y * 1.5, 0.0, 1.0));
-    color = mix(color, reflected * (0.55 + 0.45 * (1.0 - night)), 0.25 + 0.55 * fresnel);
+    // 반사는 물빛과 섞어 옅은 지평선색에 물이 회색으로 바래지 않게 한다
+    reflected = mix(reflected, vec3(0.16, 0.45, 0.72), 0.45) * (0.55 + 0.45 * (1.0 - night));
+    color = mix(color, reflected, 0.12 + 0.45 * fresnel);
     float spec = pow(max(dot(reflect(-normalize(sunDirection), wn), viewDir), 0.0), 90.0);
     color += sunColor * spec * 2.2 * sunShadow();
-    alpha = mix(alpha, 0.92, fresnel);
+    alpha = mix(alpha, 0.88, fresnel * 0.7);
   }
   gl_FragColor = vec4(color, alpha);
   #include <tonemapping_fragment>
@@ -209,7 +221,6 @@ function createVoxelMaterial(
       ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
       ...THREE.UniformsUtils.clone(THREE.UniformsLib.lights),
       atlas: { value: atlas },
-      atlasGrid: { value: new THREE.Vector2(ATLAS_COLUMNS, ATLAS_ROWS) },
       alphaCut: { value: transparent ? 0.01 : 0.5 },
       ...lighting,
     },
