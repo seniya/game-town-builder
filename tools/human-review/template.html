@@ -1041,7 +1041,13 @@ pnpm install && pnpm dev</pre>
       const list = document.getElementById('list');
       const order = [...DATA.pending].sort((a, b) => {
         const rank = (i) =>
-          i.source.includes('게이트') ? -1 : kindOf(i) === 'recheck' ? 0 : i.id === 'HR-029' ? 1 : 2;
+          i.source.includes('게이트')
+            ? -1
+            : kindOf(i) === 'recheck'
+              ? 0
+              : i.id === 'HR-029'
+                ? 1
+                : 2;
         return rank(a) - rank(b);
       });
       order.forEach((item) => {
