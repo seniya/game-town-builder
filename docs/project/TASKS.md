@@ -121,6 +121,7 @@ Phase I 끝    저장되고, 소리가 나고, 엔딩이 있다
 7. 050 → 051 → 052 → 053
 8. PERF-003 → ANIM-001 (2026-09-25 사용자 결정. TASK-053 의 사람 통과 플레이 HR-029 와 병행한다)
 9. BARK-001 → BARK-002 (2026-09-25 사용자 결정. 주민의 한마디와 그 소리)
+10. STYLE-001 → (게이트 V1) → STYLE-002 → STYLE-003 → STYLE-004 → STYLE-005 → STYLE-006 (게이트 V2) (2026-09-25 사용자 결정 D1: [확장 로드맵](EXPANSION_ROADMAP.md) X0 부터. 명세 MVP_SPEC 45)
 
 027은 초기 공통 골격, 039는 성장 게이트에 필요한 순수 지표 계산이므로 앞당긴다.
 033은 농사·요리·식사에 의존하지 않는다. 기존 디버그 기능으로 침실·주민 한 명·시계를
@@ -1906,6 +1907,40 @@ Acceptance Criteria:
 - [x] 거리에 따라 음량이 줄고 22 칸 밖은 0 이다(시험)
 - [x] 동시에 두 주민까지만 소리를 낸다. Web Audio 가 없거나 음소거면 오류 없이 지나간다(시험)
 - [x] 브라우저(headless)에서 오류 없이 소리 노드가 만들어지는지 확인하고, 사람의 판단은 HUMAN_REVIEW 에 올린다(`대기`)
+
+---
+
+## TASK-STYLE-001 스타일 시안 장면
+
+의존: TASK-ANIM-001(자세 표), ADR 044(미술 방향). 확장 로드맵 X0 의 첫 작업이다(오너 결정 D1, 2026-09-25).
+명세는 MVP_SPEC 45.1, 제작 방식은 ADR 045. **게임 상태·저장·방 판정을 바꾸지 않고, 새 블록·가구·주민을 더하지 않는다.**
+
+작업:
+
+```text
+render/style/cuteFigure.ts: 둥근 SD 주민 모형(관절별 병합 메시·정점 색·깜빡이는 눈·입·볼·외곽선), 변형 A/B/C
+render/style/styleProps.ts: 시안 화덕(불·냄비·김)·물 항아리(물빛) 모형
+render/style/styleTiles.ts: 64 px 손그림풍 블록 타일 4 종(픽셀 배열, three 없는 순수 계산)
+render/materials.ts: 툰 명암(2·3 단)·가장자리 밝힘·외곽선·시안 블록 재질
+render/style/StyleLab.ts + ui/StyleLabPanel.ts + styleLabMain.ts: ?scene=style-lab 장면(지금 ↔ 시안 나란히, 자세·명암·외곽선·시점 버튼)
+render/characterPose.ts: HIP_HEIGHT 공개(다른 비율 모형이 자세 표의 몸 이동을 제 엉덩이 높이로 늘여 입는다)
+```
+
+Acceptance Criteria:
+
+- [x] `?scene=style-lab` 에 지금 요리사와 시안 A/B/C, 지금·시안 화덕과 물 항아리, 지금·시안 블록 네 종이 같은 조명에서 나란히 보인다
+- [x] 시안 주민이 ADR 041 자세 표(서기·걷기·조리·앉기·밭일)와 눈 깜빡임을 그대로 입는다(버튼으로 바꿈)
+- [x] 명암 2 단 / 3 단과 외곽선 켬 / 끔을 장면 안에서 바꿀 수 있다
+- [x] 시안 주민의 키(모자 제외)가 1.3~1.6 칸이고, 관절 구조가 지금 모형과 같다(시험)
+- [x] 시안 주민 한 명의 드로우콜(외곽선 포함)이 지금 모형보다 많지 않다(시험·장면 계측)
+- [x] 시안 타일이 결정적이고(같은 입력 같은 픽셀) 64 × 64 이다(시험)
+- [x] `src/game/` 의 상태·저장 형식을 바꾸지 않고, 재질 생성은 `materials.ts` 에만 있다(검토·lint)
+- [x] 브라우저(headless)에서 네 시점을 관찰하고 **게이트 V1** 질문지를 HUMAN_REVIEW 에 올린다(`대기`)
+
+결과: [STYLE-001 기록](../state/2026-09-25_1916-style-001-style-lab.md), [ADR 045](../adr/045-style-prototype-code-geometry-toon.md).
+시험 `tests/styleLab.test.ts`. 게이트 V1 은 HUMAN_REVIEW 4 장 V1·HR-035(`대기`).
+
+게이트 V1 이 부정적이면 STYLE-002 로 넘어가지 않고 형태·재질·색을 다시 고친다(확장 로드맵 4.3).
 
 ---
 

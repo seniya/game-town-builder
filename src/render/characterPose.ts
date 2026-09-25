@@ -272,8 +272,11 @@ export function npcPose(i: NpcPoseInput): PoseTarget {
 
 /** 밭일 허리 굽힘 각도(rad). 모형에 허리 관절이 없어 몸 전체를 숙이고 다리를 되세워 흉내 낸다. */
 const WORK_BEND = 0.75;
-/** 모형의 엉덩이 높이(NpcView 다리 피벗 y). 굽힌 뒤 발을 제자리에 두는 데 쓴다. */
-const HIP_HEIGHT = 0.42;
+/**
+ * 모형의 엉덩이 높이(NpcView 다리 피벗 y). 굽힌 뒤 발을 제자리에 두는 데 쓴다.
+ * 자세 표의 몸 이동(figurePos)은 이 높이의 모형 기준이다. 다른 비율의 모형은 이동을 제 엉덩이 높이 비율로 늘여 입힌다(STYLE-001).
+ */
+export const HIP_HEIGHT = 0.42;
 
 /**
  * 밭일(심기·수확): 허리를 굽혀 두 팔을 땅으로 뻗고 고른다.

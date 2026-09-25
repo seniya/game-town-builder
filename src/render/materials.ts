@@ -247,3 +247,95 @@ export function createRoomOverlayMaterial(xray: boolean): THREE.MeshBasicMateria
     polygonOffsetUnits: -1,
   });
 }
+
+// ── 확장 X0 시안 재질 (STYLE-001, ADR 045) ─────────────────────────────────────
+
+/**
+ * 툰 명암 계단 텍스처. steps 단계로 빛을 끊는다(2 = 그늘·빛, 3 = 그늘·중간·빛).
+ * 가장 어두운 단도 너무 까맣지 않게 둔다(반사광이 더해진다).
+ */
+export function createToonGradient(steps: 2 | 3): THREE.DataTexture {
+  const levels = steps === 2 ? [150, 255] : [120, 195, 255];
+  const data = new Uint8Array(levels.length * 4);
+  levels.forEach((v, i) => data.set([v, v, v, 255], i * 4));
+  const texture = new THREE.DataTexture(data, levels.length, 1, THREE.RGBAFormat);
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
+ * three 표준 재질의 빛을 복셀 셰이더 규약에 맞춘다(STYLE-001 에서 확인).
+ * 복셀 셰이더는 `albedo × (반사광 + 해 × cosθ)` 이고 three 의 Lambert·Toon 은 같은 광원 값을 π 로 나눈다.
+ * 그래서 같은 광원 아래 캐릭터·가구가 블록보다 어둡게 보인다. 시안 재질은 π 를 곱해 블록과 같은 밝기로 그린다.
+ * rim 이 0 보다 크면 시선과 거의 직각인 가장자리를 밝혀 둥근 덩어리가 배경에서 떠 보이게 한다.
+ */
+function liftToVoxelLighting(material: THREE.Material, rim: number): void {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms['lightScale'] = { value: Math.PI };
+    shader.uniforms['rimStrength'] = { value: rim };
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        'void main() {',
+        'uniform float lightScale;\nuniform float rimStrength;\nvoid main() {',
+      )
+      .replace(
+        '#include <opaque_fragment>',
+        [
+          'outgoingLight *= lightScale;',
+          'float rimDot = 1.0 - max(dot(normalize(normal), normalize(vViewPosition)), 0.0);',
+          'outgoingLight += diffuseColor.rgb * rimStrength * smoothstep(0.62, 0.9, rimDot);',
+          '#include <opaque_fragment>',
+        ].join('\n'),
+      );
+  };
+}
+
+/**
+ * 시안 캐릭터·소품 재질: 정점 색 + 툰 명암 + 가장자리 밝힘(rim). gradientMap 을 바꾸면 명암 단계가 바뀐다.
+ * 밝기는 복셀 셰이더 규약에 맞춘다(liftToVoxelLighting).
+ */
+export function createToonMaterial(gradient: THREE.Texture, rim = 0.22): THREE.MeshToonMaterial {
+  const material = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradient });
+  liftToVoxelLighting(material, rim);
+  return material;
+}
+
+/**
+ * 반전 껍질(inverted hull) 외곽선 재질. 뒷면만 그리며 정점을 법선 방향으로 thickness 만큼 부풀린다.
+ * 같은 지오메트리를 한 번 더 그려 실루엣 둘레에 선이 생긴다.
+ */
+export function createOutlineMaterial(color = 0x3b2b25, thickness = 0.011): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: { outlineColor: { value: new THREE.Color(color) }, thickness: { value: thickness } },
+    vertexShader: [
+      'uniform float thickness;',
+      'void main() {',
+      '  vec3 p = position + normalize(normal) * thickness;',
+      '  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);',
+      '}',
+    ].join('\n'),
+    fragmentShader: [
+      'uniform vec3 outlineColor;',
+      'void main() {',
+      '  gl_FragColor = vec4(outlineColor, 1.0);',
+      '  #include <colorspace_fragment>',
+      '}',
+    ].join('\n'),
+    side: THREE.BackSide,
+  });
+}
+
+/** 시안 캐릭터의 눈·입처럼 명암 없이 또렷해야 하는 부분(정점 색). */
+export function createFlatVertexColorMaterial(): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({ vertexColors: true });
+}
+
+/** 시안 블록 타일 재질(STYLE-001). 지금 블록과 같은 방향광·반사광을 같은 밝기 규약으로 받는다. */
+export function createStyleBlockMaterial(texture: THREE.Texture): THREE.MeshLambertMaterial {
+  const material = new THREE.MeshLambertMaterial({ map: texture });
+  liftToVoxelLighting(material, 0);
+  return material;
+}

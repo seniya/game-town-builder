@@ -718,6 +718,12 @@ function createPerfDriver(
 async function start(): Promise<void> {
   const params = new URLSearchParams(window.location.search);
   const sceneName = params.get('scene');
+  // 스타일 시안 장면은 게임 월드 없이 따로 돈다 (STYLE-001, MVP_SPEC 45.1)
+  if (sceneName === 'style-lab') {
+    const { startStyleLab } = await import('./styleLabMain');
+    startStyleLab(getCanvas(), params);
+    return;
+  }
   const fixture = pickFixture(sceneName);
   // 자동 저장은 고정 섬(기본 장면)에서만 한다. 시험 장면은 저장하지 않는다
   const saveStore =

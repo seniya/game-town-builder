@@ -59,13 +59,13 @@ function parseItems(lines) {
 }
 
 /**
- * 재미 검증 게이트(G1/G2)의 제목과 상태를 읽는다.
+ * 게이트(재미 검증 G1/G2, 확장 미술 V1 등)의 제목과 상태를 읽는다.
  * @param {string[]} lines 4 절 본문
  * @returns {{name:string, status:string}[]} 게이트 요약
  */
 function parseGates(lines) {
   return lines
-    .filter((l) => l.startsWith('### G'))
+    .filter((l) => l.startsWith('### G') || l.startsWith('### V'))
     .map((l) => {
       const [name, status = ''] = l.replace(/^###\s*/, '').split(/\s+—\s+상태:\s*/);
       return { name, status };
