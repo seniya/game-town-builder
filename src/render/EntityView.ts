@@ -2,7 +2,13 @@
 // 플레이어 모형(관절 모형과 동작, TASK-ANIM-001). 주민은 NpcView, 몬스터는 MonsterView 다.
 import * as THREE from 'three';
 import type { Player } from '../game/entities/Player';
-import { MOVING_SPEED, playerPose, PoseBlender, SWING_SECONDS } from './characterPose';
+import {
+  armJointRotationX,
+  MOVING_SPEED,
+  playerPose,
+  PoseBlender,
+  SWING_SECONDS,
+} from './characterPose';
 import { createCharacterMaterial } from './materials';
 
 /** 상자 하나. (x, y, z) 는 상자 아랫면 가운데다. */
@@ -156,8 +162,8 @@ export class PlayerView {
     this.figure.rotation.set(d.figureRot.x, d.figureRot.y, d.figureRot.z);
     this.legL.rotation.set(d.legL.x, d.legL.y, d.legL.z);
     this.legR.rotation.set(d.legR.x, d.legR.y, d.legR.z);
-    this.armL.rotation.set(d.armL.x, d.armL.y, d.armL.z);
-    this.armR.rotation.set(d.armR.x, d.armR.y, d.armR.z);
+    this.armL.rotation.set(armJointRotationX(d.armL.x), d.armL.y, d.armL.z);
+    this.armR.rotation.set(armJointRotationX(d.armR.x), d.armR.y, d.armR.z);
     // 고개는 시선 피치를 조금 따라간다
     this.head.rotation.set(d.head.x + player.pitch * 0.45, d.head.y, d.head.z);
     this.object3d.visible = visible;

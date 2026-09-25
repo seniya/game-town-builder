@@ -399,6 +399,8 @@ export class GameWorld {
     });
     this.attach('objectiveSave', this.saves);
     this.debug.gratitudeSource = () => this.gratitude.total;
+    this.debug.gratitudeGrant = (amount, at) =>
+      void this.gratitude.gain({ kind: 'debug' }, amount, at);
     this.raids = new RaidSystem({
       events: this.events,
       clock: this.clock,

@@ -31,6 +31,8 @@ function reason(s: GratitudeSource): string {
       return '새 방';
     case 'gameEvent':
       return '';
+    case 'debug':
+      return '디버그';
   }
 }
 

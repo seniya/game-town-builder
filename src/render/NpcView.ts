@@ -6,7 +6,13 @@ import * as THREE from 'three';
 import type { NPC } from '../game/entities/NPC';
 import type { ActionView, BlockPos, NPCRole, PlacedObjectSnapshot } from '../game/types';
 import { facingOffset } from '../game/voxel/PlacementIndex';
-import { MOVING_SPEED, npcPose, PoseBlender, type CharacterPose } from './characterPose';
+import {
+  armJointRotationX,
+  MOVING_SPEED,
+  npcPose,
+  PoseBlender,
+  type CharacterPose,
+} from './characterPose';
 import { createCharacterMaterial, createCharacterSpriteMaterial } from './materials';
 import { BED_SURFACE } from './PropView';
 
@@ -370,8 +376,8 @@ export class NpcView {
     this.figure.rotation.set(d.figureRot.x, d.figureRot.y, d.figureRot.z);
     this.legL.rotation.set(d.legL.x, d.legL.y, d.legL.z);
     this.legR.rotation.set(d.legR.x, d.legR.y, d.legR.z);
-    this.armL.rotation.set(d.armL.x, d.armL.y, d.armL.z);
-    this.armR.rotation.set(d.armR.x, d.armR.y, d.armR.z);
+    this.armL.rotation.set(armJointRotationX(d.armL.x), d.armL.y, d.armL.z);
+    this.armR.rotation.set(armJointRotationX(d.armR.x), d.armR.y, d.armR.z);
     this.head.rotation.set(d.head.x, d.head.y, d.head.z);
     for (const eye of this.eyes) eye.scale.y = Math.max(0.1, d.eyes);
   }

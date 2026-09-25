@@ -5,6 +5,7 @@ Date: 2026-09-25
 Basis: G2 게이트 Q6 "애니메이션 부족"([기록](../state/2026-09-23_2309-task-033-gate-g2-passed.md)), 기존 `NpcView`·`EntityView`·`MonsterView` 구조, 시험 `tests/characterPose.test.ts`. 새 외부 조사 없음.
 Related: ADR 008 / 020 / 025 / 026 / 030 / 031 / 032 / 036
 Amends: ARCHITECTURE 12.3 구현 노트, MVP_SPEC 31 장
+Amended by: ADR 043 (2026-09-25, 팔 x 는 음수가 앞이며 적용 시 부호를 바꾼다. 밭일은 허리를 굽힌다)
 
 ## 배경
 

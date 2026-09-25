@@ -36,6 +36,8 @@ export interface DebugPanelPort {
   addSeeds(count: number): void;
   /** 디버그 작물 투입 (TASK-031) */
   addCrops(count: number): void;
+  /** 디버그 감사 포인트 투입 (HR-018: 종 레벨 시험) */
+  addGratitude(amount: number): void;
   /** 고를 수 있는 배속 */
   readonly timeScales: readonly number[];
 }
@@ -158,7 +160,10 @@ export class DebugPanel {
     const crops = document.createElement('button');
     crops.textContent = '작물 +2';
     crops.addEventListener('click', () => port.addCrops(2));
-    timeControls.append(hourInput, jump, seeds, crops);
+    const thanks = document.createElement('button');
+    thanks.textContent = '감사 +20';
+    thanks.addEventListener('click', () => port.addGratitude(20));
+    timeControls.append(hourInput, jump, seeds, crops, thanks);
     this.extraRows = document.createElement('div');
     this.root.append(this.text, controls, roomControls, timeControls, this.extraRows);
     // 패널 조작 클릭이 뒤의 메뉴(클릭하면 계속)로 전달되지 않게 한다

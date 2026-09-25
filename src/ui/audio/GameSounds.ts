@@ -43,6 +43,12 @@ const BELL_PARTIALS: readonly (readonly [number, number])[] = [
 /** 낮 BGM: C 장조 펜타토닉 느린 아르페지오. 밤 BGM: A 단조의 낮고 느린 음. */
 const DAY_SCALE = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33];
 const NIGHT_SCALE = [220.0, 246.94, 261.63, 329.63, 349.23, 440.0];
+/**
+ * BGM 을 울리는가. 2026-09-25 오너 확인(HR-029)에서 "너무 기계적이다, 지금은 없는 게 낫다" 는 판단으로 끈다
+ * (MVP_SPEC 30). 합성 코드는 음악을 다시 만들 때 참고하려고 남긴다.
+ */
+const BGM_ENABLED = false;
+
 /** BGM 음 간격(초). */
 const DAY_BEAT = 0.55;
 const NIGHT_BEAT = 0.95;
@@ -97,21 +103,13 @@ export class GameSounds {
   }
 
   /**
-   * 매 프레임 부른다. BGM 을 이어 가고 낮·밤 층을 부드럽게 바꾼다.
+   * 매 프레임 부른다. BGM(현재 꺼짐)과 발소리를 이어 간다.
    * walked 는 이번 프레임에 땅 위를 걸은 수평 거리, ground 는 발밑 블록이다(발소리).
    */
   update(dt: number, walked: number, ground: number | null): void {
     const ctx = this.engine.ctx;
     if (!ctx) return;
-    this.ensureBgm(ctx);
-    const t = ctx.currentTime;
-    this.bgmDay?.gain.setTargetAtTime(this.night ? 0 : 0.07, t, 1.5);
-    this.bgmNight?.gain.setTargetAtTime(this.night ? 0.08 : 0, t, 1.5);
-    if (this.nextBeat < t) this.nextBeat = t + 0.05;
-    while (this.nextBeat < t + 0.2) {
-      this.bgmNote(ctx, this.nextBeat);
-      this.nextBeat += this.night ? NIGHT_BEAT : DAY_BEAT;
-    }
+    if (BGM_ENABLED) this.updateBgm(ctx);
     if (ground !== null && walked > 0) {
       this.footDistance += walked;
       if (this.footDistance >= 1.6) {
@@ -239,6 +237,19 @@ export class GameSounds {
     if (this.bgmDay) this.pad(ctx, pick(DAY_SCALE), at, 1.6, this.bgmDay);
     if (this.bgmNight && this.step % 2 === 0)
       this.pad(ctx, pick(NIGHT_SCALE) / 2, at, 3.2, this.bgmNight);
+  }
+
+  /** BGM 을 이어 가고 낮·밤 층을 부드럽게 바꾼다. */
+  private updateBgm(ctx: AudioContext): void {
+    this.ensureBgm(ctx);
+    const t = ctx.currentTime;
+    this.bgmDay?.gain.setTargetAtTime(this.night ? 0 : 0.07, t, 1.5);
+    this.bgmNight?.gain.setTargetAtTime(this.night ? 0.08 : 0, t, 1.5);
+    if (this.nextBeat < t) this.nextBeat = t + 0.05;
+    while (this.nextBeat < t + 0.2) {
+      this.bgmNote(ctx, this.nextBeat);
+      this.nextBeat += this.night ? NIGHT_BEAT : DAY_BEAT;
+    }
   }
 
   /** BGM 층을 만든다. */

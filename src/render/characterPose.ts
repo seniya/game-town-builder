@@ -17,6 +17,9 @@ export interface Joint {
  * 사람형 모형 하나의 자세. 관절은 모형 기준 회전이고, figurePos 는 몸 전체의 모형 기준 이동,
  * rootOffset 은 게임 위치(body.pos)에서 모형 뿌리까지의 월드 기준 이동이다(의자·침대 위로 옮길 때).
  * eyes 는 눈 높이 비율(1 = 뜸, 작을수록 감음)이다.
+ *
+ * 모형은 -z 를 본다. 다리의 x 는 three.js 회전 그대로(양수 = 앞으로 든다)지만, 팔의 x 는
+ * **음수 = 앞으로(얼굴 쪽으로) 든다**로 적는다. 모형에 입힐 때 armJointRotationX 로 바꾼다.
  */
 export interface CharacterPose {
   legL: Joint;
@@ -28,6 +31,14 @@ export interface CharacterPose {
   figurePos: Joint;
   rootOffset: Joint;
   eyes: number;
+}
+
+/**
+ * 자세의 팔 x(음수 = 앞으로 든다)를 팔 관절의 three.js 회전으로 바꾼다.
+ * 팔은 피벗에서 아래로 늘어지므로 -z(앞)로 들려면 양의 x 회전이 필요하다.
+ */
+export function armJointRotationX(poseX: number): number {
+  return -poseX;
 }
 
 /** 관절 이름(보간·비교에 쓴다). */
@@ -191,9 +202,10 @@ export function locomotionPose(i: LocomotionInput): CharacterPose {
   const amp = 0.6 + run * 0.35;
   p.legL.x = s * amp;
   p.legR.x = -s * amp;
-  // 달리면 팔을 굽혀 앞뒤로 크게 흔든다
-  p.armL.x = -s * (0.7 + run * 0.4) - run * 0.35;
-  p.armR.x = s * (0.7 + run * 0.4) - run * 0.35;
+  // 달리면 팔을 굽혀 앞뒤로 크게 흔든다. 팔은 반대쪽 다리와 함께 앞으로 나온다
+  // (팔 x 는 음수가 앞이므로 같은 쪽 다리와 같은 부호가 반대 방향이다)
+  p.armL.x = s * (0.7 + run * 0.4) - run * 0.35;
+  p.armR.x = -s * (0.7 + run * 0.4) - run * 0.35;
   p.armL.z = -0.05 - run * 0.12;
   p.armR.z = 0.05 + run * 0.12;
   p.figurePos.y = Math.abs(s) * (0.05 + run * 0.05);
@@ -258,17 +270,28 @@ export function npcPose(i: NpcPoseInput): PoseTarget {
   return withEyes('locomotion', loco);
 }
 
-/** 밭일(심기·수확): 허리를 굽혀 두 팔로 땅을 고른다. */
+/** 밭일 허리 굽힘 각도(rad). 모형에 허리 관절이 없어 몸 전체를 숙이고 다리를 되세워 흉내 낸다. */
+const WORK_BEND = 0.75;
+/** 모형의 엉덩이 높이(NpcView 다리 피벗 y). 굽힌 뒤 발을 제자리에 두는 데 쓴다. */
+const HIP_HEIGHT = 0.42;
+
+/**
+ * 밭일(심기·수확): 허리를 굽혀 두 팔을 땅으로 뻗고 고른다.
+ * 몸 전체를 WORK_BEND 만큼 앞으로 숙인 뒤 다리를 같은 만큼 되돌려 세우고, 엉덩이가 앞으로 나간 만큼
+ * 몸을 뒤로 옮겨 발이 땅에 붙어 있게 한다.
+ */
 function workPose(time: number): CharacterPose {
   const p = restPose();
   const dig = Math.sin(time * 9);
-  p.legL.x = 0.25;
-  p.legR.x = -0.15;
-  p.armL = { x: -1.1 + dig * 0.35, y: 0, z: 0.1 };
-  p.armR = { x: -1.1 + dig * 0.35, y: 0, z: -0.1 };
-  p.figurePos.y = -0.04;
-  p.figureRot.x = -0.42;
-  p.head.x = -0.35;
+  p.figureRot.x = -WORK_BEND;
+  p.figurePos.z = HIP_HEIGHT * Math.sin(WORK_BEND);
+  p.figurePos.y = HIP_HEIGHT * (1 - Math.cos(WORK_BEND));
+  p.legL.x = WORK_BEND + 0.12;
+  p.legR.x = WORK_BEND - 0.08;
+  // 팔 x 는 음수가 앞이다. -WORK_BEND 면 땅을 향해 곧게 늘어지고, 그보다 조금 더 앞으로 뻗어 고른다
+  p.armL = { x: -WORK_BEND - 0.25 + dig * 0.25, y: 0, z: 0.1 };
+  p.armR = { x: -WORK_BEND - 0.25 - dig * 0.25, y: 0, z: -0.1 };
+  p.head.x = -0.2;
   return p;
 }
 

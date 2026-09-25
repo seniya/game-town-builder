@@ -396,7 +396,9 @@ export type GratitudeSource =
   | { readonly kind: 'cook'; readonly npcId: string }
   | { readonly kind: 'eat'; readonly npcId: string }
   | { readonly kind: 'firstRoom'; readonly roomType: RoomType }
-  | { readonly kind: 'gameEvent'; readonly id: string };
+  | { readonly kind: 'gameEvent'; readonly id: string }
+  /** F3 디버그 투입. 시험 장면에서 종 레벨을 확인하려고 쓴다(게임 진행 경로가 아니다) */
+  | { readonly kind: 'debug' };
 
 // ── 진행 이벤트·목표·대사 (MVP_SPEC 27, ARCHITECTURE 20 / 21) ──────────────────
 

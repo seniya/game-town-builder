@@ -136,6 +136,7 @@ export class GratitudeSystem implements SlotSystem {
         return true;
       case 'cook':
       case 'eat':
+      case 'debug':
         return true;
     }
   }

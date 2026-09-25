@@ -47,6 +47,17 @@ describe('천장 걷어 내기 (MVP_SPEC 9.3)', () => {
     expect(isCut(cut, 10 + balance.player.ceilingCutRadius + 2, FEET_Y + 3, 10)).toBe(false);
   });
 
+  it('나무 잎은 천장으로 치지 않는다 (HR-011)', () => {
+    const f = navFixture(24, 14);
+    const player = createPlayer({ x: 10, y: FEET_Y, z: 10 });
+    f.put(10, FEET_Y + 3, 10, BlockId.leaves);
+    f.put(10, FEET_Y + 4, 10, BlockId.leaves);
+    expect(ceilingCutFor(f.world, player)).toBeNull();
+    // 잎 위에 지붕이 있으면 그 지붕 높이로 걷는다
+    f.put(10, FEET_Y + 5, 10, BlockId.plank);
+    expect(ceilingCutFor(f.world, player)?.y).toBe(FEET_Y + 5);
+  });
+
   it('천장이 걷히면 카메라 거리가 천장에 막히지 않는다', () => {
     const f = navFixture(24, 14);
     const player = createPlayer({ x: 10, y: FEET_Y, z: 10 });

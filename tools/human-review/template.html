@@ -846,7 +846,13 @@ pnpm install && pnpm dev</pre>
       c.note.disabled = readOnly;
       c.save.disabled = readOnly || !dirty || (!verdict && !(c.draft?.note ?? saved?.note));
       c.clear.hidden = readOnly || !saved;
-      if (saved && !dirty) {
+      // 문서에서 고친 뒤 다시 볼 항목인데 기록이 그보다 오래됐으면 지난 판단으로 보여 준다
+      const stale =
+        !!saved && c.item.status.includes('재확인') && saved.updatedAt < DATA.generatedAt;
+      if (saved && !dirty && stale) {
+        c.saved.textContent =
+          '지난 판단 · ' + fmtTime(saved.updatedAt) + ' — 고친 뒤 다시 보고 새로 저장해 주세요';
+      } else if (saved && !dirty) {
         c.saved.textContent = '저장됨 · ' + fmtTime(saved.updatedAt);
       } else if (dirty) {
         c.saved.textContent = '저장하지 않은 변경';
@@ -861,7 +867,7 @@ pnpm install && pnpm dev</pre>
       c.ownerPill.hidden = !v;
       if (v) {
         c.ownerPill.className = 'pill owner-pill ' + v.pill;
-        c.ownerPill.textContent = '내 판단: ' + v.label;
+        c.ownerPill.textContent = (stale ? '지난 판단: ' : '내 판단: ') + v.label;
       }
     }
 
@@ -922,6 +928,12 @@ pnpm install && pnpm dev</pre>
       }
     }
 
+    /** 고친 뒤 다시 볼 항목인데 기록이 문서 갱신보다 오래됐는가. */
+    function isStale(c) {
+      const saved = state.records[c.item.id];
+      return !!saved && c.item.status.includes('재확인') && saved.updatedAt < DATA.generatedAt;
+    }
+
     /** 거르기 조건에 맞는지 본다. */
     function matches(c) {
       const rec = !!state.records[c.item.id];
@@ -929,7 +941,7 @@ pnpm install && pnpm dev</pre>
       if (f === 'recheck' && c.kind !== 'recheck') return false;
       if (f === 'pending' && c.kind !== 'pending') return false;
       if (f === 'recorded' && !rec) return false;
-      if (f === 'unrecorded' && rec) return false;
+      if (f === 'unrecorded' && rec && !isStale(c)) return false;
       return !state.query || c.text.includes(state.query);
     }
 
@@ -949,7 +961,7 @@ pnpm install && pnpm dev</pre>
         pending: all.filter((c) => c.kind === 'pending').length,
         recorded: all.filter((c) => state.records[c.item.id]).length,
       };
-      count.unrecorded = count.all - count.recorded;
+      count.unrecorded = all.filter((c) => !state.records[c.item.id] || isStale(c)).length;
       document.querySelectorAll('.chip').forEach((b) => {
         b.querySelector('.n').textContent = count[b.dataset.f];
         b.setAttribute('aria-pressed', String(b.dataset.f === state.filter));

@@ -201,9 +201,9 @@ describe('상호작용 대상 선택 (READY-07)', () => {
     // 상자는 저장소 대상이다(Storeroom 이 아니어도)
     w.voxels.setBlock(c.x, c.y, c.z, BlockId.chest, 'player');
     expect(findInteractTarget(w.voxels, p, npcs())?.kind).toBe('chest');
-    // 사거리(5) 밖이면 없다
+    // 사거리(reachDistance) 밖이면 없다
     w.voxels.setBlock(c.x, c.y, c.z, BlockId.air, 'player');
-    const far = cellOnRay(w, 6.5);
+    const far = cellOnRay(w, balance.player.reachDistance + 1.5);
     w.voxels.setBlock(far.x, far.y, far.z, BlockId.bell, 'player');
     expect(findInteractTarget(w.voxels, p, npcs())).toBeNull();
   });

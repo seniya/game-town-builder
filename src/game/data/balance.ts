@@ -20,7 +20,7 @@ export const balance = {
     gravity: -22,
     maxFallSpeed: -30,
     maxHealth: 20,
-    reachDistance: 5.0,
+    reachDistance: 8.0,
     attackDamage: 1,
     attackIntervalSeconds: 0.5,
     attackRange: 2.5,

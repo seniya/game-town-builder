@@ -874,6 +874,7 @@ async function start(): Promise<void> {
     timeScales: balance.clock.debugTimeScales,
     addSeeds: (n) => world.debug.addSeeds(n),
     addCrops: (n) => world.debug.addCrops(n),
+    addGratitude: (n) => world.debug.addGratitude(n),
   });
   if (params.get('debug') === '1') debugPanel.toggle();
   const measureSeconds = Number(params.get('measure') ?? 0);

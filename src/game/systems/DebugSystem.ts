@@ -90,6 +90,8 @@ export class DebugSystem {
   } | null = null;
   /** 감사 포인트 조회. GameWorld 가 연결한다 */
   gratitudeSource: (() => number) | null = null;
+  /** 감사 포인트 디버그 투입. GameWorld 가 연결한다 */
+  gratitudeGrant: ((amount: number, at: Vec3) => void) | null = null;
   /** 파생 지표 조회. GameWorld 가 연결한다 */
   worldStateSource: (() => WorldStateData) | null = null;
   /** 식사 계측 대상. GameWorld 가 연결한다 */
@@ -122,6 +124,16 @@ export class DebugSystem {
   /** 디버그 작물 투입 (TASK-031 검증). 수확(12 게임시간)을 기다리지 않고 조리를 확인하는 시험용이다. */
   addCrops(count: number): void {
     if (count > 0) this.cookingSources?.storage.add('crop', count);
+  }
+
+  /**
+   * 디버그 감사 포인트 투입. 며칠을 기다리지 않고 종 레벨·새 주민·습격을 시험하는 용도다.
+   * +N 연출은 플레이어 머리 위(플레이어가 없으면 원점)에 뜬다.
+   */
+  addGratitude(amount: number): void {
+    if (amount <= 0) return;
+    const p = this.player?.body.pos ?? { x: 0, y: 0, z: 0 };
+    this.gratitudeGrant?.(amount, { x: p.x, y: p.y + 2.2, z: p.z });
   }
 
   /** 디버그 시각 강제 설정. 다음 도래하는 hour:minute 로 앞당긴다 (MVP_SPEC 20.3). */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { balance } from '../src/game/data/balance';
 import {
+  armJointRotationX,
   npcPose,
   playerPose,
   PoseBlender,
@@ -147,5 +148,49 @@ describe('캐릭터 동작 (TASK-ANIM-001, ADR 041)', () => {
     const walk = playerPose(player({ speed: balance.player.walkSpeed, phase: 1 })).pose;
     const run = playerPose(player({ speed: balance.player.runSpeed, phase: 1 })).pose;
     expect(run.figureRot.x).toBeLessThan(walk.figureRot.x - 0.1);
+  });
+});
+
+describe('팔 방향 (오너 확인 2026-09-25: 파괴·요리 팔이 반대로 보였다)', () => {
+  /** 팔 x(자세 기준)를 모형에 입혔을 때 손끝의 z. 모형은 -z 를 보므로 음수가 앞이다. */
+  // 아래로 늘어진 팔 (0, -1, 0) 을 x 축으로 r 만큼 돌리면 z = -sin(r)
+  const handZ = (poseX: number) => -Math.sin(armJointRotationX(poseX));
+
+  it('팔 x 가 음수면 손이 앞(-z)으로 간다', () => {
+    expect(handZ(-1.2)).toBeLessThan(0);
+    expect(handZ(0.5)).toBeGreaterThan(0);
+  });
+
+  it('블록을 부술 때 오른팔이 앞으로 들린다', () => {
+    const t = playerPose(player({ breaking: true, actionWeight: 1 }));
+    expect(handZ(t.pose.armR.x)).toBeLessThan(-0.5);
+  });
+
+  it('조리할 때 두 팔이 화덕(앞) 쪽이다', () => {
+    const t = npcPose(npc({ kind: 'cook', key: 'cook', pose: 'cook' }));
+    expect(handZ(t.pose.armL.x)).toBeLessThan(0);
+    expect(handZ(t.pose.armR.x)).toBeLessThan(0);
+  });
+
+  it('걸을 때 팔은 같은 쪽 다리와 반대로 흔든다', () => {
+    const t = playerPose(player({ speed: balance.player.walkSpeed, phase: Math.PI / 2 }));
+    // 왼다리가 앞(+x 회전)이면 왼팔은 뒤(+z)
+    expect(t.pose.legL.x).toBeGreaterThan(0);
+    expect(handZ(t.pose.armL.x)).toBeGreaterThan(0);
+    expect(handZ(t.pose.armR.x)).toBeLessThan(0);
+  });
+});
+
+describe('밭일 자세 (HR-013: 허리를 굽힌다)', () => {
+  it('몸을 크게 숙이고 다리는 거의 곧게 서며 발은 땅에 붙어 있다', () => {
+    const p = npcPose(npc({ kind: 'farm', key: 'farm', pose: 'work' })).pose;
+    expect(p.figureRot.x).toBeLessThan(-0.6);
+    // 다리의 월드 기울기 = 몸 기울기 + 다리 회전 ≈ 0
+    expect(Math.abs(p.figureRot.x + (p.legL.x + p.legR.x) / 2)).toBeLessThan(0.1);
+    // 엉덩이(높이 0.42) 아래 발이 원래 자리(z≈0, y≈0) 근처에 있다
+    const hipZ = p.figurePos.z + 0.42 * Math.sin(p.figureRot.x);
+    const hipY = p.figurePos.y + 0.42 * Math.cos(p.figureRot.x);
+    expect(Math.abs(hipZ)).toBeLessThan(0.05);
+    expect(Math.abs(hipY - 0.42)).toBeLessThan(0.05);
   });
 });

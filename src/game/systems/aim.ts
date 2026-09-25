@@ -1,6 +1,7 @@
 // 조준 광선 (MVP_SPEC 9.3 / 10.1). 카메라(render)와 BlockEditSystem 이 같은 함수를 써서
 // 화면 중앙 조준점과 실제 대상이 같은 직선 위에 있게 한다.
 import { balance } from '../data/balance';
+import { BlockId } from '../data/blocks';
 import { eyePosition, lookDirection, rightDirection, type Player } from '../entities/Player';
 import type { Vec3 } from '../types';
 import { isCollisionSolid, type CollisionWorld } from '../voxel/collision';
@@ -30,7 +31,7 @@ export function aimRay(world: CollisionWorld, player: Player): AimRay {
   return { origin: shoulderPoint(world, player), direction: lookDirection(player) };
 }
 
-/** 조준 대상 블록. reachDistance(5.0) 보다 먼 블록은 선택하지 않는다 (MVP_SPEC 10.1). */
+/** 조준 대상 블록. reachDistance(8.0) 보다 먼 블록은 선택하지 않는다 (MVP_SPEC 10.1). */
 export function findAimTarget(world: CollisionWorld, player: Player): RaycastHit | null {
   const ray = aimRay(world, player);
   return raycastVoxels(world, ray.origin, ray.direction, balance.player.reachDistance, isAimTarget);
@@ -74,6 +75,7 @@ export interface CeilingCut {
 /**
  * 플레이어 머리 위(발 칸 +2 ~ +1+ceilingSearchHeight)에 카메라를 막는 블록이 있으면 그 가장 낮은 y 로 천장 범위를 만든다.
  * 없으면 null(지붕 밑이 아니다). 블록·충돌은 바꾸지 않는 표현 전용 범위다.
+ * 잎은 천장으로 치지 않는다. 나무 밑에서 숲 전체의 잎이 걷혀 투명해 보였다(HR-011, 2026-09-25).
  */
 export function ceilingCutFor(world: CollisionWorld, player: Player): CeilingCut | null {
   const p = player.body.pos;
@@ -81,7 +83,8 @@ export function ceilingCutFor(world: CollisionWorld, player: Player): CeilingCut
   const z = Math.floor(p.z);
   const feet = Math.floor(p.y + 0.01);
   for (let y = feet + 2; y <= feet + 1 + balance.player.ceilingSearchHeight; y++) {
-    if (isCameraBlocking(world.getBlock(x, y, z))) {
+    const id = world.getBlock(x, y, z);
+    if (id !== BlockId.leaves && isCameraBlocking(id)) {
       return { y, x: p.x, z: p.z, radius: balance.player.ceilingCutRadius };
     }
   }
