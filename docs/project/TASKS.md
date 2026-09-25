@@ -2030,9 +2030,11 @@ Acceptance Criteria:
 
 Acceptance Criteria:
 
-- [ ] MVP_SPEC 36 조건(`?scene=mvp-perf`)으로 드로우콜·FPS 를 다시 잰다
-- [ ] 섬 전경·집 안·식사·취침·습격 장면의 지금 ↔ 이전 비교 스크린샷을 남긴다
-- [ ] HUMAN_REVIEW 에 **게이트 V2** 질문지를 올린다(`대기`). V2 통과 전에는 X1 로 넘어가지 않는다
+- [x] MVP_SPEC 36 조건(`?scene=mvp-perf`)으로 드로우콜·FPS 를 다시 잰다
+- [x] 섬 전경·집 안·식사·취침·습격 장면의 지금 ↔ 이전 비교 스크린샷을 남긴다
+- [x] HUMAN_REVIEW 에 **게이트 V2** 질문지를 올린다(`대기`). V2 통과 전에는 X1 로 넘어가지 않는다
+
+결과: [STYLE-006 기록](../state/2026-09-25_2340-style-006-x0-measure-v2.md). 게이트 V2 는 HUMAN_REVIEW 4 장 V2·HR-036(`대기`).
 
 ---
 
