@@ -31,6 +31,7 @@ import { Highlight } from './render/Highlight';
 import { createItemIconProvider } from './render/itemIcons';
 import { Renderer } from './render/Renderer';
 import { RoomLabelView } from './render/RoomLabelView';
+import { BarkBubbleView } from './render/BarkBubbleView';
 import { GratitudePopupView } from './render/GratitudePopupView';
 import { DayNightVisual } from './render/DayNightVisual';
 import { NavOverlayView } from './render/NavOverlayView';
@@ -448,6 +449,8 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
         talkTarget = t.npcId;
         return 'dialogue';
       }
+      // 들을 대사가 없는 주민은 한마디만 한다(모달 없음, MVP_SPEC 19.7)
+      if (t?.kind === 'npc') world.barks.poke(t.npcId);
       return null;
     },
   );
@@ -508,7 +511,9 @@ function createPlayView(world: GameWorld, renderer: Renderer): PlayView {
             ? '[F] 저장소'
             : it?.kind === 'npc' && talkable(it.npcId)
               ? '[F] 대화하기'
-              : null,
+              : it?.kind === 'npc' && world.barks.canPoke(it.npcId)
+                ? '[F] 말 걸기'
+                : null,
       );
       bellPanel.update(now);
       // 엔딩은 조작 중일 때 연다. 같은 아침의 피해 보고는 엔딩 뒤에 연다 (MVP_SPEC 25.4 / 28)
@@ -759,6 +764,12 @@ async function start(): Promise<void> {
   renderer.scene.add(roomOverlay.object3d);
   const roomLabels = new RoomLabelView(document.body, world.rooms, world.events, renderer.camera);
   const gratitudePopups = new GratitudePopupView(document.body, world.events, renderer.camera);
+  const barkBubbles = new BarkBubbleView(
+    document.body,
+    world.events,
+    renderer.camera,
+    (id) => world.registry.npcs.get(id)?.body.pos,
+  );
   const gratitudeHud = new GratitudeHud(document.body, () => world.gratitude.total, world.events);
   const audio = new AudioEngine();
   const sounds = new GameSounds(audio, world.events);
@@ -913,6 +924,7 @@ async function start(): Promise<void> {
     );
     roomLabels.update(frameMs / 1000, diagnosing);
     gratitudePopups.update(frameMs / 1000);
+    barkBubbles.update(frameMs / 1000);
     gratitudeHud.update(frameMs / 1000);
     npcViews.update(frameMs / 1000);
     monsterViews.update(frameMs / 1000);

@@ -189,6 +189,29 @@ export const balance = {
     /** 경로가 없던 (주민, 침대) 조합을 블록 변경 뒤 다시 시도하는 최소 간격(초). 편집마다 재탐색하지 않는다 (PERF-001) */
     sleepRetrySeconds: 1,
   },
+
+  /** 주민의 한마디 (MVP_SPEC 19.7, TASK-BARK-001). 시간은 실초다 */
+  bark: {
+    /** 한 주민의 두 말 사이 최소 간격. 도피·맞음·말 걸기는 무시한다 */
+    npcCooldownSeconds: 10,
+    /** 플레이어가 이 반경 안에 들어오면 인사한다 */
+    greetRadius: 4,
+    /** 인사 거리 확인 주기 */
+    greetCheckSeconds: 0.5,
+    greetCooldownSeconds: 120,
+    /** 같은 일(농사·조리·수리)을 다시 말하기까지 */
+    workCooldownSeconds: 90,
+    fleeCooldownSeconds: 30,
+    hitCooldownSeconds: 5,
+    pokeCooldownSeconds: 1,
+    /** 습격 끝·마을 레벨·새 방에 반응하는 반경 */
+    reactRadius: 16,
+    /** 잠에서 깨어 기상 문장을 말하는 시간대 [시작, 끝) */
+    wakeStartHour: 5,
+    wakeEndHour: 9,
+    /** 말 걸기에서 "잘 곳 없음" 힌트를 주는 시간대 시작(끝은 wakeStartHour) */
+    noBedHintStartHour: 19,
+  },
 } as const;
 
 export type Balance = typeof balance;

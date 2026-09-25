@@ -14,6 +14,7 @@ import { NavigationGraph } from './nav/NavigationGraph';
 import { PathScheduler } from './nav/PathScheduler';
 import { RoomRegistry } from './room/RoomRegistry';
 import { createRoomReader } from './room/roomReader';
+import { BarkSystem } from './systems/BarkSystem';
 import { BlockEditSystem } from './systems/BlockEditSystem';
 import { CombatSystem } from './systems/CombatSystem';
 import { CookingSystem } from './systems/CookingSystem';
@@ -146,6 +147,8 @@ export class GameWorld {
   readonly farm: FarmSystem;
   /** 대화 표시·재생·완료 (TASK-040). 대화 중 주민은 판단 2 단계로 TalkAction 을 한다 */
   readonly dialogue: DialogueSystem;
+  /** 주민의 한마디 (update 11 번, NPCSystem 뒤). 상태를 바꾸지 않는다 (MVP_SPEC 19.7) */
+  readonly barks: BarkSystem;
   /** 진행 이벤트 (update 15 번) */
   readonly gameEvents: GameEventSystem;
   /** 엔딩 연출 상태(보여 줄 차례·보았음). 슬롯 없이 이벤트로 바뀐다 (TASK-052) */
@@ -372,6 +375,19 @@ export class GameWorld {
     );
     this.attach('npcDecision', this.npcDecision);
     this.attach('npc', this.npcSystem);
+    this.barks = new BarkSystem({
+      events: this.events,
+      clock: this.clock,
+      npcs,
+      npcById: (id) => this.registry.npcs.get(id),
+      playerPos: () => this.player?.body.pos ?? null,
+      roomCenter: (id) => this.rooms.getById(id)?.center,
+      hasBed: (id) => this.sleep.assignedBed(id) !== null,
+      mealActive: () => this.meal.active,
+      food: () => this.storage.get('food'),
+      talking: (id) => this.dialogue.active?.npcId === id,
+    });
+    this.attach('npc', this.barks);
     this.attach('gratitude', this.gratitude);
     this.attach('objectiveSave', this.objectives);
     this.ending = new EndingSystem(this.events);

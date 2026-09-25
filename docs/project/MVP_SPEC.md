@@ -1167,6 +1167,49 @@ FleeAction / TalkAction
 연출          화면 상단에 "새 주민이 마을에 왔어요" 알림. NPC_ARRIVED 를 발행한다
 ```
 
+## 19.7 주민의 한마디 (TASK-BARK-001, ADR 042)
+
+주민이 지금 상황에 맞는 짧은 말을 머리 위 말풍선으로 한다. 2026-09-25 사용자 결정으로 추가했다.
+**모달이 아니고 조작·시간을 멈추지 않는다.** 진행 대사(27.4)와 별개이며 해금·보상·목표·Action·판단을 바꾸지 않는다.
+저장하지 않는다(32.2). 말하는 계기는 이미 있는 Action 전환·이벤트·플레이어의 거리뿐이다. 새 메커닉·자원·역할을 만들지 않는다.
+
+```text
+상황          계기                                                           상황별 간격(주민마다, 실초)
+인사          플레이어가 반경 greetRadius(4) 안에 들어온다(greetCheckSeconds 0.5 마다 확인). 시간대별 문장   120
+말 걸기        진행 대사가 없는 주민에게 F. 아래 우선순위로 문장을 고른다                           1   (공통 간격 무시)
+기상          SleepAction 이 끝나고 05:00~09:00 에 다른 Action 으로 바뀐다                      —
+기상(바닥)      RestAction(침대 없이 쉬기) 이 끝나고 같은 조건                                   —
+취침          SleepAction 시작                                                             —
+잘 곳 없음      RestAction 시작                                                              —
+식사(식당)      식당 의자에서 EatAction 시작                                                   —
+식사(광장)      의자 없이 EatAction 시작                                                       —
+수확 / 심기     harvest / plant 시작                                                        90
+조리          cook 시작                                                                   90
+수리          repair 시작                                                                 90
+도피          flee 시작                                                                   30  (공통 간격 무시)
+맞음 / 기절     COMBAT_HIT(npc). 맞은 뒤 기절했으면 기절 문장                                   5   (공통 간격 무시)
+습격 끝        RAID_ENDED. 플레이어 반경 reactRadius(16) 안의 주민                               —
+새 방          ROOM_REGISTERED / ROOM_TYPE_CHANGED(새 타입). 방 중심 반경 16 안에서 가장 가까운 주민 한 명. 방 타입별 문장  —
+마을 레벨       VILLAGE_LEVEL_UP. 플레이어 반경 16 안의 주민                                     —
+도착          NPC_ARRIVED 의 그 주민                                                        —
+```
+
+- 공통 간격: 한 주민의 두 말 사이는 npcCooldownSeconds(10 실초) 이상이다. 위 표의 "공통 간격 무시" 만 예외다.
+- 말하지 않을 때: 자는 중(sleep)·대화 중(talk)·기절 중. 기절 중에는 맞음 / 기절 문장만 한다.
+- 말 걸기 문장의 우선순위: 도피 중 → 기절 중 → 배고픔(식사 구간·이번 끼니 안 먹음·저장소 food 0) →
+  잘 곳 없음(19:00~05:00·배정된 침대 없음) → 지금 하는 일(Action 종류. 서 있거나 걷는 중이면 역할별 잡담).
+  인사 문장은 시간대(새벽·아침 / 낮 / 저녁 / 밤)마다 따로 둔다.
+  배고픔·잘 곳 없음은 플레이어가 할 일을 주민의 말로 알려 주는 힌트다. 조건식은 판단(19.4)의 것을 읽기만 한다.
+- 문장 고르기는 결정적이다. 14.1 의 유일한 무작위를 늘리지 않는다. 주민·상황별로 말한 횟수 n 과 주민 id 의 해시 h 로
+  `lines[(h + n) % lines.length]` 를 고른다. 횟수는 저장하지 않는다(로드 뒤 처음부터 센다).
+- 문장은 `src/game/data/barks.ts` 에 둔다. 창립 주민(농부·요리사·목수)은 역할별 문장이 있으면 그것을, 없으면 공통 문장을 쓴다.
+  말투는 진행 대사와 같은 반말이다. 한 문장은 24 자 안팎으로 짧게 쓴다.
+- 표시(렌더): 말풍선은 머리 위에 3.5 실초 보이고 흐려진다. 같은 주민이 새 말을 하면 이전 말풍선을 바꾼다.
+  카메라에서 22 칸보다 먼 주민의 말풍선은 숨기고, 동시에 보이는 말풍선은 가까운 순으로 4 개까지다.
+  글자 선명도를 위해 방 이름 라벨·+N 과 같은 DOM 방식이다. 벽 뒤에서도 보인다(거리 제한으로 줄인다).
+- 규모: 인사 확인은 주민 수에 비례하는 거리 비교뿐이며 복셀을 탐색하지 않는다. 표시 개수 상한은 렌더가 가진다.
+  주민 100 명이어도 말의 빈도는 주민별 간격으로 묶인다.
+
 ---
 
 # 20. Game Clock
@@ -1765,7 +1808,8 @@ EVENT_SLICE_END   2 차 습격이 끝난 뒤 첫 07:00
 마을 레벨          우측 상단. 감사 포인트 옆
 목표 (Objective)  좌측 상단. 한 줄
 게임 시간          우측 상단. Day N / HH:MM
-상호작용 프롬프트    화면 중앙 하단. "[F] 대화하기"
+상호작용 프롬프트    화면 중앙 하단. "[F] 대화하기" (진행 대사가 없는 주민은 "[F] 말 걸기", 19.7)
+주민의 한마디       주민 머리 위 말풍선. 모달이 아니다 (19.7)
 조준점            화면 중앙. 대상이 있으면 강조
 ```
 
@@ -1906,6 +1950,7 @@ crop 성장 상태     좌표 → 심은 시각 (표시 단계와 성숙은 재�
 WorldState 지표     계산한다 (ADR 004)
 방 인식 결과         블록에서 다시 판정한다
 NPC 의 현재 Action  IdleAction 으로 시작한다
+주민의 한마디        간격·횟수·말풍선 (19.7)
 통행 그래프 캐시
 청크 메시
 ```
@@ -1993,11 +2038,11 @@ src/
       VillageLevelSystem.ts  ResidentArrivalSystem.ts  RaidSystem.ts         MonsterSystem.ts
       RepairSystem.ts        CombatSystem.ts       GameEventSystem.ts
       DialogueSystem.ts      ObjectiveSystem.ts    WorldStateSystem.ts
-      InputSystem.ts         DebugSystem.ts
+      InputSystem.ts         DebugSystem.ts        BarkSystem.ts
 
     data/                    ★ 모든 밸런스 수치가 여기에만 있다
       balance.ts  blocks.ts  recipes.ts  roomRecipes.ts
-      unlocks.ts  dialogues.ts  gameEvents.ts  island.ts
+      unlocks.ts  dialogues.ts  barks.ts  gameEvents.ts  island.ts
 
     types/
       index.ts               공통 타입. BlockPos / Vec3 / RoomType ...
@@ -2008,6 +2053,7 @@ src/
     materials.ts             ★ 재질 생성은 여기 한 곳에만 (WebGPU 전환 대비)
     EntityView.ts
     RoomLabelView.ts         방 이름 라벨 (DOM, 카메라 투영)
+    BarkBubbleView.ts        주민의 한마디 말풍선 (DOM, 카메라 투영, 19.7)
     RoomOverlayView.ts       인식 빛남·해제 깜빡임·진단 하이라이트
     DayNightVisual.ts
     CameraController.ts
@@ -2186,6 +2232,21 @@ export const balance = {
     pathfindMaxNodes: 4000,
     maxPointLights: 16,
     sleepRetrySeconds: 1,   // 경로 없던 침대 재시도 최소 간격 (PERF-001, ADR 029)
+  },
+
+  bark: {                   // 주민의 한마디 (19.7, TASK-BARK-001). 시간은 실초
+    npcCooldownSeconds: 10,
+    greetRadius: 4,
+    greetCheckSeconds: 0.5,
+    greetCooldownSeconds: 120,
+    workCooldownSeconds: 90,
+    fleeCooldownSeconds: 30,
+    hitCooldownSeconds: 5,
+    pokeCooldownSeconds: 1,
+    reactRadius: 16,
+    wakeStartHour: 5,
+    wakeEndHour: 9,
+    noBedHintStartHour: 19,
   },
 } as const;
 ```
@@ -2609,7 +2670,7 @@ Gamepad / 모바일
 날씨
 NPC 사망
 주민 관계 / 호감도 / 결혼
-동적 대사 생성 / LLM NPC
+동적 대사 생성 / LLM NPC   (19.7 의 한마디는 정해 둔 문장을 상황으로 고를 뿐이다)
 감사 포인트의 화폐화 (상점)
 멀티플레이 / 백엔드 / 클라우드 저장
 WebGPU

@@ -1,6 +1,7 @@
 // 타입 안전 이벤트 버스 (ARCHITECTURE 5). "일어난 일" 을 알린다. 명령에는 쓰지 않는다 (5.1).
 import type {
   BlockChangeSource,
+  BarkTopic,
   BlockPos,
   DamageEntry,
   DayPhase,
@@ -81,6 +82,8 @@ export interface GameEventMap {
   DAY_PHASE_CHANGED: { phase: DayPhase };
   /** 파생 지표가 바뀌었다. 바뀔 때만 발행한다 (MVP_SPEC 21.5, TASK-039) */
   WORLD_STATE_CHANGED: WorldStateData;
+  /** 주민이 한마디 했다(말풍선 표시용, MVP_SPEC 19.7). 게임 상태를 바꾸지 않는다 */
+  NPC_BARK: { npcId: string; topic: BarkTopic; text: string };
 }
 
 export type GameEventName = keyof GameEventMap;

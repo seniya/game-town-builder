@@ -299,7 +299,7 @@ export class GameWorld {
  8  raid / arrival     습격 스케줄과 ResidentArrivalSystem의 도착 예약 처리
  9  monster            몬스터 AI. 블록 파괴 포함
 10  npcDecision        식사 구간·침대 배정을 갱신한 뒤 읽기 전용 판단
-11  npc                Action 실행. 조리·식사·취침·수리 서비스 호출
+11  npc                Action 실행. 조리·식사·취침·수리 서비스 호출. 이어서 주민의 한마디(BarkSystem)
 12  combat             공격 판정
 13  gratitude          누적 이벤트를 소비해 포인트를 더한다
 14  worldState         ★ 파생 지표를 계산한다. NPC 행동 이후여야 한다
@@ -359,6 +359,7 @@ export type GameEventMap = {
   OBJECTIVE_CHANGED:   { text: string; progress?: { current: number; total: number } };
   DAY_PHASE_CHANGED:   { phase: DayPhase };
   WORLD_STATE_CHANGED: WorldStateData;
+  NPC_BARK:            { npcId: string; topic: BarkTopic; text: string };
 };
 
 export class EventBus {
@@ -1376,6 +1377,7 @@ CombatSystem          플레이어 / 몬스터 공격 판정·체력·기절·�
 WorldStateSystem      파생 지표 계산 (순수 함수 호출)
 GameEventSystem       진행 이벤트 조건 평가 / 커맨드 실행
 DialogueSystem        대사 재생
+BarkSystem            주민의 한마디(MVP_SPEC 19.7). 이벤트·Action 전환·플레이어 거리로 상황을 받아 문장을 고르고 NPC_BARK 를 낸다. update 11 번에서 NPCSystem 뒤. 상태를 바꾸지 않는다
 ObjectiveSystem       목표 문구
 DebugSystem           F3 패널의 계측 수집과 디버그 명령 (26 장)
 ```
@@ -1739,6 +1741,36 @@ MVP의 `ObjectiveSystem`은 매 프레임 원천 소유자의 인덱스/집계�
 진행 순서는 `data/gameEventOrder.ts`. 좌측 상단 한 줄은 `ui/ObjectivePanel.ts` 이며 문구가 바뀌면 금빛으로 강조한다.
 벽을 채점하지 않는다는 ADR 015 의 결정 때문이다.
 
+## 21.4 BarkSystem — 주민의 한마디
+
+MVP_SPEC 19.7 을 구현한다(TASK-BARK-001, ADR 042). 진행 대사(DialogueSystem)와 소유 상태를 나누지 않는다.
+BarkSystem 은 **말의 간격·횟수만 소유**하고 게임 상태를 바꾸지 않는다. 저장하지 않는다.
+
+```ts
+export type BarkTopic =
+  | 'greet' | 'poke' | 'wake' | 'wakeFloor' | 'sleep' | 'noBed' | 'eatDining' | 'eatPlaza' | 'hungry'
+  | 'harvest' | 'plant' | 'cook' | 'repair' | 'flee' | 'hit' | 'stunned' | 'raidEnd' | 'newRoom'
+  | 'levelUp' | 'arrived' | 'idle';
+
+class BarkSystem implements SlotSystem {
+  update(dt: number): void;          // 11 번 슬롯, NPCSystem 뒤. 모인 계기를 처리하고 인사 거리를 확인한다
+  poke(npcId: string): boolean;      // F(진행 대사가 없는 주민). 말했으면 true
+}
+```
+
+```text
+입력        EventBus 구독(NPC_ACTION_CHANGED / COMBAT_HIT / RAID_ENDED / ROOM_REGISTERED / ROOM_TYPE_CHANGED / VILLAGE_LEVEL_UP / NPC_ARRIVED)
+            → 계기를 큐에 모았다가 update 에서 처리한다. 발행 도중에 다른 발행을 끼워 넣지 않는다
+읽기        주민(registry), 시계, 플레이어 위치, 방 조회, 침대 배정 조회, 식사 구간, 저장소 food, 진행 대사 여부
+출력        NPC_BARK { npcId, topic, text }. 시스템 → 렌더 알림(5.1)이다. 다른 시스템은 구독하지 않는다
+문장        data/barks.ts 의 topic → { common, farmer?, cook?, carpenter?, villager? } 와 방 타입별 새 방 문장
+```
+
+- 주민별 이전 Action 종류를 기억해 기상(sleep / rest → 다른 종류)을 알아본다. 주민이 사라지면 그 주민의 기록을 지운다.
+- 인사 확인은 greetCheckSeconds 마다 주민 목록을 한 번 도는 거리 비교다. 복셀·경로를 조회하지 않는다.
+  장기 규모에서는 지역 인덱스로 바꿀 수 있다(2.3). 표시 상한·거리 숨김은 render/BarkBubbleView 가 가진다.
+- UI 진입점: main 의 F 처리에서 진행 대사가 없는 주민이면 `poke` 를 부른다(명령). 모달을 열지 않는다.
+
 ---
 
 # 22. WorldStateSystem
@@ -1916,6 +1948,7 @@ src/game/data/
   roomRecipes.ts   방 레시피. MVP_SPEC 12.1 이 정본
   unlocks.ts       레벨별 해금. MVP_SPEC 23.2 가 정본
   dialogues.ts     대사
+  barks.ts         주민의 한마디 문장. MVP_SPEC 19.7 이 정본
   gameEvents.ts    진행 이벤트 정의 8 개
   island.ts        섬 지형 생성 데이터
 ```
@@ -2301,6 +2334,7 @@ DI 컨테이너
 039  엔딩 연출을 모달로·게임은 계속 진행(TASK-052)        Accepted
 040  몬스터 추적 탐색 상한과 대상 포기(PERF-003)          Accepted
 041  캐릭터 동작: 목표 자세 보간·렌더 전용(ANIM-001)      Accepted
+042  주민의 한마디: 계기·간격·결정적 문장·DOM 말풍선(BARK-001) Accepted
 ```
 
 ---

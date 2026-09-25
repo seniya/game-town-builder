@@ -480,3 +480,29 @@ export interface DamageEntry {
   readonly object: PlacedObjectSnapshot | null;
   readonly gameMinutes: number;
 }
+
+// ── 주민의 한마디 (MVP_SPEC 19.7, ARCHITECTURE 21.4) ─────────────────────────
+
+/** 한마디의 상황. 문장은 data/barks.ts 가 상황별로 둔다. */
+export type BarkTopic =
+  | 'greet'
+  | 'poke'
+  | 'wake'
+  | 'wakeFloor'
+  | 'sleep'
+  | 'noBed'
+  | 'eatDining'
+  | 'eatPlaza'
+  | 'hungry'
+  | 'harvest'
+  | 'plant'
+  | 'cook'
+  | 'repair'
+  | 'flee'
+  | 'hit'
+  | 'stunned'
+  | 'raidEnd'
+  | 'newRoom'
+  | 'levelUp'
+  | 'arrived'
+  | 'idle';
