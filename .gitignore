@@ -36,3 +36,6 @@ graft/.cache/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# 오너 확인판 생성물 (tools/human-review/build.mjs)
+.review/

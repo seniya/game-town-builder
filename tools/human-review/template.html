@@ -1,0 +1,1156 @@
+<title>마을 오너 확인판</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap"
+/>
+<style>
+  :root {
+    --ground: #f2f4ee;
+    --surface: #ffffff;
+    --surface-2: #f7f8f4;
+    --ink: #1e2621;
+    --muted: #5e6a61;
+    --line: #d9ded4;
+    --accent: #a65f1e;
+    --accent-soft: #f5e9dc;
+    --pending: #4a6583;
+    --pending-soft: #e6ecf3;
+    --recheck: #9a6414;
+    --recheck-soft: #f8edd9;
+    --good: #3f7d4e;
+    --good-soft: #e2efe4;
+    --bad: #b4443a;
+    --bad-soft: #f6e3e0;
+    --unsure: #6b5f86;
+    --unsure-soft: #ebe7f3;
+    --radius: 10px;
+    --display:
+      'Gowun Dodum', 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    --body: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      color-scheme: dark;
+      --ground: #151a17;
+      --surface: #1d2420;
+      --surface-2: #232b26;
+      --ink: #e6ebe4;
+      --muted: #9aa59d;
+      --line: #313a34;
+      --accent: #dc9a57;
+      --accent-soft: #3a2c1e;
+      --pending: #9cb6d4;
+      --pending-soft: #25303c;
+      --recheck: #e2b566;
+      --recheck-soft: #3a3020;
+      --good: #86c294;
+      --good-soft: #213228;
+      --bad: #eb8b80;
+      --bad-soft: #3d2522;
+      --unsure: #b9acd6;
+      --unsure-soft: #2d2839;
+    }
+  }
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --ground: #151a17;
+    --surface: #1d2420;
+    --surface-2: #232b26;
+    --ink: #e6ebe4;
+    --muted: #9aa59d;
+    --line: #313a34;
+    --accent: #dc9a57;
+    --accent-soft: #3a2c1e;
+    --pending: #9cb6d4;
+    --pending-soft: #25303c;
+    --recheck: #e2b566;
+    --recheck-soft: #3a3020;
+    --good: #86c294;
+    --good-soft: #213228;
+    --bad: #eb8b80;
+    --bad-soft: #3d2522;
+    --unsure: #b9acd6;
+    --unsure-soft: #2d2839;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding-inline: 16px;
+    padding-block: 28px 64px;
+    display: grid;
+    gap: 22px;
+  }
+  h1,
+  h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    text-wrap: balance;
+    margin: 0;
+  }
+  h1 {
+    font-size: 30px;
+    line-height: 1.25;
+  }
+  h2 {
+    font-size: 20px;
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  .sub code {
+    font-family: var(--mono);
+  }
+
+  /* 요약 */
+  .tally {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .tally div {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    min-width: 108px;
+    flex: 1 1 108px;
+  }
+  .tally b {
+    display: block;
+    font-size: 24px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .tally span {
+    color: var(--muted);
+    font-size: 12.5px;
+  }
+  .tally .t-recheck b {
+    color: var(--recheck);
+  }
+  .tally .t-pending b {
+    color: var(--pending);
+  }
+  .tally .t-mine b {
+    color: var(--accent);
+  }
+  .tally .t-done b {
+    color: var(--good);
+  }
+
+  /* 안내 */
+  .guide {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .box {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .box h3 {
+    margin: 0 0 6px;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .box p {
+    margin: 0 0 8px;
+  }
+  .box pre {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--surface-2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    overflow-x: auto;
+  }
+  .start {
+    background: var(--accent-soft);
+    border-color: transparent;
+  }
+  .start strong {
+    color: var(--accent);
+  }
+  .base-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .base-row input {
+    flex: 1 1 200px;
+    min-width: 0;
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--ink);
+  }
+  .gates {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+
+  /* 도구 막대 */
+  .bar {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 2;
+    background: var(--ground);
+    padding-block: 10px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+  }
+  .chip {
+    font: inherit;
+    font-size: 13px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 4px 12px;
+    cursor: pointer;
+  }
+  .chip[aria-pressed='true'] {
+    background: var(--ink);
+    color: var(--ground);
+    border-color: var(--ink);
+  }
+  .chip .n {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+    margin-left: 4px;
+  }
+  .bar input[type='search'] {
+    margin-left: auto;
+    flex: 0 1 240px;
+    min-width: 0;
+    font: inherit;
+    font-size: 13px;
+    padding: 5px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  /* 항목 카드 */
+  .list {
+    display: grid;
+    gap: 14px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    display: grid;
+    gap: 12px;
+  }
+  .card.is-recheck {
+    border-left: 4px solid var(--recheck);
+  }
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: baseline;
+  }
+  .hid {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .src {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .pills {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .pill {
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 999px;
+    padding: 2px 10px;
+    white-space: nowrap;
+  }
+  .p-pending {
+    background: var(--pending-soft);
+    color: var(--pending);
+  }
+  .p-recheck {
+    background: var(--recheck-soft);
+    color: var(--recheck);
+  }
+  .p-done,
+  .p-good {
+    background: var(--good-soft);
+    color: var(--good);
+  }
+  .p-bad {
+    background: var(--bad-soft);
+    color: var(--bad);
+  }
+  .p-unsure {
+    background: var(--unsure-soft);
+    color: var(--unsure);
+  }
+  .label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .scene {
+    line-height: 2;
+  }
+  .scene code,
+  .checks code,
+  .prev code,
+  .done-table code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--surface-2);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  .url {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    vertical-align: middle;
+    max-width: 100%;
+  }
+  .url a {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    padding: 0 8px;
+    color: var(--accent);
+    text-decoration: none;
+    background: var(--surface-2);
+    overflow-wrap: anywhere;
+    line-height: 1.8;
+  }
+  .url a:hover {
+    text-decoration: underline;
+  }
+  .url button {
+    font: inherit;
+    font-size: 11.5px;
+    border: 0;
+    border-left: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+    padding: 0 8px;
+    cursor: pointer;
+  }
+  .checks ul {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 3px;
+  }
+  .checks li::marker {
+    color: var(--accent);
+  }
+  .star {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .prev {
+    background: var(--surface-2);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  .prev a,
+  .done-table a,
+  .sub a,
+  .box a {
+    color: var(--accent);
+  }
+
+  /* 오너 기록 */
+  .rec {
+    border-top: 1px dashed var(--line);
+    padding-top: 12px;
+    display: grid;
+    gap: 8px;
+  }
+  .verdicts {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .verdicts button {
+    font: inherit;
+    font-size: 13.5px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 5px 12px;
+    cursor: pointer;
+  }
+  .verdicts button[aria-pressed='true'][data-v='good'] {
+    background: var(--good-soft);
+    border-color: var(--good);
+    color: var(--good);
+  }
+  .verdicts button[aria-pressed='true'][data-v='bad'] {
+    background: var(--bad-soft);
+    border-color: var(--bad);
+    color: var(--bad);
+  }
+  .verdicts button[aria-pressed='true'][data-v='unsure'] {
+    background: var(--unsure-soft);
+    border-color: var(--unsure);
+    color: var(--unsure);
+  }
+  .rec textarea {
+    font: inherit;
+    font-size: 14px;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 64px;
+    resize: vertical;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--ink);
+  }
+  .rec-foot {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .save {
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    border: 0;
+    border-radius: 8px;
+    padding: 6px 16px;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  .save:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .clear {
+    font: inherit;
+    font-size: 12.5px;
+    background: none;
+    border: 0;
+    color: var(--muted);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .saved {
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .readonly {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* 완료 */
+  details.done {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+  }
+  details.done summary {
+    cursor: pointer;
+    font-family: var(--display);
+    font-size: 18px;
+  }
+  .done-scroll {
+    overflow-x: auto;
+    margin-top: 10px;
+  }
+  .done-table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 560px;
+    font-size: 13.5px;
+  }
+  .done-table th,
+  .done-table td {
+    text-align: left;
+    vertical-align: top;
+    padding: 8px 10px;
+    border-top: 1px solid var(--line);
+  }
+  .done-table th {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+    border-top: 0;
+  }
+  .done-table td:first-child {
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+  .empty {
+    color: var(--muted);
+    text-align: center;
+    padding: 24px;
+  }
+  @media (max-width: 560px) {
+    .pills {
+      margin-left: 0;
+      width: 100%;
+    }
+    .bar input[type='search'] {
+      margin-left: 0;
+      flex: 1 1 100%;
+    }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>마을 오너 확인판</h1>
+    <div class="sub" id="meta"></div>
+  </header>
+
+  <section class="tally" id="tally" aria-label="요약"></section>
+
+  <section class="guide">
+    <div class="box start" id="start-box">
+      <h3>처음 볼 것</h3>
+      <p id="start-text"></p>
+    </div>
+    <div class="box">
+      <h3>실행 방법 (내 컴퓨터에서)</h3>
+      <pre>
+git clone https://github.com/seniya/game-town-builder.git
+cd game-town-builder
+pnpm install && pnpm dev</pre>
+      <p class="sub">
+        Chrome 실제 창 1280 × 720, 확대 100 % 권장. 장면 주소를 누르면 아래 주소로 새 탭이 열립니다.
+      </p>
+      <div class="base-row">
+        <label for="base-url" class="sub">실행 주소</label>
+        <input id="base-url" type="text" spellcheck="false" />
+      </div>
+    </div>
+    <div class="box">
+      <h3>기록하는 법</h3>
+      <p>
+        각 항목 아래에서 <b>좋음 / 고칠 곳 있음 / 애매</b>를 고르고, 어떤 장면에서 그렇게 느꼈는지
+        한두 문장 적은 뒤 <b>저장</b>하세요.
+      </p>
+      <p class="sub">
+        저장한 기록은 Claude가 읽어 HUMAN_REVIEW.md 에 옮기고, 고칠 곳은 수정 작업으로 이어집니다.
+      </p>
+      <div class="gates" id="gates"></div>
+    </div>
+  </section>
+
+  <nav class="bar" aria-label="거르기">
+    <button class="chip" data-f="all" aria-pressed="true">전체<span class="n"></span></button>
+    <button class="chip" data-f="recheck" aria-pressed="false">
+      재확인<span class="n"></span>
+    </button>
+    <button class="chip" data-f="pending" aria-pressed="false">대기<span class="n"></span></button>
+    <button class="chip" data-f="unrecorded" aria-pressed="false">
+      아직 안 봄<span class="n"></span>
+    </button>
+    <button class="chip" data-f="recorded" aria-pressed="false">
+      기록함<span class="n"></span>
+    </button>
+    <input id="q" type="search" placeholder="장면·내용 찾기" aria-label="찾기" />
+  </nav>
+
+  <section class="list" id="list"></section>
+
+  <details class="done" id="done">
+    <summary></summary>
+    <div class="done-scroll"><table class="done-table" id="done-table"></table></div>
+  </details>
+</div>
+
+<script id="hr-data" type="application/json">
+  "__HR_DATA__"
+</script>
+<script>
+  (function () {
+    'use strict';
+
+    const DATA = JSON.parse(document.getElementById('hr-data').textContent);
+    const VERDICTS = [
+      { v: 'good', label: '좋음', pill: 'p-good' },
+      { v: 'bad', label: '고칠 곳 있음', pill: 'p-bad' },
+      { v: 'unsure', label: '애매', pill: 'p-unsure' },
+    ];
+    const verdictOf = (v) => VERDICTS.find((x) => x.v === v);
+
+    /** 페이지 상태: 오너 기록, 쓰기 가능 여부, 거르기. */
+    const state = {
+      records: {},
+      db: null,
+      writable: false,
+      dbKnown: false,
+      filter: 'all',
+      query: '',
+      base: 'http://localhost:5173',
+    };
+    const cards = new Map();
+
+    /** 브라우저 저장소 읽기. 막혀 있으면 기본값. */
+    function lsGet(key, fallback) {
+      try {
+        return localStorage.getItem(key) ?? fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+    /** 브라우저 저장소 쓰기. 막혀 있으면 무시. */
+    function lsSet(key, value) {
+      try {
+        localStorage.setItem(key, value);
+      } catch (e) {
+        /* 저장소가 막힌 보기: 편의 기능만 잃는다 */
+      }
+    }
+
+    /** HTML 특수 문자를 이스케이프한다. */
+    function esc(s) {
+      return String(s).replace(
+        /[&<>"']/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+      );
+    }
+
+    /** 장면 경로를 실행 주소와 합친다. */
+    function sceneHref(path) {
+      return state.base.replace(/\/+$/, '') + path;
+    }
+
+    /** 문서 안 인라인 마크다운(코드·굵게·링크·★)을 HTML 로 바꾼다. */
+    function inline(md) {
+      return String(md)
+        .split('`')
+        .map((part, i) => {
+          if (i % 2 === 1) {
+            if (/^\/(\?|$)/.test(part)) {
+              return (
+                '<span class="url"><a target="_blank" rel="noopener" data-path="' +
+                esc(part) +
+                '" href="' +
+                esc(sceneHref(part)) +
+                '">' +
+                esc(part) +
+                '</a><button type="button" data-copy="' +
+                esc(part) +
+                '" aria-label="주소 복사">복사</button></span>'
+              );
+            }
+            return '<code>' + esc(part) + '</code>';
+          }
+          return esc(part)
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, href) => {
+              let url = href;
+              try {
+                url = new URL(href.replace(/&amp;/g, '&'), DATA.repoBlob).href;
+              } catch (e) {
+                /* 주소를 만들 수 없으면 원문 그대로 */
+              }
+              return '<a target="_blank" rel="noopener" href="' + esc(url) + '">' + text + '</a>';
+            })
+            .replace(/★/g, '<span class="star">★</span>');
+        })
+        .join('');
+    }
+
+    /** "확인할 것" 문단을 질문 단위로 나눈다. */
+    function splitChecks(text) {
+      const parts = [];
+      let buf = '';
+      let inCode = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        buf += c;
+        if (c === '`') inCode = !inCode;
+        if (!inCode && (c === '.' || c === '?') && (text[i + 1] === ' ' || i === text.length - 1)) {
+          if (buf.trim()) parts.push(buf.trim());
+          buf = '';
+        }
+      }
+      if (buf.trim()) parts.push(buf.trim());
+      return parts;
+    }
+
+    /** 문서의 상태 문자열을 분류한다. */
+    function kindOf(item) {
+      return item.status.includes('재확인') ? 'recheck' : 'pending';
+    }
+
+    /** 항목 하나의 카드를 만든다. */
+    function buildCard(item) {
+      const kind = kindOf(item);
+      const el = document.createElement('article');
+      el.className = 'card' + (kind === 'recheck' ? ' is-recheck' : '');
+      el.id = item.id;
+      el.innerHTML =
+        '<div class="head"><span class="hid">' +
+        esc(item.id) +
+        '</span><span class="src">' +
+        inline(item.source) +
+        '</span><span class="pills"><span class="pill ' +
+        (kind === 'recheck' ? 'p-recheck' : 'p-pending') +
+        '">' +
+        esc(item.status) +
+        '</span><span class="pill owner-pill" hidden></span></span></div>' +
+        '<div><div class="label">장면</div><div class="scene">' +
+        inline(item.scene) +
+        '</div></div>' +
+        '<div class="checks"><div class="label">확인할 것</div><ul>' +
+        splitChecks(item.checks)
+          .map((s) => '<li>' + inline(s) + '</li>')
+          .join('') +
+        '</ul></div>' +
+        (item.result
+          ? '<div class="prev"><div class="label">지난 확인과 수정</div>' +
+            inline(item.result) +
+            '</div>'
+          : '') +
+        '<div class="rec"><div class="label">내 판단</div>' +
+        '<div class="verdicts" role="group" aria-label="판단">' +
+        VERDICTS.map(
+          (x) =>
+            '<button type="button" data-v="' +
+            x.v +
+            '" aria-pressed="false">' +
+            x.label +
+            '</button>',
+        ).join('') +
+        '</div><textarea id="note-' +
+        esc(item.id) +
+        '" placeholder="어떤 장면에서 그렇게 느꼈나요? (예: 20:00 에 문 앞에서 멈칫한다)" aria-label="' +
+        esc(item.id) +
+        ' 메모"></textarea>' +
+        '<div class="rec-foot"><button type="button" class="save" disabled>저장</button>' +
+        '<button type="button" class="clear" hidden>기록 지우기</button><span class="saved" aria-live="polite"></span></div></div>';
+
+      const c = {
+        item,
+        kind,
+        el,
+        draft: null,
+        text: (
+          item.id +
+          ' ' +
+          item.source +
+          ' ' +
+          item.scene +
+          ' ' +
+          item.checks +
+          ' ' +
+          item.result
+        ).toLowerCase(),
+        buttons: el.querySelectorAll('.verdicts button'),
+        note: el.querySelector('textarea'),
+        save: el.querySelector('.save'),
+        clear: el.querySelector('.clear'),
+        saved: el.querySelector('.saved'),
+        ownerPill: el.querySelector('.owner-pill'),
+        rec: el.querySelector('.rec'),
+      };
+      c.buttons.forEach((b) =>
+        b.addEventListener('click', () => {
+          const cur = currentVerdict(c);
+          setDraft(c, { verdict: cur === b.dataset.v ? '' : b.dataset.v });
+        }),
+      );
+      c.note.addEventListener('input', () => setDraft(c, { note: c.note.value }));
+      c.save.addEventListener('click', () => saveRecord(c));
+      c.clear.addEventListener('click', () => clearRecord(c));
+      return c;
+    }
+
+    /** 저장 전 고친 값(초안)과 저장된 값을 합친 현재 판단. */
+    function currentVerdict(c) {
+      if (c.draft && 'verdict' in c.draft) return c.draft.verdict;
+      return state.records[c.item.id]?.verdict ?? '';
+    }
+
+    /** 초안을 갱신하고 카드를 다시 그린다. */
+    function setDraft(c, patch) {
+      c.draft = Object.assign({}, c.draft, patch);
+      paintCard(c);
+    }
+
+    /** 카드의 기록 부분을 상태에 맞게 칠한다. */
+    function paintCard(c) {
+      const saved = state.records[c.item.id];
+      const verdict = currentVerdict(c);
+      c.buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === verdict)));
+      if (!c.draft || !('note' in c.draft)) {
+        if (document.activeElement !== c.note) c.note.value = saved?.note ?? '';
+      }
+      const dirty =
+        !!c.draft &&
+        (('verdict' in c.draft && c.draft.verdict !== (saved?.verdict ?? '')) ||
+          ('note' in c.draft && c.draft.note !== (saved?.note ?? '')));
+      const readOnly = state.dbKnown && !state.writable;
+      c.buttons.forEach((b) => (b.disabled = readOnly));
+      c.note.disabled = readOnly;
+      c.save.disabled = readOnly || !dirty || (!verdict && !(c.draft?.note ?? saved?.note));
+      c.clear.hidden = readOnly || !saved;
+      if (saved && !dirty) {
+        c.saved.textContent = '저장됨 · ' + fmtTime(saved.updatedAt);
+      } else if (dirty) {
+        c.saved.textContent = '저장하지 않은 변경';
+      } else if (readOnly) {
+        c.saved.textContent = state.db
+          ? '이 보기에서는 기록을 저장할 수 없어요.'
+          : '이 보기에서는 기록을 저장할 수 없어요. 판단은 채팅으로 알려 주세요.';
+      } else {
+        c.saved.textContent = '';
+      }
+      const v = saved && verdictOf(saved.verdict);
+      c.ownerPill.hidden = !v;
+      if (v) {
+        c.ownerPill.className = 'pill owner-pill ' + v.pill;
+        c.ownerPill.textContent = '내 판단: ' + v.label;
+      }
+    }
+
+    /** ISO 시각을 짧은 한국어 표기로 바꾼다. */
+    function fmtTime(iso) {
+      const d = new Date(iso);
+      if (isNaN(d)) return '';
+      const p = (n) => String(n).padStart(2, '0');
+      return (
+        d.getMonth() + 1 + '월 ' + d.getDate() + '일 ' + p(d.getHours()) + ':' + p(d.getMinutes())
+      );
+    }
+
+    /** 오너 기록을 저장한다. */
+    async function saveRecord(c) {
+      if (!state.db) return;
+      const saved = state.records[c.item.id];
+      const verdict = currentVerdict(c);
+      const note = (c.draft && 'note' in c.draft ? c.draft.note : (saved?.note ?? '')).trim();
+      c.save.disabled = true;
+      c.saved.textContent = '저장 중…';
+      try {
+        await state.db.doc('results/' + c.item.id).set({
+          id: c.item.id,
+          verdict,
+          note,
+          docStatus: c.item.status,
+          updatedAt: new Date().toISOString(),
+        });
+        state.records[c.item.id] = { verdict, note, updatedAt: new Date().toISOString() };
+        c.draft = null;
+        paintCard(c);
+        refreshCounts();
+      } catch (e) {
+        if (e && e.code === 'invalid_argument') {
+          state.writable = false;
+          state.dbKnown = true;
+          cards.forEach(paintCard);
+          return;
+        }
+        c.saved.textContent = '저장하지 못했어요. 잠시 뒤 다시 눌러 주세요.';
+        c.save.disabled = false;
+      }
+    }
+
+    /** 오너 기록을 지운다. */
+    async function clearRecord(c) {
+      if (!state.db) return;
+      try {
+        await state.db.doc('results/' + c.item.id).delete();
+        delete state.records[c.item.id];
+        c.draft = null;
+        c.note.value = '';
+        paintCard(c);
+        refreshCounts();
+      } catch (e) {
+        c.saved.textContent = '지우지 못했어요. 잠시 뒤 다시 눌러 주세요.';
+      }
+    }
+
+    /** 거르기 조건에 맞는지 본다. */
+    function matches(c) {
+      const rec = !!state.records[c.item.id];
+      const f = state.filter;
+      if (f === 'recheck' && c.kind !== 'recheck') return false;
+      if (f === 'pending' && c.kind !== 'pending') return false;
+      if (f === 'recorded' && !rec) return false;
+      if (f === 'unrecorded' && rec) return false;
+      return !state.query || c.text.includes(state.query);
+    }
+
+    /** 목록 표시와 거르기 칩 숫자를 갱신한다. */
+    function refreshCounts() {
+      let shown = 0;
+      cards.forEach((c) => {
+        const ok = matches(c);
+        c.el.hidden = !ok;
+        if (ok) shown++;
+      });
+      document.getElementById('empty').hidden = shown > 0;
+      const all = [...cards.values()];
+      const count = {
+        all: all.length,
+        recheck: all.filter((c) => c.kind === 'recheck').length,
+        pending: all.filter((c) => c.kind === 'pending').length,
+        recorded: all.filter((c) => state.records[c.item.id]).length,
+      };
+      count.unrecorded = count.all - count.recorded;
+      document.querySelectorAll('.chip').forEach((b) => {
+        b.querySelector('.n').textContent = count[b.dataset.f];
+        b.setAttribute('aria-pressed', String(b.dataset.f === state.filter));
+      });
+      const bad = all.filter((c) => state.records[c.item.id]?.verdict === 'bad').length;
+      document.getElementById('tally').innerHTML =
+        '<div class="t-recheck"><b>' +
+        count.recheck +
+        '</b><span>고친 뒤 재확인</span></div>' +
+        '<div class="t-pending"><b>' +
+        count.pending +
+        '</b><span>확인 대기</span></div>' +
+        '<div class="t-mine"><b>' +
+        count.recorded +
+        '</b><span>내가 기록함' +
+        (bad ? ' · 고칠 곳 ' + bad : '') +
+        '</span></div>' +
+        '<div class="t-done"><b>' +
+        DATA.done.length +
+        '</b><span>확인 끝남</span></div>';
+    }
+
+    /** 장면 링크를 실행 주소에 맞게 다시 쓴다. */
+    function refreshLinks() {
+      document
+        .querySelectorAll('a[data-path]')
+        .forEach((a) => (a.href = sceneHref(a.dataset.path)));
+    }
+
+    /** 첫 화면을 그린다. */
+    function render() {
+      document.getElementById('meta').innerHTML =
+        'HUMAN_REVIEW.md 에서 만든 사본 · ' +
+        esc(fmtTime(DATA.generatedAt)) +
+        (DATA.commit ? ' · 커밋 <code>' + esc(DATA.commit) + '</code>' : '') +
+        ' · <a target="_blank" rel="noopener" href="' +
+        esc(DATA.repoBlob + 'HUMAN_REVIEW.md') +
+        '">원본 문서</a>';
+
+      const pinned = DATA.pending.find((i) => i.id === 'HR-029');
+      if (pinned) {
+        document.getElementById('start-text').innerHTML =
+          '<strong>HR-029 통과 플레이</strong>부터 권합니다. <code>/?new=1</code> 에서 디버그 없이 엔딩까지 한 번 플레이하면 습격·엔딩·저장·소리·주민 동작 등 여러 항목의 장면을 함께 만납니다. 플레이하며 떠오른 것은 해당 항목에 바로 적어 주세요. <a href="#HR-029">HR-029 로 가기</a>';
+      } else {
+        document.getElementById('start-text').innerHTML =
+          '<strong>재확인</strong> 항목(고친 뒤 다시 볼 것)부터 보세요. 짧게 끝납니다.';
+      }
+
+      document.getElementById('gates').innerHTML = DATA.gates
+        .map((g) => {
+          const passed = g.status.includes('통과');
+          return (
+            '<span class="pill ' +
+            (passed ? 'p-done' : 'p-recheck') +
+            '">' +
+            esc(g.name.split(' (')[0]) +
+            ' · ' +
+            (passed ? '통과' : '진행 중') +
+            '</span>'
+          );
+        })
+        .join('');
+
+      const list = document.getElementById('list');
+      const order = [...DATA.pending].sort((a, b) => {
+        const rank = (i) => (kindOf(i) === 'recheck' ? 0 : i.id === 'HR-029' ? 1 : 2);
+        return rank(a) - rank(b);
+      });
+      order.forEach((item) => {
+        const c = buildCard(item);
+        cards.set(item.id, c);
+        list.appendChild(c.el);
+        paintCard(c);
+      });
+      const empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.id = 'empty';
+      empty.textContent = '조건에 맞는 항목이 없어요.';
+      empty.hidden = true;
+      list.appendChild(empty);
+
+      document.querySelector('#done summary').textContent =
+        '확인이 끝난 항목 ' + DATA.done.length + '개';
+      document.getElementById('done-table').innerHTML =
+        '<thead><tr><th>ID</th><th>출처</th><th>확인한 것</th><th>결과</th></tr></thead><tbody>' +
+        DATA.done
+          .map(
+            (i) =>
+              '<tr><td>' +
+              esc(i.id) +
+              '</td><td>' +
+              inline(i.source) +
+              '</td><td>' +
+              inline(i.checks) +
+              '</td><td>' +
+              inline(i.result) +
+              '</td></tr>',
+          )
+          .join('') +
+        '</tbody>';
+
+      refreshCounts();
+    }
+
+    /** 거르기·찾기·주소·복사 조작을 연결한다. */
+    function wire() {
+      document.querySelectorAll('.chip').forEach((b) =>
+        b.addEventListener('click', () => {
+          state.filter = b.dataset.f;
+          lsSet('hr-filter', state.filter);
+          refreshCounts();
+        }),
+      );
+      document.getElementById('q').addEventListener('input', (e) => {
+        state.query = e.target.value.trim().toLowerCase();
+        refreshCounts();
+      });
+      const base = document.getElementById('base-url');
+      base.value = state.base;
+      base.addEventListener('input', () => {
+        state.base = base.value.trim() || 'http://localhost:5173';
+        lsSet('hr-base', state.base);
+        refreshLinks();
+      });
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-copy]');
+        if (!btn) return;
+        const text = sceneHref(btn.dataset.copy);
+        const done = () => {
+          btn.textContent = '복사됨';
+          setTimeout(() => (btn.textContent = '복사'), 1200);
+        };
+        try {
+          navigator.clipboard.writeText(text).then(done, () => selectFallback(btn));
+        } catch (err) {
+          selectFallback(btn);
+        }
+      });
+    }
+
+    /** 클립보드가 막힌 보기에서는 주소를 선택해 준다. */
+    function selectFallback(btn) {
+      const a = btn.previousElementSibling;
+      const range = document.createRange();
+      range.selectNodeContents(a);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      btn.textContent = '선택됨';
+      setTimeout(() => (btn.textContent = '복사'), 1200);
+    }
+
+    /** 공유 저장소(db)에 연결해 오너 기록을 받아 온다. */
+    async function connect() {
+      // 보기(viewer)가 window.claude 를 늦게 붙일 수 있어 잠시 기다린다.
+      for (let i = 0; i < 25 && !(window.claude && window.claude.use); i++) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      const use = window.claude && window.claude.use ? window.claude.use.bind(window.claude) : null;
+      if (!use) {
+        state.dbKnown = true;
+        cards.forEach(paintCard);
+        return;
+      }
+      const [db, user] = await Promise.all([use('db'), use('user')]);
+      state.db = db;
+      if (!db) {
+        state.dbKnown = true;
+        cards.forEach(paintCard);
+        return;
+      }
+      const can = user ? await user.can('data.write') : null;
+      state.writable = can !== false;
+      state.dbKnown = can !== null;
+      db.collection('results').onSnapshot(
+        (snap) => {
+          const next = {};
+          snap.docs.forEach((d) => {
+            const v = d.data();
+            if (v)
+              next[d.id] = {
+                verdict: v.verdict || '',
+                note: v.note || '',
+                updatedAt: v.updatedAt || '',
+              };
+          });
+          state.records = next;
+          cards.forEach(paintCard);
+          refreshCounts();
+        },
+        () => {
+          /* 구독이 끊기면 마지막 기록을 그대로 보여 준다 */
+        },
+      );
+      cards.forEach(paintCard);
+    }
+
+    state.base = lsGet('hr-base', state.base);
+    state.filter = lsGet('hr-filter', 'all');
+    render();
+    wire();
+    connect();
+  })();
+</script>
