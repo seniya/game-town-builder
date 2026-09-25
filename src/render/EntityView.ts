@@ -23,6 +23,7 @@ function box(
 ): THREE.Mesh {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
   mesh.position.set(x, y + h / 2, z);
+  mesh.castShadow = true;
   return mesh;
 }
 

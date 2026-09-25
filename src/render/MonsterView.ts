@@ -24,6 +24,7 @@ let eyeMat: THREE.Material | null = null;
 function box(w: number, h: number, d: number, color: number, x = 0, y = 0, z = 0): THREE.Mesh {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
   mesh.position.set(x, y + h / 2, z);
+  mesh.castShadow = true;
   return mesh;
 }
 

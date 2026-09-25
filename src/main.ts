@@ -763,6 +763,7 @@ async function start(): Promise<void> {
     workerCount: Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1)),
     chunkUploadsPerFrame: balance.performance.chunkUploadsPerFrame,
     maxPixelRatio: Number(params.get('dpr') ?? 2),
+    quality: params.get('quality') === 'low' ? 'low' : 'high',
   });
   const view = pickView(fixture, Number(params.get('view') ?? 0));
   const playView = world.player ? createPlayView(world, renderer) : null;

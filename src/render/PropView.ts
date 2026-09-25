@@ -38,6 +38,8 @@ function mat(color: number): THREE.Material {
 function box(w: number, h: number, d: number, color: number, x: number, y: number, z: number) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
   m.position.set(x, y + h / 2, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
   return m;
 }
 

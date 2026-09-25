@@ -8,12 +8,16 @@ import type { GameClockReader } from '../game/types';
 import type { VoxelWorld } from '../game/voxel/VoxelWorld';
 import { MAX_VOXEL_POINT_LIGHTS } from './materials';
 import type { Renderer } from './Renderer';
+import { SUN_SHADOW } from './renderQuality';
 
 /** 시각 하나의 조명. 색은 sRGB hex, 세기는 광원 세기다. */
 export interface LightKey {
   /** 그날 시각(시, 소수) */
   readonly hour: number;
+  /** 지평선색(안개·배경). 하늘 돔의 아래쪽 */
   readonly sky: number;
+  /** 천정색. 하늘 돔의 위쪽 (MVP_SPEC 45.3) */
+  readonly zenith: number;
   readonly sun: number;
   readonly sunIntensity: number;
   readonly hemiSky: number;
@@ -30,7 +34,8 @@ export interface LightKey {
 export const LIGHT_KEYS: readonly LightKey[] = [
   {
     hour: 0,
-    sky: 0x0d1633,
+    sky: 0x1a2550,
+    zenith: 0x070c22,
     sun: 0x8fa6dc,
     sunIntensity: 0.24,
     hemiSky: 0x3c4c82,
@@ -40,7 +45,8 @@ export const LIGHT_KEYS: readonly LightKey[] = [
   },
   {
     hour: 4.5,
-    sky: 0x18203f,
+    sky: 0x202a52,
+    zenith: 0x0a1028,
     sun: 0x8fa6dc,
     sunIntensity: 0.25,
     hemiSky: 0x404e84,
@@ -50,7 +56,8 @@ export const LIGHT_KEYS: readonly LightKey[] = [
   },
   {
     hour: 5.6,
-    sky: 0xe3a585,
+    sky: 0xf0b08a,
+    zenith: 0x6a7cb4,
     sun: 0xffb47e,
     sunIntensity: 0.5,
     hemiSky: 0xa4acc9,
@@ -60,7 +67,8 @@ export const LIGHT_KEYS: readonly LightKey[] = [
   },
   {
     hour: 7,
-    sky: 0x9fcbe8,
+    sky: 0xd4ecf7,
+    zenith: 0x5aa6e6,
     sun: 0xfff1dc,
     sunIntensity: 0.85,
     hemiSky: 0xbcd7ee,
@@ -70,7 +78,8 @@ export const LIGHT_KEYS: readonly LightKey[] = [
   },
   {
     hour: 16.5,
-    sky: 0xa3cce6,
+    sky: 0xd8ecf3,
+    zenith: 0x5fa6e0,
     sun: 0xfff0d6,
     sunIntensity: 0.85,
     hemiSky: 0xbcd7ee,
@@ -80,7 +89,8 @@ export const LIGHT_KEYS: readonly LightKey[] = [
   },
   {
     hour: 18.4,
-    sky: 0xeea77a,
+    sky: 0xf4b183,
+    zenith: 0x7b84bd,
     sun: 0xffa865,
     sunIntensity: 0.6,
     hemiSky: 0xb49fae,
@@ -90,7 +100,8 @@ export const LIGHT_KEYS: readonly LightKey[] = [
   },
   {
     hour: 19.6,
-    sky: 0x3d3e70,
+    sky: 0x4a4a7e,
+    zenith: 0x1c1f4c,
     sun: 0x8390c8,
     sunIntensity: 0.24,
     hemiSky: 0x444f80,
@@ -100,7 +111,8 @@ export const LIGHT_KEYS: readonly LightKey[] = [
   },
   {
     hour: 20.6,
-    sky: 0x0d1633,
+    sky: 0x1a2550,
+    zenith: 0x070c22,
     sun: 0x8fa6dc,
     sunIntensity: 0.24,
     hemiSky: 0x3c4c82,
@@ -113,6 +125,7 @@ export const LIGHT_KEYS: readonly LightKey[] = [
 /** 보간된 조명 값(선형 색 공간의 0~1 성분). */
 export interface LightState {
   readonly sky: THREE.Color;
+  readonly zenith: THREE.Color;
   readonly sun: THREE.Color;
   readonly sunIntensity: number;
   readonly hemiSky: THREE.Color;
@@ -155,6 +168,7 @@ export function lightAt(minuteOfDay: number): LightState {
   ).normalize();
   return {
     sky: mixHex(a.sky, b.sky, t),
+    zenith: mixHex(a.zenith, b.zenith, t),
     sun: mixHex(a.sun, b.sun, t),
     sunIntensity: a.sunIntensity + (b.sunIntensity - a.sunIntensity) * t,
     hemiSky: mixHex(a.hemiSky, b.hemiSky, t),
@@ -251,10 +265,21 @@ export class DayNightVisual {
     if (r.scene.fog instanceof THREE.Fog) r.scene.fog.color.copy(s.sky);
     r.sun.color.copy(s.sun);
     r.sun.intensity = s.sunIntensity;
-    r.sun.position.copy(s.sunDirection);
+    r.sunDirection.copy(s.sunDirection);
+    r.sun.shadow.intensity =
+      SUN_SHADOW.dayIntensity + (SUN_SHADOW.nightIntensity - SUN_SHADOW.dayIntensity) * s.night;
     r.ambient.color.copy(s.hemiSky);
     r.ambient.groundColor.copy(s.hemiGround);
     r.ambient.intensity = s.hemiIntensity;
+    // 하늘 돔과 물 반사가 같은 하늘색을 쓴다 (MVP_SPEC 45.3)
+    const sky = r.sky.uniforms;
+    sky.horizon.value.copy(s.sky);
+    sky.zenith.value.copy(s.zenith);
+    sky.sunColor.value.copy(s.sun);
+    sky.night.value = s.night;
+    r.lighting.skyHorizon.value.copy(s.sky);
+    r.lighting.skyZenith.value.copy(s.zenith);
+    r.lighting.night.value = s.night;
     r.syncLighting();
     // 가까운 torch 부터 최대 16 개. 밤일수록 불빛이 두드러진다. 아주 약하게 일렁인다
     const near = this.torches.nearest(r.camera.position, this.pointLights.length);

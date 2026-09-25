@@ -43,6 +43,7 @@ export class CropView {
     for (const mesh of [this.stems, this.leaves, this.heads]) {
       mesh.count = 0;
       mesh.frustumCulled = false;
+      mesh.castShadow = true;
       this.object3d.add(mesh);
     }
   }

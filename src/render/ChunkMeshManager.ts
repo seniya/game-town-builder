@@ -42,6 +42,8 @@ export class ChunkMeshManager {
     private readonly uploadsPerFrame: number,
     private readonly opaqueMaterial: THREE.Material,
     private readonly transparentMaterial: THREE.Material,
+    /** 불투명 메시의 그림자 깊이 재질(천장 걷어 내기를 따른다, ADR 046). 없으면 three 기본 */
+    private readonly depthMaterial: THREE.Material | null = null,
   ) {
     this.queue = new MeshJobQueue(world);
     this.group.name = 'chunks';
@@ -174,6 +176,11 @@ export class ChunkMeshManager {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(origin);
     mesh.renderOrder = renderOrder;
+    // 불투명 블록은 해 그림자를 던지고 받는다. 반투명(물·창문)은 받기만 한다 (MVP_SPEC 45.3)
+    const opaque = material === this.opaqueMaterial;
+    mesh.castShadow = opaque;
+    mesh.receiveShadow = true;
+    if (opaque && this.depthMaterial) mesh.customDepthMaterial = this.depthMaterial;
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
     this.group.add(mesh);
