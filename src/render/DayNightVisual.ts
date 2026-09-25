@@ -6,7 +6,7 @@ import { BlockId } from '../game/data/blocks';
 import type { EventBus } from '../game/EventBus';
 import type { GameClockReader } from '../game/types';
 import type { VoxelWorld } from '../game/voxel/VoxelWorld';
-import { MAX_VOXEL_POINT_LIGHTS } from './materials';
+import { MAX_VOXEL_POINT_LIGHTS, MODEL_GLOW } from './materials';
 import type { Renderer } from './Renderer';
 import { SUN_SHADOW } from './renderQuality';
 
@@ -179,6 +179,11 @@ export function lightAt(minuteOfDay: number): LightState {
   };
 }
 
+/** 스스로 빛나는 부품의 밝기 배율(MVP_SPEC 45.8): 낮 1.6 ~ 밤 3. */
+export function glowScaleAt(night: number): number {
+  return 1.6 + 1.4 * Math.min(1, Math.max(0, night));
+}
+
 /** 월드의 torch 칸 목록. 처음에 한 번 훑고 이후에는 블록 변경 이벤트로만 갱신한다. */
 export class TorchIndex {
   private readonly torches = new Map<string, THREE.Vector3>();
@@ -280,6 +285,8 @@ export class DayNightVisual {
     r.lighting.skyHorizon.value.copy(s.sky);
     r.lighting.skyZenith.value.copy(s.zenith);
     r.lighting.night.value = s.night;
+    // 불꽃은 낮에 덜 번지고 밤에 두드러진다 (MVP_SPEC 45.8)
+    MODEL_GLOW.value = glowScaleAt(s.night);
     r.syncLighting();
     // 가까운 torch 부터 최대 16 개. 밤일수록 불빛이 두드러진다. 아주 약하게 일렁인다
     const near = this.torches.nearest(r.camera.position, this.pointLights.length);

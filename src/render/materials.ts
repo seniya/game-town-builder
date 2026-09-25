@@ -483,6 +483,7 @@ export function createModelToonMaterial(
   material.onBeforeCompile = (shader) => {
     shader.uniforms['lightScale'] = { value: Math.PI };
     shader.uniforms['rimStrength'] = { value: rim };
+    shader.uniforms['glowScale'] = MODEL_GLOW;
     shader.vertexShader = shader.vertexShader.replace(
       'void main() {',
       'attribute float unlit;\nvarying float vUnlit;\nvoid main() {\n  vUnlit = unlit;',
@@ -490,7 +491,7 @@ export function createModelToonMaterial(
     shader.fragmentShader = shader.fragmentShader
       .replace(
         'void main() {',
-        'uniform float lightScale;\nuniform float rimStrength;\nvarying float vUnlit;\nvoid main() {',
+        'uniform float lightScale;\nuniform float rimStrength;\nuniform float glowScale;\nvarying float vUnlit;\nvoid main() {',
       )
       .replace(
         '#include <opaque_fragment>',
@@ -498,9 +499,9 @@ export function createModelToonMaterial(
           'outgoingLight *= lightScale;',
           'float rimDot = 1.0 - max(dot(normalize(normal), normalize(vViewPosition)), 0.0);',
           'outgoingLight += diffuseColor.rgb * rimStrength * smoothstep(0.62, 0.9, rimDot);',
-          // 무조명 부위(1)는 제 색, 빛나는 부위(2, 불꽃)는 제 색의 3 배라 빛 번짐 문턱을 넘는다
+          // 무조명 부위(1)는 제 색, 빛나는 부위(2, 불꽃)는 제 색의 glowScale 배(낮 1.6 ~ 밤 3)라 빛 번짐 문턱을 넘는다
           'outgoingLight = mix(outgoingLight, diffuseColor.rgb * 0.95, min(vUnlit, 1.0));',
-          'outgoingLight *= 1.0 + max(vUnlit - 1.0, 0.0) * 2.0;',
+          'outgoingLight *= 1.0 + max(vUnlit - 1.0, 0.0) * (glowScale - 1.0);',
           '#include <opaque_fragment>',
         ].join('\n'),
       );
@@ -667,4 +668,48 @@ export function createGradeMaterial(): THREE.ShaderMaterial {
     depthTest: false,
     depthWrite: false,
   });
+}
+
+// ── 다듬기 (STYLE-008, MVP_SPEC 45.8) ─────────────────────────────────────────
+
+/** 스스로 빛나는 부품(unlit 2)의 밝기 배율. DayNightVisual 이 낮 1.6 ~ 밤 3 으로 바꾼다. 모든 모형 재질이 공유한다. */
+export const MODEL_GLOW: THREE.IUniform<number> = { value: 3 };
+
+/**
+ * 풀잎 포기 재질: 정점 색 툰 명암 + 바람 흔들림. 인스턴스 위치마다 위상이 달라 풀밭이 물결처럼 흔들린다.
+ * 흔들림은 정점 높이(y)에 비례해 밑동은 땅에 붙어 있다. 밝기는 복셀 셰이더 규약(π)을 따른다.
+ */
+export function createGrassMaterial(
+  gradient: THREE.Texture,
+  time: THREE.IUniform<number>,
+): THREE.MeshToonMaterial {
+  const material = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradient });
+  material.side = THREE.DoubleSide;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms['lightScale'] = { value: Math.PI };
+    shader.uniforms['windTime'] = time;
+    shader.vertexShader = shader.vertexShader
+      .replace('void main() {', 'uniform float windTime;\nvoid main() {')
+      .replace(
+        '#include <begin_vertex>',
+        [
+          '#include <begin_vertex>',
+          '#ifdef USE_INSTANCING',
+          '  vec2 ip = instanceMatrix[3].xz;',
+          '#else',
+          '  vec2 ip = vec2(0.0);',
+          '#endif',
+          '  float gust = sin(windTime * 1.6 + ip.x * 0.35 + ip.y * 0.27) * 0.6 + sin(windTime * 2.9 + ip.x * 1.3) * 0.4;',
+          '  transformed.x += gust * 0.1 * position.y * position.y * 6.0;',
+          '  transformed.z += gust * 0.05 * position.y * position.y * 6.0;',
+        ].join('\n'),
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('void main() {', 'uniform float lightScale;\nvoid main() {')
+      .replace(
+        '#include <opaque_fragment>',
+        'outgoingLight *= lightScale;\n#include <opaque_fragment>',
+      );
+  };
+  return material;
 }

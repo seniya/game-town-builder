@@ -120,8 +120,9 @@ export function paintDirt(c: Canvas, seed: number): void {
 /** 풀 윗면: 세 단계 초록 얼룩, 작은 풀 포기, 드문 밝은 점. */
 export function paintGrassTop(c: Canvas, seed: number): void {
   c.each((x, y) => tones(blotch(x, y, seed), GRASS_DARK, GRASS_MID, GRASS_LIGHT));
-  const tuft = shade(GRASS_DARK, 0.9);
-  for (let i = 0; i < 12; i++) {
+  // 작은 포기 무늬는 몇 개만 옅게 둔다(반복이 드러나지 않게, 풀잎 장식이 대신한다 — STYLE-008)
+  const tuft = shade(GRASS_DARK, 0.97);
+  for (let i = 0; i < 4; i++) {
     const cx = Math.floor(hash(i, 5, seed) * STYLE_TILE_PX);
     const cy = Math.floor(hash(i, 6, seed) * STYLE_TILE_PX);
     // 작은 "v" 모양 풀 포기

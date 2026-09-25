@@ -29,6 +29,7 @@ import { CameraController, HIDE_PLAYER_BELOW } from './render/CameraController';
 import { PlayerView } from './render/EntityView';
 import { Highlight } from './render/Highlight';
 import { FurnitureView } from './render/FurnitureView';
+import { GrassView } from './render/GrassView';
 import { createItemIconProvider } from './render/itemIcons';
 import { createModelIconSource } from './render/modelIcons';
 import { Renderer } from './render/Renderer';
@@ -828,6 +829,8 @@ async function start(): Promise<void> {
   renderer.scene.add(crops.object3d);
   const furniture = new FurnitureView(world.voxels, world.events);
   renderer.scene.add(furniture.object3d);
+  const grass = new GrassView(world.voxels, renderer.lighting.time);
+  renderer.scene.add(grass.mesh);
   const dishes = new DishView(() => world.registry.npcs.values());
   renderer.scene.add(dishes.object3d);
   const dayNight = new DayNightVisual(
@@ -950,6 +953,7 @@ async function start(): Promise<void> {
     props.update(frameMs / 1000);
     crops.update(frameMs / 1000);
     furniture.update();
+    grass.update(renderer.camera.position);
     bellRing.update(frameMs / 1000);
     // 발소리: 땅 위에서 걸은 수평 거리와 발밑 블록
     const pl = world.player;

@@ -120,6 +120,9 @@ export interface NpcViewWorld {
   readonly talkable?: (npc: NPC<ActionView>) => boolean;
 }
 
+/** 누운 주민의 뿌리를 침대 가운데에서 발 쪽으로 옮기는 거리(칸). */
+export const LIE_SHIFT = 0.12;
+
 /** 한 프레임에 이만큼 넘게 움직이면 순간 이동(로드·도착)으로 보고 보간하지 않는다. */
 const TELEPORT_DISTANCE = 3;
 
@@ -216,9 +219,10 @@ export class NpcView {
       const o = facingOffset(placed.facing);
       const an = placed.anchor;
       // 침대 두 칸의 가운데, 매트리스 윗면 높이. 머리는 anchor 칸(베개) 쪽이다
-      root.x = an.x + 0.5 + o.dx * 0.5 - p.x;
+      // 둥근 모형은 머리가 커서 발 쪽으로 LIE_SHIFT 옮겨야 머리가 베개 위에 얹힌다 (MVP_SPEC 45.8)
+      root.x = an.x + 0.5 + o.dx * (0.5 + LIE_SHIFT) - p.x;
       root.y = an.y + BED_SURFACE - p.y;
-      root.z = an.z + 0.5 + o.dz * 0.5 - p.z;
+      root.z = an.z + 0.5 + o.dz * (0.5 + LIE_SHIFT) - p.z;
       faceYaw = Math.atan2(-o.dx, -o.dz);
       turnRate = 1.2;
     } else if (onChair && use && look) {
