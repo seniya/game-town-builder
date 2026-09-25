@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { BLOCKS, BlockId } from '../src/game/data/blocks';
 import { EventBus } from '../src/game/EventBus';
 import { VoxelWorld } from '../src/game/voxel/VoxelWorld';
-import { BLOCK_MODEL, FURNITURE_BLOCKS, modelGeometry } from '../src/render/furnitureModels';
+import {
+  BLOCK_MODEL,
+  FURNITURE_BLOCKS,
+  modelGeometry,
+  monsterGeometry,
+} from '../src/render/furnitureModels';
 import { chairTurns, FurnitureView } from '../src/render/FurnitureView';
 
 /** 뷰 안의 인스턴스 메시 목록. */
@@ -64,5 +69,18 @@ describe('가구·소품 모형 (STYLE-003, MVP_SPEC 45.6)', () => {
     expect(chairTurns(at(0, -1), 5, 1, 5)).toBe(2);
     expect(chairTurns(at(1, 0), 5, 1, 5)).toBe(3);
     expect(chairTurns({ getBlock: () => 0 }, 5, 1, 5)).toBe(0);
+  });
+
+  it('몬스터 모형(STYLE-007)은 둥근 한 메시이고 눈이 스스로 빛난다', () => {
+    const g = monsterGeometry();
+    const unlit = g.body.getAttribute('unlit');
+    let glow = 0;
+    for (let i = 0; i < unlit.count; i++) if (unlit.getX(i) >= 2) glow++;
+    expect(glow).toBeGreaterThan(0);
+    g.body.computeBoundingBox();
+    const size = g.body.boundingBox?.getSize(new THREE.Vector3());
+    // 몬스터 몸체 1 칸 안팎(뿔 포함 1.2 칸 이하)
+    expect(size?.y ?? 0).toBeLessThan(1.2);
+    expect(monsterGeometry()).toBe(g);
   });
 });

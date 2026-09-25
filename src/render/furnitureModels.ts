@@ -15,8 +15,8 @@ export interface ModelGeometry {
   readonly outline: THREE.BufferGeometry;
 }
 
-/** 부품 모음. 외곽선 없는 부품(불꽃 등)은 따로 둔다. */
-class Parts {
+/** 부품 모음. 외곽선 없는 부품(불꽃 등)은 따로 둔다. 몬스터 모형(STYLE-007)도 쓴다. */
+export class Parts {
   readonly shell: THREE.BufferGeometry[] = [];
   readonly glow: THREE.BufferGeometry[] = [];
 
@@ -323,4 +323,62 @@ export function modelGeometry(name: ModelName): ModelGeometry {
     cache.set(name, g);
   }
   return g;
+}
+
+/**
+ * 몬스터(STYLE-007, MVP_SPEC 45.7): 무섭기보다 "혼내 주고 싶은" 둥근 꼬마 악당. 특정 DQ 몬스터를 닮게 하지 않는다.
+ * 보라 몸통 방울, 밝은 배, 작은 뿔 둘, 찡그린 눈썹과 스스로 빛나는 노란 눈, 작은 송곳니, 짧은 팔·발, 말린 꼬리. 앞은 −z.
+ */
+function monster(): ModelGeometry {
+  const p = new Parts();
+  const body = 0x6a4a9a;
+  const dark = 0x3e2a5e;
+  p.ball(0.46, body, [0, 0.5, 0], [1.05, 0.95, 1]);
+  p.ball(0.3, 0xa58ad0, [0, 0.42, -0.24], [1, 1, 0.55]);
+  for (const s of [-1, 1]) {
+    p.add(
+      place(
+        new THREE.ConeGeometry(0.08, 0.26, 10),
+        [s * 0.22, 0.98, 0.02],
+        [1, 1, 1],
+        [0, 0, -s * 0.35],
+      ),
+      0xf2e2c0,
+    );
+    p.ball(0.1, dark, [s * 0.14, 0.05, -0.08], [1.2, 0.6, 1.5]);
+    p.ball(0.09, body, [s * 0.46, 0.44, -0.05], [0.8, 1.2, 0.8]);
+    // 찡그린 눈썹(안쪽이 내려간다)
+    p.box([0.16, 0.035, 0.04], 0.015, dark, [s * 0.14, 0.78, -0.42], [0, 0, s * 0.35]);
+    p.ball(0.07, 0xffe05a, [s * 0.14, 0.66, -0.41], [1, 1.1, 0.5], 2);
+    p.ball(0.028, 0x2a1d38, [s * 0.13, 0.65, -0.44], [1, 1.2, 0.5], 1);
+    p.add(
+      place(
+        new THREE.ConeGeometry(0.03, 0.07, 6),
+        [s * 0.08, 0.43, -0.43],
+        [1, 1, 1],
+        [Math.PI, 0, 0],
+      ),
+      0xffffff,
+    );
+  }
+  // 입(찡그린 선)과 말린 꼬리
+  p.box([0.2, 0.03, 0.03], 0.012, dark, [0, 0.47, -0.43]);
+  p.add(
+    place(
+      new THREE.TorusGeometry(0.1, 0.035, 6, 12, Math.PI * 1.4),
+      [0, 0.35, 0.5],
+      [1, 1, 1],
+      [0, Math.PI / 2, 0],
+    ),
+    dark,
+  );
+  return p.build();
+}
+
+let monsterCache: ModelGeometry | null = null;
+
+/** 몬스터 모형 지오메트리(한 번 만들어 공유한다). */
+export function monsterGeometry(): ModelGeometry {
+  monsterCache ??= monster();
+  return monsterCache;
 }

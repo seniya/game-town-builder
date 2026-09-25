@@ -67,7 +67,7 @@ export class BellPanel {
       display: 'none',
       minWidth: '360px',
       padding: '16px 18px',
-      borderRadius: '12px',
+      borderRadius: '18px',
       background: 'rgba(250, 244, 232, 0.97)',
       color: '#3a2f25',
       font: '14px system-ui, sans-serif',

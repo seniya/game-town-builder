@@ -12,6 +12,7 @@ import {
   createCharacterSpriteMaterial,
   createEmissiveMaterial,
   createFlatVertexColorMaterial,
+  createModelToonMaterial,
   createOutlineMaterial,
   createStyleBlockMaterial,
   createToonGradient,
@@ -19,6 +20,7 @@ import {
 } from '../materials';
 import { CuteCharacter, type CharacterKind } from '../cuteCharacter';
 import { FurnitureView } from '../FurnitureView';
+import { monsterGeometry } from '../furnitureModels';
 import { NpcView, type NpcViewWorld } from '../NpcView';
 import { Renderer, type OrbitView } from '../Renderer';
 import {
@@ -69,6 +71,8 @@ const CURRENT_X = 13.5;
 const VARIANT_X: Record<FigureVariant, number> = { A: 17, B: 19.5, C: 22 };
 /** 게임 캐릭터 다섯의 첫 x(1.6 칸 간격, STYLE-002). */
 const VILLAGER_X0 = 4.5;
+/** 몬스터 x(STYLE-007). */
+const MONSTER_X = 2.8;
 const CHARACTER_KINDS: readonly CharacterKind[] = [
   'farmer',
   'cook',
@@ -115,8 +119,8 @@ export const LAB_VIEWS: readonly OrbitView[] = [
     pitch: 0.06,
   },
   {
-    target: { x: 7.7, y: GROUND + 0.8, z: ROW_FIGURES + 0.5 },
-    distance: 5.6,
+    target: { x: 7.0, y: GROUND + 0.8, z: ROW_FIGURES + 0.5 },
+    distance: 6.2,
     yaw: 0,
     pitch: 0.12,
   },
@@ -216,6 +220,7 @@ export class StyleLab {
   private readonly walkers = new Map<FigureVariant, Walker>();
   /** 게임에 쓰는 둥근 캐릭터 다섯(STYLE-002): 농부·요리사·목수·주민·플레이어 */
   private readonly villagers: Walker[] = [];
+  private readonly monster = new THREE.Group();
   private readonly figures = new Map<FigureVariant, CuteFigure>();
   private readonly currentNpc: NPC<ActionView>;
   private readonly currentView: NpcView;
@@ -317,6 +322,17 @@ export class StyleLab {
       });
       this.label(CHARACTER_NAMES[kind], new THREE.Vector3(home.x, GROUND + 2.0, home.z));
     });
+
+    // 몬스터(STYLE-007): 마을 사람 줄 왼쪽 끝에서 통통 튄다
+    const mg = monsterGeometry();
+    this.monster.add(
+      new THREE.Mesh(mg.body, createModelToonMaterial(this.gradients[3])),
+      new THREE.Mesh(mg.outline, createOutlineMaterial(0x2a1d38, 0.014)),
+    );
+    this.monster.position.set(MONSTER_X, GROUND, ROW_FIGURES + 0.5);
+    this.monster.rotation.y = Math.PI;
+    this.root.add(this.monster);
+    this.label('몬스터', new THREE.Vector3(MONSTER_X, GROUND + 1.5, ROW_FIGURES + 0.5));
 
     // 가구: 지금(블록) ↔ 시안(모형)
     this.label(
@@ -459,6 +475,7 @@ export class StyleLab {
     // 시안: 같은 자세 계산(npcPose)·보간(PoseBlender)을 입힌다
     for (const w of this.walkers.values()) this.updateWalker(w, dt, action, walking);
     for (const w of this.villagers) this.updateWalker(w, dt, action, walking);
+    this.monster.position.y = GROUND + Math.abs(Math.sin(this.time * 4)) * 0.1;
 
     // 불 흔들림·김·물결
     this.stove.flames.forEach((f, i) => {

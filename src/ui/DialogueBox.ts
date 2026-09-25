@@ -41,7 +41,7 @@ export class DialogueBox implements ModalView {
       transform: 'translateX(-50%)',
       width: 'min(640px, calc(100vw - 32px))',
       padding: '14px 18px 12px',
-      borderRadius: '12px',
+      borderRadius: '18px',
       background: 'rgba(250, 244, 232, 0.97)',
       color: '#3a2f25',
       font: '16px system-ui, sans-serif',

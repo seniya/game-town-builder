@@ -49,7 +49,7 @@ export class InventoryPanel implements ModalView {
       display: 'none',
       gap: '18px',
       padding: '18px',
-      borderRadius: '12px',
+      borderRadius: '18px',
       background: 'rgba(250, 244, 232, 0.96)',
       color: '#3a2f25',
       font: '13px system-ui, sans-serif',

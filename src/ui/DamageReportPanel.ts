@@ -23,7 +23,7 @@ export class DamageReportPanel implements ModalView {
       transform: 'translate(-50%, -50%)',
       minWidth: '320px',
       padding: '18px 22px 14px',
-      borderRadius: '12px',
+      borderRadius: '18px',
       background: 'rgba(250, 244, 232, 0.97)',
       color: '#3a2f25',
       font: '15px system-ui, sans-serif',

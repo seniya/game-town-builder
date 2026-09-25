@@ -2019,8 +2019,10 @@ Acceptance Criteria:
 
 Acceptance Criteria:
 
-- [ ] 몬스터가 무섭기보다 "혼내 주고 싶은" 둥근 모형이다(특정 DQ 몬스터를 닮게 하지 않는다)
-- [ ] HUD·패널·버튼이 둥글고 따뜻한 한 톤으로 맞춰진다
+- [x] 몬스터가 무섭기보다 "혼내 주고 싶은" 둥근 모형이다(특정 DQ 몬스터를 닮게 하지 않는다)
+- [x] HUD·패널·버튼이 둥글고 따뜻한 한 톤으로 맞춰진다
+
+결과: [STYLE-007 기록](../state/2026-09-25_2325-style-007-monster-ui.md). 시험 `tests/furnitureView.test.ts`(몬스터).
 
 ## TASK-STYLE-006 측정·전체 확인 (게이트 V2)
 

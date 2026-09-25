@@ -19,8 +19,8 @@ export class ObjectivePanel {
       top: '10px',
       maxWidth: 'calc(100vw - 260px)',
       padding: '5px 12px',
-      borderRadius: '6px',
-      background: 'rgba(20, 22, 26, 0.55)',
+      borderRadius: '12px',
+      background: 'rgba(62, 42, 30, 0.62)',
       color: '#f4efe2',
       font: '600 15px system-ui, sans-serif',
       whiteSpace: 'nowrap',
@@ -48,7 +48,7 @@ export class ObjectivePanel {
       boxShadow: '0 0 0 2px #ffd35a, 0 0 18px rgba(255, 211, 90, 0.7)',
     });
     setTimeout(() => {
-      Object.assign(this.root.style, { background: 'rgba(20, 22, 26, 0.55)', boxShadow: 'none' });
+      Object.assign(this.root.style, { background: 'rgba(62, 42, 30, 0.62)', boxShadow: 'none' });
     }, HIGHLIGHT_MS);
   }
 }

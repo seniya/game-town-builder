@@ -1,31 +1,31 @@
-// 몬스터 모형 (MVP_SPEC 24, TASK-044). 게임 상태는 읽기만 한다. 어두운 보라 몸통에 빛나는 눈, 걸을 때 통통 튄다.
+// 몬스터 모형 (MVP_SPEC 24·45.7, TASK-044, STYLE-007). 게임 상태는 읽기만 한다. 둥근 보라 꼬마 악당에 빛나는 눈, 걸을 때 통통 튄다.
 // 파괴 중에는 앞으로 몸을 부딪치고, 공격받아 체력이 줄면 잠깐 붉게 번쩍인다(TASK-045 / 046 에서 쓰는 표현).
 import * as THREE from 'three';
 import { balance } from '../game/data/balance';
 import type { Monster } from '../game/entities/Monster';
 import { CRACK_STAGES, createCrackTexture } from './crackTexture';
-import { createCharacterMaterial, createCrackMaterial, createEmissiveMaterial } from './materials';
+import { monsterGeometry } from './furnitureModels';
+import {
+  createCrackMaterial,
+  createEmissiveMaterial,
+  createModelToonMaterial,
+  createOutlineMaterial,
+  createToonGradient,
+} from './materials';
 
-/** 색 → 재질(몬스터 모형끼리 공유). */
-const cache = new Map<number, THREE.Material>();
-function mat(color: number): THREE.Material {
-  let m = cache.get(color);
-  if (!m) {
-    m = createCharacterMaterial(color);
-    cache.set(color, m);
-  }
-  return m;
-}
-
-/** 빛나는 눈 재질(공유). */
-let eyeMat: THREE.Material | null = null;
-
-/** 상자 하나. (x, y, z) 는 아랫면 가운데다. */
-function box(w: number, h: number, d: number, color: number, x = 0, y = 0, z = 0): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
-  mesh.position.set(x, y + h / 2, z);
-  mesh.castShadow = true;
-  return mesh;
+/** 몬스터 재질(공유): 툰 3 단·외곽선·맞았을 때의 붉은 번쩍임. */
+let shared: { toon: THREE.Material; outline: THREE.Material; hurt: THREE.Material } | null = null;
+function monsterMaterials(): {
+  toon: THREE.Material;
+  outline: THREE.Material;
+  hurt: THREE.Material;
+} {
+  shared ??= {
+    toon: createModelToonMaterial(createToonGradient(3)),
+    outline: createOutlineMaterial(0x2a1d38, 0.014),
+    hurt: createEmissiveMaterial(0xff4a3a),
+  };
+  return shared;
 }
 
 /**
@@ -53,20 +53,17 @@ class MonsterView {
   private breakWeight = 0;
   private attackWeight = 0;
 
-  /** 모형을 만든다. */
+  /** 모형을 만든다. 둥근 꼬마 악당 모형(STYLE-007)과 맞았을 때 번쩍이는 붉은 껍질. */
   constructor() {
-    const torso = box(0.9, 0.9, 0.8, 0x3b2a4d, 0, 0.05, 0);
-    const belly = box(0.7, 0.5, 0.05, 0x52406a, 0, 0.2, -0.41);
-    eyeMat ??= createEmissiveMaterial(0xffe05a);
-    const eyeL = box(0.14, 0.14, 0.05, 0xffe05a, -0.2, 0.62, -0.41);
-    const eyeR = box(0.14, 0.14, 0.05, 0xffe05a, 0.2, 0.62, -0.41);
-    eyeL.material = eyeMat;
-    eyeR.material = eyeMat;
-    const hornL = box(0.12, 0.25, 0.12, 0x2a1d38, -0.3, 0.95, 0);
-    const hornR = box(0.12, 0.25, 0.12, 0x2a1d38, 0.3, 0.95, 0);
-    this.hurt = box(0.95, 0.95, 0.85, 0xff4a3a, 0, 0.03, 0);
+    const g = monsterGeometry();
+    const m = monsterMaterials();
+    const body = new THREE.Mesh(g.body, m.toon);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    this.hurt = new THREE.Mesh(g.outline, m.hurt);
+    this.hurt.scale.setScalar(1.06);
     this.hurt.visible = false;
-    this.body.add(torso, belly, eyeL, eyeR, hornL, hornR, this.hurt);
+    this.body.add(body, new THREE.Mesh(g.outline, m.outline), this.hurt);
     this.object3d.add(this.body);
   }
 

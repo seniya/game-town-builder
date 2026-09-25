@@ -33,7 +33,7 @@ export class PauseMenu {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'rgba(20, 24, 28, 0.45)',
+      background: 'rgba(48, 34, 26, 0.35)',
       cursor: 'pointer',
       userSelect: 'none',
       zIndex: '20',
@@ -43,7 +43,7 @@ export class PauseMenu {
     Object.assign(card.style, {
       minWidth: '300px',
       padding: '22px 28px',
-      borderRadius: '12px',
+      borderRadius: '18px',
       background: 'rgba(250, 244, 232, 0.94)',
       color: '#3a2f25',
       font: '14px system-ui, sans-serif',

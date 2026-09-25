@@ -45,8 +45,8 @@ export class Hotbar {
       display: 'flex',
       gap: '4px',
       padding: '5px',
-      borderRadius: '10px',
-      background: 'rgba(28, 24, 20, 0.55)',
+      borderRadius: '16px',
+      background: 'rgba(62, 42, 30, 0.6)',
       pointerEvents: 'none',
       userSelect: 'none',
     });
@@ -56,7 +56,7 @@ export class Hotbar {
         position: 'relative',
         width: '48px',
         height: '48px',
-        borderRadius: '6px',
+        borderRadius: '10px',
         background: 'rgba(255, 248, 232, 0.12)',
         boxSizing: 'border-box',
       });

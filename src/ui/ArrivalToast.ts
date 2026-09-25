@@ -24,7 +24,7 @@ export class ArrivalToast {
       top: '56px',
       transform: 'translateX(-50%)',
       padding: '8px 16px',
-      borderRadius: '8px',
+      borderRadius: '14px',
       background: 'rgba(250, 244, 232, 0.94)',
       color: '#3a2f25',
       font: '600 15px system-ui, sans-serif',
