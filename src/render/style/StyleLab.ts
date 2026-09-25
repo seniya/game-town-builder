@@ -17,6 +17,7 @@ import {
   createToonGradient,
   createToonMaterial,
 } from '../materials';
+import { CuteCharacter, type CharacterKind } from '../cuteCharacter';
 import { NpcView, type NpcViewWorld } from '../NpcView';
 import { Renderer, type OrbitView } from '../Renderer';
 import {
@@ -65,11 +66,27 @@ const LAB_SIZE_X = 60;
 /** 지금 요리사와 시안 A/B/C 의 x. */
 const CURRENT_X = 13.5;
 const VARIANT_X: Record<FigureVariant, number> = { A: 17, B: 19.5, C: 22 };
+/** 게임 캐릭터 다섯의 첫 x(1.6 칸 간격, STYLE-002). */
+const VILLAGER_X0 = 4.5;
+const CHARACTER_KINDS: readonly CharacterKind[] = [
+  'farmer',
+  'cook',
+  'carpenter',
+  'villager',
+  'player',
+];
+const CHARACTER_NAMES: Record<CharacterKind, string> = {
+  farmer: '농부',
+  cook: '요리사',
+  carpenter: '목수',
+  villager: '주민',
+  player: '플레이어',
+};
 /** 걷기 원의 반지름·각속도. 속도 1.4 칸/초 로 걷기 걸음이 된다. */
 const WALK_RADIUS = 0.7;
 const WALK_OMEGA = 2;
 
-/** 고정 시점: 0 주민 · 1 가구 · 2 블록 · 3 전경 · 4 얼굴(시안 셋 가까이). */
+/** 고정 시점: 0 주민 · 1 가구 · 2 블록 · 3 전경 · 4 얼굴(시안 셋 가까이) · 5 마을 사람(게임 캐릭터 다섯). */
 export const LAB_VIEWS: readonly OrbitView[] = [
   {
     target: { x: 17.8, y: GROUND + 0.75, z: ROW_FIGURES + 0.5 },
@@ -96,6 +113,12 @@ export const LAB_VIEWS: readonly OrbitView[] = [
     yaw: 0,
     pitch: 0.06,
   },
+  {
+    target: { x: 7.7, y: GROUND + 0.8, z: ROW_FIGURES + 0.5 },
+    distance: 5.6,
+    yaw: 0,
+    pitch: 0.12,
+  },
 ];
 
 /** 화면에 띄울 이름표 하나(화면 픽셀 좌표). */
@@ -118,7 +141,7 @@ export interface LabStats {
 
 /** 시안 한 명의 걸음 상태(NpcView 와 같은 방식으로 속도·위상·방향을 렌더에서 계산한다). */
 interface Walker {
-  readonly figure: CuteFigure;
+  readonly figure: Pick<CuteFigure, 'object3d' | 'applyPose'>;
   readonly blender: PoseBlender;
   readonly home: THREE.Vector3;
   readonly seed: number;
@@ -190,6 +213,9 @@ export class StyleLab {
   private readonly toon: THREE.MeshToonMaterial;
   private readonly outline: THREE.Material;
   private readonly walkers = new Map<FigureVariant, Walker>();
+  /** 게임에 쓰는 둥근 캐릭터 다섯(STYLE-002): 농부·요리사·목수·주민·플레이어 */
+  private readonly villagers: Walker[] = [];
+  private readonly figures = new Map<FigureVariant, CuteFigure>();
   private readonly currentNpc: NPC<ActionView>;
   private readonly currentView: NpcView;
   private readonly npcWorld: NpcViewWorld;
@@ -247,6 +273,7 @@ export class StyleLab {
       figure.object3d.position.copy(home);
       figure.object3d.rotation.y = Math.PI;
       this.root.add(figure.object3d);
+      this.figures.set(key, figure);
       this.walkers.set(key, {
         figure,
         blender: new PoseBlender(),
@@ -263,6 +290,26 @@ export class StyleLab {
         new THREE.Vector3(home.x, GROUND + 2.05, home.z),
       );
     }
+
+    // 게임 캐릭터 다섯(STYLE-002): 지금 요리사 왼쪽에 나란히
+    CHARACTER_KINDS.forEach((kind, i) => {
+      const character = new CuteCharacter(kind);
+      const home = new THREE.Vector3(VILLAGER_X0 + i * 1.6, GROUND, ROW_FIGURES + 0.5);
+      character.object3d.position.copy(home);
+      character.object3d.rotation.y = Math.PI;
+      this.root.add(character.object3d);
+      this.villagers.push({
+        figure: character,
+        blender: new PoseBlender(),
+        home,
+        seed: 10 + i,
+        last: null,
+        speed: 0,
+        phase: 0,
+        yaw: Math.PI,
+      });
+      this.label(CHARACTER_NAMES[kind], new THREE.Vector3(home.x, GROUND + 2.0, home.z));
+    });
 
     // 가구: 지금(블록) ↔ 시안(모형)
     this.label(
@@ -404,6 +451,7 @@ export class StyleLab {
 
     // 시안: 같은 자세 계산(npcPose)·보간(PoseBlender)을 입힌다
     for (const w of this.walkers.values()) this.updateWalker(w, dt, action, walking);
+    for (const w of this.villagers) this.updateWalker(w, dt, action, walking);
 
     // 불 흔들림·김·물결
     this.stove.flames.forEach((f, i) => {
@@ -453,8 +501,8 @@ export class StyleLab {
   stats(): LabStats {
     const info = this.renderer.webgl.info.render;
     const variants = {} as Record<FigureVariant, { drawCalls: number; triangles: number }>;
-    for (const [key, w] of this.walkers) {
-      const s = w.figure.stats();
+    for (const [key, figure] of this.figures) {
+      const s = figure.stats();
       const outlineOn = this.outlineVisible();
       variants[key] = {
         drawCalls: s.meshes + (outlineOn ? s.outlineMeshes : 0),

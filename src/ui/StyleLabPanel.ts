@@ -32,7 +32,7 @@ const POSES = [
   ['sit', '앉기'],
   ['work', '밭일'],
 ] as const;
-const VIEWS = ['주민', '가구', '블록', '전경', '얼굴'] as const;
+const VIEWS = ['주민', '가구', '블록', '전경', '얼굴', '마을 사람'] as const;
 
 /** 둥근 말랑 버튼 모양(시안 UI 톤의 맛보기). */
 const BUTTON_CSS =

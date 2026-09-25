@@ -440,11 +440,23 @@ export function createToonMaterial(gradient: THREE.Texture, rim = 0.22): THREE.M
 export function createOutlineMaterial(color = 0x3b2b25, thickness = 0.011): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: { outlineColor: { value: new THREE.Color(color) }, thickness: { value: thickness } },
+    // 스키닝(사람, STYLE-002)과 인스턴싱(가구, STYLE-003) 메시에도 쓴다. three 가 메시 종류에 맞춰 정의를 켠다
     vertexShader: [
+      '#include <common>',
+      '#include <skinning_pars_vertex>',
       'uniform float thickness;',
       'void main() {',
-      '  vec3 p = position + normalize(normal) * thickness;',
-      '  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);',
+      '  vec3 objectNormal = normal;',
+      '  #include <skinbase_vertex>',
+      '  #include <skinnormal_vertex>',
+      '  vec3 transformed = position;',
+      '  #include <skinning_vertex>',
+      '  transformed += normalize(objectNormal) * thickness;',
+      '  vec4 p = vec4(transformed, 1.0);',
+      '  #ifdef USE_INSTANCING',
+      '    p = instanceMatrix * p;',
+      '  #endif',
+      '  gl_Position = projectionMatrix * modelViewMatrix * p;',
       '}',
     ].join('\n'),
     fragmentShader: [
@@ -456,6 +468,43 @@ export function createOutlineMaterial(color = 0x3b2b25, thickness = 0.011): THRE
     ].join('\n'),
     side: THREE.BackSide,
   });
+}
+
+/**
+ * 사람·가구 모형 재질(STYLE-002·003): 정점 색 + 툰 명암 + 가장자리 밝힘 + 무조명 부위.
+ * 지오메트리의 `unlit` 속성(0~1)이 1 인 정점(눈·입·불꽃)은 명암 없이 제 색으로 보인다.
+ * 한 캐릭터를 메시 하나로 그리기 위해 눈·입을 따로 떼지 않는다. 밝기는 복셀 셰이더 규약을 따른다.
+ */
+export function createModelToonMaterial(
+  gradient: THREE.Texture,
+  rim = 0.2,
+): THREE.MeshToonMaterial {
+  const material = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradient });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms['lightScale'] = { value: Math.PI };
+    shader.uniforms['rimStrength'] = { value: rim };
+    shader.vertexShader = shader.vertexShader.replace(
+      'void main() {',
+      'attribute float unlit;\nvarying float vUnlit;\nvoid main() {\n  vUnlit = unlit;',
+    );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        'void main() {',
+        'uniform float lightScale;\nuniform float rimStrength;\nvarying float vUnlit;\nvoid main() {',
+      )
+      .replace(
+        '#include <opaque_fragment>',
+        [
+          'outgoingLight *= lightScale;',
+          'float rimDot = 1.0 - max(dot(normalize(normal), normalize(vViewPosition)), 0.0);',
+          'outgoingLight += diffuseColor.rgb * rimStrength * smoothstep(0.62, 0.9, rimDot);',
+          // 무조명 부위는 제 색(밝은 반짝임은 빛 번짐 문턱을 넘지 않게 1 이하)
+          'outgoingLight = mix(outgoingLight, diffuseColor.rgb * 0.95, vUnlit);',
+          '#include <opaque_fragment>',
+        ].join('\n'),
+      );
+  };
+  return material;
 }
 
 /** 시안 캐릭터의 눈·입처럼 명암 없이 또렷해야 하는 부분(정점 색). */

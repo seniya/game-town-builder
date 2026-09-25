@@ -1,46 +1,9 @@
 // 엔티티 표시 (ARCHITECTURE 12.2). Entity 를 읽어서 그리고 고치지 않는다.
-// 플레이어 모형(관절 모형과 동작, TASK-ANIM-001). 주민은 NpcView, 몬스터는 MonsterView 다.
+// 플레이어 모형(둥근 SD 캐릭터 STYLE-002, 동작 TASK-ANIM-001). 주민은 NpcView, 몬스터는 MonsterView 다.
 import * as THREE from 'three';
 import type { Player } from '../game/entities/Player';
-import {
-  armJointRotationX,
-  MOVING_SPEED,
-  playerPose,
-  PoseBlender,
-  SWING_SECONDS,
-} from './characterPose';
-import { createCharacterMaterial } from './materials';
-
-/** 상자 하나. (x, y, z) 는 상자 아랫면 가운데다. */
-function box(
-  w: number,
-  h: number,
-  d: number,
-  material: THREE.Material,
-  x = 0,
-  y = 0,
-  z = 0,
-): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
-  mesh.position.set(x, y + h / 2, z);
-  mesh.castShadow = true;
-  return mesh;
-}
-
-/** 관절: 피벗 그룹에 매달린 상자. 피벗에서 아래로 늘어진다. */
-function limb(
-  w: number,
-  h: number,
-  d: number,
-  material: THREE.Material,
-  px: number,
-  py: number,
-): THREE.Group {
-  const pivot = new THREE.Group();
-  pivot.position.set(px, py, 0);
-  pivot.add(box(w, h, d, material, 0, -h, 0));
-  return pivot;
-}
+import { MOVING_SPEED, playerPose, PoseBlender, SWING_SECONDS } from './characterPose';
+import { CuteCharacter } from './cuteCharacter';
 
 /** 플레이어 동작 입력. main 이 BlockEditSystem 과 이벤트에서 읽어 넘긴다. */
 export interface PlayerActionInput {
@@ -55,17 +18,12 @@ const ACTION_FADE = 0.3;
 const TELEPORT_DISTANCE = 3;
 
 /**
- * 플레이어 모형: 다리·몸통·팔·머리 관절. 높이 1.8, 폭 0.6 안에 들어간다.
+ * 플레이어 모형: 둥근 SD 캐릭터(키 1.55, 몸체 AABB 1.8 안).
  * 걷기·달리기·점프·낙하와 파괴(반복 휘두르기)·설치·공격(한 번 휘두르기)을 그린다.
  */
 export class PlayerView {
   readonly object3d = new THREE.Group();
-  private readonly figure = new THREE.Group();
-  private readonly legL: THREE.Group;
-  private readonly legR: THREE.Group;
-  private readonly armL: THREE.Group;
-  private readonly armR: THREE.Group;
-  private readonly head = new THREE.Group();
+  private readonly character = new CuteCharacter('player');
   private readonly blender = new PoseBlender();
   private last: THREE.Vector3 | null = null;
   private speed = 0;
@@ -78,31 +36,7 @@ export class PlayerView {
 
   /** 모형을 만든다. */
   constructor() {
-    const cloth = createCharacterMaterial(0x4f7cac);
-    const trousers = createCharacterMaterial(0x6b5a45);
-    const skin = createCharacterMaterial(0xf0c8a0);
-    const hair = createCharacterMaterial(0x5a3b24);
-    const boots = createCharacterMaterial(0x4a3a2c);
-    // 다리(엉덩이 피벗 y 0.72)
-    this.legL = limb(0.21, 0.72, 0.24, trousers, -0.12, 0.72);
-    this.legR = limb(0.21, 0.72, 0.24, trousers, 0.12, 0.72);
-    for (const leg of [this.legL, this.legR])
-      leg.add(box(0.23, 0.12, 0.27, boots, 0, -0.72, -0.01));
-    const torso = box(0.52, 0.6, 0.3, cloth, 0, 0.7, 0);
-    const belt = box(0.54, 0.07, 0.32, boots, 0, 0.72, 0);
-    // 팔(어깨 피벗 y 1.28)
-    this.armL = limb(0.14, 0.56, 0.16, cloth, -0.34, 1.28);
-    this.armR = limb(0.14, 0.56, 0.16, cloth, 0.34, 1.28);
-    for (const arm of [this.armL, this.armR]) arm.add(box(0.13, 0.1, 0.15, skin, 0, -0.64, 0));
-    // 머리(목 피벗 y 1.3). 앞은 −z 다
-    this.head.position.set(0, 1.3, 0);
-    this.head.add(
-      box(0.42, 0.42, 0.42, skin, 0, 0.02, 0),
-      box(0.45, 0.1, 0.45, hair, 0, 0.4, 0),
-      box(0.45, 0.24, 0.1, hair, 0, 0.2, 0.18),
-    );
-    this.figure.add(this.legL, this.legR, torso, belt, this.armL, this.armR, this.head);
-    this.object3d.add(this.figure);
+    this.object3d.add(this.character.object3d);
   }
 
   /** 설치·공격 때 한 번 휘두른다(main 이 이벤트에서 부른다). 진행 중이면 처음부터 다시 한다. */
@@ -159,14 +93,8 @@ export class PlayerView {
     const d = this.blender.apply(target, dt, snap);
     this.object3d.position.set(p.x, p.y, p.z);
     this.object3d.rotation.set(0, player.yaw, 0);
-    this.figure.position.set(d.figurePos.x, d.figurePos.y, d.figurePos.z);
-    this.figure.rotation.set(d.figureRot.x, d.figureRot.y, d.figureRot.z);
-    this.legL.rotation.set(d.legL.x, d.legL.y, d.legL.z);
-    this.legR.rotation.set(d.legR.x, d.legR.y, d.legR.z);
-    this.armL.rotation.set(armJointRotationX(d.armL.x), d.armL.y, d.armL.z);
-    this.armR.rotation.set(armJointRotationX(d.armR.x), d.armR.y, d.armR.z);
     // 고개는 시선 피치를 조금 따라간다
-    this.head.rotation.set(d.head.x + player.pitch * 0.45, d.head.y, d.head.z);
+    this.character.applyPose(d, player.pitch * 0.45);
     this.object3d.visible = visible;
   }
 }

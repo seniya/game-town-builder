@@ -13,7 +13,7 @@ import { createGradeMaterial } from './materials';
 export type RenderQuality = 'high' | 'low';
 
 /** 빛 번짐 값(MVP_SPEC 45.3). 선형 HDR 밝기 문턱을 넘는 부분만 번진다. */
-export const BLOOM = { strength: 0.35, radius: 0.5, threshold: 0.85 } as const;
+export const BLOOM = { strength: 0.32, radius: 0.5, threshold: 1.0 } as const;
 
 /** 장면 한 장을 후처리까지 그리는 사슬. */
 export class PostPipeline {

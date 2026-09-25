@@ -93,7 +93,7 @@ export function figureLayout(style: FigureStyle): FigureLayout {
 }
 
 /** 부품 지오메트리에 한 색을 칠한다(정점 색, 선형 색공간). uv 는 쓰지 않으므로 뺀다. */
-function paint(g: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
+export function paint(g: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
   const c = new THREE.Color(color);
   const n = g.getAttribute('position').count;
   const data = new Float32Array(n * 3);
@@ -104,7 +104,7 @@ function paint(g: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
 }
 
 /** 부품을 옮기고 돌리고 늘린다(법선도 함께 바뀐다). */
-function place(
+export function place(
   g: THREE.BufferGeometry,
   pos: [number, number, number],
   scale: [number, number, number] = [1, 1, 1],
@@ -119,7 +119,13 @@ function place(
 }
 
 /** 부품들을 한 지오메트리로 합친다. 합친 뒤 원본은 버린다. */
-function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+export function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  // 인덱스 없는 부품(둥근 상자 등)에는 순차 인덱스를 붙여 인덱스 있는 부품과 합칠 수 있게 한다
+  for (const p of parts) {
+    if (p.index) continue;
+    const n = p.getAttribute('position').count;
+    p.setIndex(Array.from({ length: n }, (_, i) => i));
+  }
   const merged = mergeGeometries(parts, false);
   for (const p of parts) p.dispose();
   if (!merged) throw new Error('시안 모형 부품의 속성이 맞지 않는다');
@@ -127,7 +133,7 @@ function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 }
 
 /** 구(색·위치·늘림). */
-function ball(
+export function ball(
   r: number,
   color: number,
   pos: [number, number, number],
@@ -137,7 +143,7 @@ function ball(
 }
 
 /** 캡슐: 가운데가 pos, 전체 길이 length(양끝 반구 포함). */
-function capsule(r: number, length: number, color: number, pos: [number, number, number]) {
+export function capsule(r: number, length: number, color: number, pos: [number, number, number]) {
   return place(
     paint(new THREE.CapsuleGeometry(r, Math.max(0.01, length - 2 * r), 6, 12), color),
     pos,
@@ -145,7 +151,7 @@ function capsule(r: number, length: number, color: number, pos: [number, number,
 }
 
 /** 머리 구 표면(앞 −z)의 z. 얼굴 부품을 표면에 붙인다. */
-function faceZ(r: number, x: number, y: number, inset = 0): number {
+export function faceZ(r: number, x: number, y: number, inset = 0): number {
   return -Math.sqrt(Math.max(0, r * r - x * x - y * y)) + inset;
 }
 
@@ -408,7 +414,7 @@ export class CuteFigure {
 }
 
 /** 몸통 회전체의 옆모습(반지름, 높이): 아래가 넓고 어깨가 둥근 조롱박. */
-function torsoProfile(h: number): THREE.Vector2[] {
+export function torsoProfile(h: number): THREE.Vector2[] {
   const pts: [number, number][] = [
     [0, 0],
     [0.12, 0.005],

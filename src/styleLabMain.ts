@@ -1,6 +1,6 @@
 // 스타일 시안 장면 부트스트랩 (STYLE-001, MVP_SPEC 45.1). main.ts 가 ?scene=style-lab 일 때만 불러온다.
 // render(StyleLab) 와 ui(StyleLabPanel) 를 잇는다. 게임 월드·저장·오디오를 만들지 않는다.
-//   URL: &view=0~4 (주민·가구·블록·전경·얼굴), &pose=idle|walk|cook|sit|work, &steps=2|3, &outline=0|1, &dpr=
+//   URL: &view=0~5 (주민·가구·블록·전경·얼굴·마을 사람), &pose=idle|walk|cook|sit|work, &steps=2|3, &outline=0|1, &dpr=
 import { StyleLab, type LabPose } from './render/style/StyleLab';
 import { StyleLabPanel } from './ui/StyleLabPanel';
 
@@ -18,7 +18,7 @@ export function startStyleLab(canvas: HTMLCanvasElement, params: URLSearchParams
     pose: poseFromParam(params.get('pose')),
     steps: params.get('steps') === '2' ? 2 : 3,
     outline: params.get('outline') !== '0',
-    view: Math.max(0, Math.min(4, Number(params.get('view') ?? 0) || 0)),
+    view: Math.max(0, Math.min(5, Number(params.get('view') ?? 0) || 0)),
   });
 
   // 끌어서 돌리기·휠 확대
