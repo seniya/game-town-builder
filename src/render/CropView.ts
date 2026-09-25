@@ -3,7 +3,8 @@
 // 한 칸에 포기 넷. 단계 0 새싹 / 1 중간 / 2 큰 포기 / 성숙은 이삭이 달린다. 부위별 InstancedMesh 라 작물 수와 드로우콜이 무관하다.
 import * as THREE from 'three';
 import type { CropView as CropState } from '../game/systems/FarmSystem';
-import { createPropMaterial } from './materials';
+import { createModelToonMaterial, createToonGradient } from './materials';
+import { paint } from './style/cuteFigure';
 
 /** 다시 모으는 간격(초). 단계는 게임 시간 4 시간(100 실초)마다 바뀌므로 자주 볼 필요가 없다. */
 const REFRESH_SECONDS = 0.5;
@@ -36,10 +37,14 @@ export class CropView {
 
   /** 작물 목록 조회를 받는다. */
   constructor(private readonly crops: () => readonly CropState[]) {
-    const box = new THREE.BoxGeometry(1, 1, 1);
-    this.stems = new THREE.InstancedMesh(box, createPropMaterial(0x5f9a3a), MAX_CROPS * 4);
-    this.leaves = new THREE.InstancedMesh(box, createPropMaterial(0x7cc04a), MAX_CROPS * 8);
-    this.heads = new THREE.InstancedMesh(box, createPropMaterial(0xe7c24f), MAX_CROPS * 4);
+    // 단위 크기 둥근 부품(STYLE-003): 줄기는 원기둥, 잎은 납작한 타원체, 이삭은 타원체. 크기는 인스턴스 행렬이 준다
+    const toon = createModelToonMaterial(createToonGradient(3));
+    const stem = paint(new THREE.CylinderGeometry(0.5, 0.5, 1, 8), 0x5f9a3a);
+    const leaf = paint(new THREE.SphereGeometry(0.5, 12, 8), 0x86cc52);
+    const head = paint(new THREE.SphereGeometry(0.5, 12, 10), 0xf0c84f);
+    this.stems = new THREE.InstancedMesh(stem, toon, MAX_CROPS * 4);
+    this.leaves = new THREE.InstancedMesh(leaf, toon, MAX_CROPS * 8);
+    this.heads = new THREE.InstancedMesh(head, toon, MAX_CROPS * 4);
     for (const mesh of [this.stems, this.leaves, this.heads]) {
       mesh.count = 0;
       mesh.frustumCulled = false;

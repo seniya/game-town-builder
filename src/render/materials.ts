@@ -472,7 +472,7 @@ export function createOutlineMaterial(color = 0x3b2b25, thickness = 0.011): THRE
 
 /**
  * 사람·가구 모형 재질(STYLE-002·003): 정점 색 + 툰 명암 + 가장자리 밝힘 + 무조명 부위.
- * 지오메트리의 `unlit` 속성(0~1)이 1 인 정점(눈·입·불꽃)은 명암 없이 제 색으로 보인다.
+ * 지오메트리의 `unlit` 속성이 1 인 정점(눈·입)은 명암 없이 제 색으로, 2 인 정점(불꽃)은 스스로 빛난다.
  * 한 캐릭터를 메시 하나로 그리기 위해 눈·입을 따로 떼지 않는다. 밝기는 복셀 셰이더 규약을 따른다.
  */
 export function createModelToonMaterial(
@@ -498,8 +498,9 @@ export function createModelToonMaterial(
           'outgoingLight *= lightScale;',
           'float rimDot = 1.0 - max(dot(normalize(normal), normalize(vViewPosition)), 0.0);',
           'outgoingLight += diffuseColor.rgb * rimStrength * smoothstep(0.62, 0.9, rimDot);',
-          // 무조명 부위는 제 색(밝은 반짝임은 빛 번짐 문턱을 넘지 않게 1 이하)
-          'outgoingLight = mix(outgoingLight, diffuseColor.rgb * 0.95, vUnlit);',
+          // 무조명 부위(1)는 제 색, 빛나는 부위(2, 불꽃)는 제 색의 3 배라 빛 번짐 문턱을 넘는다
+          'outgoingLight = mix(outgoingLight, diffuseColor.rgb * 0.95, min(vUnlit, 1.0));',
+          'outgoingLight *= 1.0 + max(vUnlit - 1.0, 0.0) * 2.0;',
           '#include <opaque_fragment>',
         ].join('\n'),
       );

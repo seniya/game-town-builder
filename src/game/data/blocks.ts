@@ -67,8 +67,22 @@ function def(
 /** 반투명 메시로 그리는 블록. 게임 규칙에는 영향이 없는 렌더 분류다. */
 const TRANSLUCENT: ReadonlySet<BlockName> = new Set<BlockName>(['water', 'window']);
 
-/** 청크 메시 대신 렌더 모형으로 그리는 블록 (ADR 026). 게임 규칙에는 영향이 없는 렌더 분류다. */
-const PROPS: ReadonlySet<BlockName> = new Set<BlockName>(['door', 'bed', 'crop']);
+/**
+ * 청크 메시 대신 렌더 모형으로 그리는 블록 (ADR 026, STYLE-003 에서 가구·횃불·종까지 넓힘). 게임 규칙에는 영향이 없는 렌더 분류다.
+ * 충돌·통행·방 판정·조준·설치는 solid / opaque / kind 등 다른 필드를 쓴다.
+ */
+const PROPS: ReadonlySet<BlockName> = new Set<BlockName>([
+  'door',
+  'bed',
+  'crop',
+  'torch',
+  'table',
+  'chair',
+  'chest',
+  'cooking_stove',
+  'water_pot',
+  'bell',
+]);
 
 const B = BlockId;
 

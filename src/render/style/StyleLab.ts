@@ -18,6 +18,7 @@ import {
   createToonMaterial,
 } from '../materials';
 import { CuteCharacter, type CharacterKind } from '../cuteCharacter';
+import { FurnitureView } from '../FurnitureView';
 import { NpcView, type NpcViewWorld } from '../NpcView';
 import { Renderer, type OrbitView } from '../Renderer';
 import {
@@ -175,8 +176,8 @@ function puffTexture(): THREE.Texture {
 }
 
 /** 시안 장면 월드: 풀밭과 지금 블록·가구 견본. 게임 규칙 없이 청크 메시만 쓴다. */
-function buildLabVoxels(): VoxelWorld {
-  const world = new VoxelWorld({ sizeX: LAB_SIZE_X, sizeY: 16, sizeZ: 32 }, new EventBus());
+function buildLabVoxels(events: EventBus): VoxelWorld {
+  const world = new VoxelWorld({ sizeX: LAB_SIZE_X, sizeY: 16, sizeZ: 32 }, events);
   for (let z = 0; z < 32; z++) {
     for (let x = 0; x < LAB_SIZE_X; x++) {
       world.writeInitial(x, 0, z, BlockId.bedrock);
@@ -229,12 +230,18 @@ export class StyleLab {
 
   /** 캔버스에 장면을 만든다. */
   constructor(canvas: HTMLCanvasElement, options: { maxPixelRatio: number }) {
-    this.renderer = new Renderer(canvas, buildLabVoxels(), {
+    const events = new EventBus();
+    const voxels = buildLabVoxels(events);
+    this.renderer = new Renderer(canvas, voxels, {
       workerCount: 1,
       chunkUploadsPerFrame: 8,
       maxPixelRatio: options.maxPixelRatio,
     });
     this.renderer.scene.add(this.root);
+    // 가구 블록은 청크 메시가 아니라 모형으로 그린다(STYLE-003). 게임과 같은 뷰를 쓴다
+    const furniture = new FurnitureView(voxels, events);
+    furniture.update();
+    this.root.add(furniture.object3d);
     this.toon = createToonMaterial(this.gradients[3]);
     this.outline = createOutlineMaterial();
     const materials: CuteMaterials = {

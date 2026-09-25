@@ -39,73 +39,11 @@ function box(
     : { min: [x0, y0, z0], max: [x1, y1, z1], tileFrom };
 }
 
-/** 네 귀퉁이 다리. inset 은 가장자리에서 띄운 거리, size 는 굵기, height 는 높이. */
-function legs(inset: number, size: number, height: number): ShapeBox[] {
-  const a = inset;
-  const b = 16 - inset - size;
-  return [
-    box(a, 0, a, a + size, height, a + size),
-    box(b, 0, a, b + size, height, a + size),
-    box(a, 0, b, a + size, height, b + size),
-    box(b, 0, b, b + size, height, b + size),
-  ];
-}
-
-const SEAT = CHAIR_SEAT_HEIGHT * 16;
-
 /** blockId → 모양. 없는 블록은 정육면체다. */
 export const BLOCK_SHAPES: ReadonlyMap<number, BlockShape> = new Map<number, BlockShape>([
-  // 막대와 불꽃. 불꽃은 윗면 타일(torchTop)이 보이는 작은 상자다
-  [
-    BlockId.torch,
-    {
-      boxes: [box(7, 0, 7, 9, 10, 9), box(6.5, 10, 6.5, 9.5, 13, 9.5)],
-    },
-  ],
-  // 벽 가운데 평면의 판유리. 타일의 나무 테두리가 창틀이 된다
+  // 벽 가운데 평면의 판유리. 타일의 나무 테두리가 창틀이 된다.
+  // 식탁·의자·상자·화덕·물 항아리·종·횃불은 STYLE-003 부터 청크 메시가 아니라 렌더 모형(blocks.prop, render/furnitureModels)이다
   [BlockId.window, { boxes: [box(0, 0, 7, 16, 16, 9)], orient: 'pane' }],
-  // 상판과 다리 넷. 윗면은 칸 윗면(1.0) 그대로다(식탁 위 음식 연출이 이 높이를 쓴다)
-  [BlockId.table, { boxes: [box(0, 13, 0, 16, 16, 16), ...legs(1.5, 2, 13)] }],
-  // 앉는 판·다리 넷·등받이(북쪽에 정의, 식탁 반대쪽으로 돌린다)
-  [
-    BlockId.chair,
-    {
-      boxes: [
-        box(2, SEAT - 2, 2, 14, SEAT, 14),
-        ...legs(2.5, 2, SEAT - 2),
-        box(2, SEAT, 2, 14, 16, 4),
-      ],
-      orient: 'backrest',
-    },
-  ],
-  // 몸통과 뚜껑. 칸보다 조금 작다
-  [BlockId.chest, { boxes: [box(1, 0, 2, 15, 10, 14), box(0.5, 10, 1.5, 15.5, 13, 14.5)] }],
-  // 돌 화덕 몸통(옆면 띠가 불구멍), 윗면 판, 위에 얹은 냄비
-  [
-    BlockId.cooking_stove,
-    {
-      boxes: [
-        box(1, 0, 1, 15, 12, 15),
-        box(0.5, 12, 0.5, 15.5, 13, 15.5),
-        box(5, 13, 5, 11, 16, 11, BlockId.water_pot),
-      ],
-    },
-  ],
-  // 물 항아리: 몸통과 테두리
-  [BlockId.water_pot, { boxes: [box(3, 0, 3, 13, 12, 13), box(2.5, 12, 2.5, 13.5, 14, 13.5)] }],
-  // 종: 받침·기둥·종 몸통·꼭지
-  [
-    BlockId.bell,
-    {
-      boxes: [
-        box(2, 0, 2, 14, 2, 14),
-        box(7, 2, 7, 9, 4, 9),
-        box(4, 4, 4, 12, 12, 12),
-        box(5, 12, 5, 11, 14, 11),
-        box(7, 14, 7, 9, 16, 9),
-      ],
-    },
-  ],
 ]);
 
 /** 이 블록이 모양 블록인가. */

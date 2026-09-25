@@ -8,12 +8,23 @@ import { greedyMesh, PADDED_VOLUME, paddedIndex } from '../src/workers/greedyMes
 import { navFixture, FEET_Y } from './helpers/navWorld';
 
 describe('침대·문은 청크 메시 대신 렌더 모형이다', () => {
-  it('prop 은 door / bed / crop 뿐이고 게임 규칙 필드는 그대로다', () => {
+  it('prop 은 door / bed / crop 과 가구·횃불·종(STYLE-003)이고 게임 규칙 필드는 그대로다', () => {
     expect(
       BLOCKS.filter((b) => b.prop)
         .map((b) => b.name)
         .sort(),
-    ).toEqual(['bed', 'crop', 'door']);
+    ).toEqual([
+      'bed',
+      'bell',
+      'chair',
+      'chest',
+      'cooking_stove',
+      'crop',
+      'door',
+      'table',
+      'torch',
+      'water_pot',
+    ]);
     expect(getBlockDef(BlockId.bed).solid).toBe(true);
     expect(getBlockDef(BlockId.door).solid).toBe(false);
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLOCK_SHAPES, CHAIR_SEAT_HEIGHT } from '../src/game/data/blockShapes';
+import { BLOCK_SHAPES } from '../src/game/data/blockShapes';
 import { BLOCKS, BlockId } from '../src/game/data/blocks';
 import type { MeshBuffers } from '../src/game/types';
 import { greedyMesh, PADDED_VOLUME, paddedIndex } from '../src/workers/greedyMesh';
@@ -54,14 +54,13 @@ describe('기존 블록의 모양 표현 (TASK-SHAPE-001, ADR 028 보완)', () =
     }
   });
 
-  it('모양 블록은 이웃 면을 가리지 않고, 불투명 블록에 붙은 자기 상자 면만 지운다', () => {
+  it('가구 모형 블록(prop)은 청크 면을 내지 않고 이웃 면을 가리지 않는다 (STYLE-003)', () => {
     const p = empty();
     put(p, 5, 4, 5, BlockId.stone);
     put(p, 5, 5, 5, BlockId.torch);
     const mesh = greedyMesh(p, BLOCKS, { greedy: false });
-    // 돌은 여섯 면이 모두 보인다(횃불 아래 윗면 포함). 횃불 막대 밑면은 돌에 붙어 지운다
-    expect(mesh.stats.visibleFaces).toBe(6 + faceCount(BlockId.torch) - 1);
-    // 식탁 아래 바닥 윗면도 보인다(다리 사이로 보인다)
+    // 돌 여섯 면만(횃불 아래 윗면 포함). 횃불은 FurnitureView 가 모형으로 그린다
+    expect(mesh.stats.visibleFaces).toBe(6);
     const q = empty();
     put(q, 5, 4, 5, BlockId.plank);
     put(q, 5, 5, 5, BlockId.table);
@@ -101,28 +100,6 @@ describe('기존 블록의 모양 표현 (TASK-SHAPE-001, ADR 028 보완)', () =
     expect(greedyMesh(pair, BLOCKS).stats.visibleFaces).toBe(10);
   });
 
-  it('의자 등받이는 맞닿은 식탁의 반대쪽에 선다', () => {
-    const seatTop = 5 + CHAIR_SEAT_HEIGHT;
-    // 의자 칸 안쪽(경계 제외): 옆 칸 식탁의 정점을 빼기 위해서다
-    const inside = (c: number): boolean => c > 5 + 1e-6 && c < 6 - 1e-6;
-    const backrest = (tx: number, tz: number): [number, number, number][] => {
-      const p = empty();
-      put(p, 5, 5, 5, BlockId.chair);
-      put(p, 5 + tx, 5, 5 + tz, BlockId.table);
-      return vertices(greedyMesh(p, BLOCKS).opaque).filter(
-        (v) => v[1] > seatTop + 0.01 && inside(v[0]) && inside(v[2]),
-      );
-    };
-    // 식탁이 남(+z) → 등받이는 북(z 2~4/16)
-    expect(range(backrest(0, 1), 2)).toEqual([5 + 2 / 16, 5 + 4 / 16]);
-    // 식탁이 북(−z) → 등받이는 남(z 12~14/16)
-    expect(range(backrest(0, -1), 2)).toEqual([5 + 12 / 16, 5 + 14 / 16]);
-    // 식탁이 동(+x) → 등받이는 서(x 2~4/16)
-    expect(range(backrest(1, 0), 0)).toEqual([5 + 2 / 16, 5 + 4 / 16]);
-    // 식탁이 서(−x) → 등받이는 동(x 12~14/16)
-    expect(range(backrest(-1, 0), 0)).toEqual([5 + 12 / 16, 5 + 14 / 16]);
-  });
-
   it('바닥 한 층을 모양 블록으로 채워도 버퍼는 두 벌이고 메싱은 20 ms 미만이다', () => {
     const ids = [...BLOCK_SHAPES.keys()];
     const p = empty();
@@ -148,7 +125,7 @@ describe('기존 블록의 모양 표현 (TASK-SHAPE-001, ADR 028 보완)', () =
 
   it('정육면체로 그리던 결과는 모양 표를 비우면 그대로다', () => {
     const p = empty();
-    put(p, 5, 5, 5, BlockId.table);
+    put(p, 5, 5, 5, BlockId.window);
     expect(greedyMesh(p, BLOCKS, { shapes: new Map() }).stats.visibleFaces).toBe(6);
   });
 });
