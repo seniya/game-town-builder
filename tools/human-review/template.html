@@ -1001,8 +1001,21 @@ pnpm install && pnpm dev</pre>
         esc(DATA.repoBlob + 'HUMAN_REVIEW.md') +
         '">원본 문서</a>';
 
+      // 다음 단계를 막는 게이트 항목(출처에 "게이트")이 있으면 그것부터 권한다
+      const gate = DATA.pending.find((i) => i.source.includes('게이트'));
       const pinned = DATA.pending.find((i) => i.id === 'HR-029');
-      if (pinned) {
+      if (gate) {
+        document.getElementById('start-text').innerHTML =
+          '<strong>' +
+          esc(gate.id) +
+          '</strong>부터 봐 주세요. 이 판단을 받아야 다음 작업으로 넘어갑니다. ' +
+          inline(gate.scene) +
+          ' <a href="#' +
+          esc(gate.id) +
+          '">' +
+          esc(gate.id) +
+          ' 로 가기</a>';
+      } else if (pinned) {
         document.getElementById('start-text').innerHTML =
           '<strong>HR-029 통과 플레이</strong>부터 권합니다. <code>/?new=1</code> 에서 디버그 없이 엔딩까지 한 번 플레이하면 습격·엔딩·저장·소리·주민 동작 등 여러 항목의 장면을 함께 만납니다. 플레이하며 떠오른 것은 해당 항목에 바로 적어 주세요. <a href="#HR-029">HR-029 로 가기</a>';
       } else {
@@ -1027,7 +1040,8 @@ pnpm install && pnpm dev</pre>
 
       const list = document.getElementById('list');
       const order = [...DATA.pending].sort((a, b) => {
-        const rank = (i) => (kindOf(i) === 'recheck' ? 0 : i.id === 'HR-029' ? 1 : 2);
+        const rank = (i) =>
+          i.source.includes('게이트') ? -1 : kindOf(i) === 'recheck' ? 0 : i.id === 'HR-029' ? 1 : 2;
         return rank(a) - rank(b);
       });
       order.forEach((item) => {
