@@ -271,7 +271,13 @@ export function npcPose(i: NpcPoseInput): PoseTarget {
 }
 
 /** 밭일 허리 굽힘 각도(rad). 모형에 허리 관절이 없어 몸 전체를 숙이고 다리를 되세워 흉내 낸다. */
-const WORK_BEND = 0.75;
+const WORK_BEND = 0.8;
+/**
+ * 밭일 중 허리를 폈다 굽혔다 하는 폭(rad)과 빠르기(rad/s). 큰 머리에 가려 정면에서는 굽힘이 끄덕임처럼 보여서(HR-013)
+ * 몸이 오르내리는 움직임으로 어느 방향에서든 "땅을 고른다" 가 읽히게 한다.
+ */
+const WORK_BOB = 0.18;
+const WORK_BOB_SPEED = 4.5;
 /**
  * 모형의 엉덩이 높이(NpcView 다리 피벗 y). 굽힌 뒤 발을 제자리에 두는 데 쓴다.
  * 자세 표의 몸 이동(figurePos)은 이 높이의 모형 기준이다. 다른 비율의 모형은 이동을 제 엉덩이 높이 비율로 늘여 입힌다(STYLE-001).
@@ -286,15 +292,18 @@ export const HIP_HEIGHT = 0.42;
 function workPose(time: number): CharacterPose {
   const p = restPose();
   const dig = Math.sin(time * 9);
-  p.figureRot.x = -WORK_BEND;
-  p.figurePos.z = HIP_HEIGHT * Math.sin(WORK_BEND);
-  p.figurePos.y = HIP_HEIGHT * (1 - Math.cos(WORK_BEND));
-  p.legL.x = WORK_BEND + 0.12;
-  p.legR.x = WORK_BEND - 0.08;
-  // 팔 x 는 음수가 앞이다. -WORK_BEND 면 땅을 향해 곧게 늘어지고, 그보다 조금 더 앞으로 뻗어 고른다
-  p.armL = { x: -WORK_BEND - 0.25 + dig * 0.25, y: 0, z: 0.1 };
-  p.armR = { x: -WORK_BEND - 0.25 - dig * 0.25, y: 0, z: -0.1 };
-  p.head.x = -0.2;
+  // 굽힘은 WORK_BEND ± WORK_BOB 사이를 오간다. 다리 되세우기·발 고정도 같은 각도로 따라간다
+  const bend = WORK_BEND + WORK_BOB * Math.sin(time * WORK_BOB_SPEED);
+  p.figureRot.x = -bend;
+  p.figurePos.z = HIP_HEIGHT * Math.sin(bend);
+  p.figurePos.y = HIP_HEIGHT * (1 - Math.cos(bend));
+  p.legL.x = bend + 0.12;
+  p.legR.x = bend - 0.08;
+  // 팔 x 는 음수가 앞이다. -bend 면 땅을 향해 곧게 늘어지고, 그보다 조금 더 앞으로 뻗어 고른다
+  p.armL = { x: -bend - 0.25 + dig * 0.25, y: 0, z: 0.1 };
+  p.armR = { x: -bend - 0.25 - dig * 0.25, y: 0, z: -0.1 };
+  // 머리는 굽힐수록 조금 들어 땅을 보는 얼굴이 정면에서도 보이게 한다
+  p.head.x = -0.2 + (bend - WORK_BEND) * 0.5;
   return p;
 }
 

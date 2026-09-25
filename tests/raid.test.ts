@@ -111,6 +111,26 @@ describe('습격 스케줄 (TASK-044, MVP_SPEC 24.1)', () => {
     expect(started).toHaveLength(2);
   });
 
+  it('시각 강제 설정으로 그 밤을 통째로 건너뛰면 낮에 열지 않고 다음 21:00 에 연다 (MVP_SPEC 20.3, HR-019)', () => {
+    const w = raidWorld(9);
+    const { started } = log(w);
+    w.village.restore(2);
+    run(w, 0.1);
+    const first = w.raids.scheduledAtGameMinutes ?? 0;
+    jump(w, 7, 0); // 09:00 → 다음 날 07:00: 21:00~05:00 을 건너뛴다
+    expect(monsters(w)).toBe(0);
+    expect(started).toHaveLength(0);
+    expect(w.raids.scheduledAtGameMinutes).toBe(first + 24 * 60);
+    jump(w, 21, 0);
+    expect(monsters(w)).toBe(3);
+    // 밤 안에서 멈추면 그 자리에서 시작한다
+    const v = raidWorld(9);
+    v.village.restore(2);
+    run(v, 0.1);
+    jump(v, 23, 0);
+    expect(monsters(v)).toBe(3);
+  });
+
   it('1 차를 21~24 시에 모두 처치하면 그때 끝나고, 2 차는 종료보다 엄격히 뒤인 다음 21:00 이다', () => {
     const w = raidWorld(10);
     const { started, ended } = log(w);

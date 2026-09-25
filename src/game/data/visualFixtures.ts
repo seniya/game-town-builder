@@ -398,6 +398,7 @@ export const sleepLabFixture: VisualFixture = {
  * 주방은 내부 x 20~24, z 22~26, 돌벽돌 벽 세 층·판자 바닥·지붕, 북쪽 벽에 붙은 화덕과 물통, 서쪽 창문, 남쪽 문이다.
  * 식당은 내부 x 20~24, z 36~40, 판자 벽 세 층·지붕, 가운데 식탁 하나와 의자 셋, 동쪽 창문, 북쪽 문(광장 쪽)이다.
  * 요리사가 오전에 조리하고, 12:00 과 18:00 에 주민 셋이 식당 의자에 앉아 먹는다. 기존 블록만 쓴다.
+ * 침실에는 침대가 둘이다(레벨 2 게이트의 housingLevel 50 을 넘겨, F3 "감사 +20" 만으로 종을 시험할 수 있다).
  */
 export const kitchenLabFixture: VisualFixture = {
   ...sleepLabFixture,
@@ -439,6 +440,8 @@ export const kitchenLabFixture: VisualFixture = {
     ...sleepLabFixture.objects,
     { blockId: BlockId.door, anchor: { x: 22, y: 11, z: 27 }, facing: 'south' },
     { blockId: BlockId.door, anchor: { x: 22, y: 11, z: 35 }, facing: 'north' },
+    // 침실 두 번째 침대: 주민 셋에 침대 둘이면 housingLevel 67 ≥ 50 이라 감사 포인트만 채우면 종을 칠 수 있다 (HR-019·021)
+    { blockId: BlockId.bed, anchor: { x: 41, y: 11, z: 23 }, facing: 'south' },
   ],
   views: [
     { target: { x: 27, y: 12, z: 29 }, distance: 24, yaw: -0.35, pitch: 0.5 },

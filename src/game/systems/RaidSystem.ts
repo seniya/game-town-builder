@@ -109,7 +109,13 @@ export class RaidSystem implements SlotSystem {
       return;
     }
     if (this.scheduledAt === null) this.scheduledAt = nextOccurrence(now, M.spawnHour, 0);
-    if (now >= this.scheduledAt) this.start(next.raidId, next.count, now);
+    if (now < this.scheduledAt) return;
+    // 시각 강제 설정으로 그 밤(21:00~05:00)을 통째로 건너뛰었으면 낮에 열지 않고 다음 21:00 로 미룬다 (MVP_SPEC 20.3)
+    if (now >= nextOccurrence(this.scheduledAt, M.despawnHour, 0)) {
+      this.scheduledAt = nextOccurrence(now, M.spawnHour, 0);
+      return;
+    }
+    this.start(next.raidId, next.count, now);
   }
 
   /** 저장용 스냅샷. */

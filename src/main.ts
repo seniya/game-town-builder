@@ -50,6 +50,7 @@ import type { BlockPos } from './game/types';
 import { BellPanel } from './ui/BellPanel';
 import { DialogueBox } from './ui/DialogueBox';
 import { ClockHud } from './ui/ClockHud';
+import { CompassHud, headingFromDirection } from './ui/CompassHud';
 import { InteractPrompt } from './ui/InteractPrompt';
 import { endingPose, type EndingScene } from './game/ending/endingShot';
 import { ArrivalToast } from './ui/ArrivalToast';
@@ -811,6 +812,12 @@ async function start(): Promise<void> {
   renderer.scene.add(damageMarks.object3d);
   renderer.scene.add(bellRing.object3d);
   const clockHud = new ClockHud(document.body, world.clock, formatClock);
+  // 나침반: 카메라 시선의 수평 방위(북 = −z). 새 주민이 오는 남쪽·습격 방향을 찾게 돕는다 (HR-019)
+  const compassDir = new THREE.Vector3();
+  const compassHud = new CompassHud(document.body, () => {
+    renderer.camera.getWorldDirection(compassDir);
+    return headingFromDirection(compassDir.x, compassDir.z);
+  });
   if (params.get('bounds') === '1') world.debug.showRoomBounds = true;
   if (params.get('nav') === '1') world.debug.showNavCells = true;
   const navOverlay = new NavOverlayView(world.nav);
@@ -976,6 +983,7 @@ async function start(): Promise<void> {
       [...world.registry.npcs.values()].map((n) => n.action.remainingPath ?? []),
     );
     clockHud.update();
+    compassHud.update();
     const renderStart = performance.now();
     renderer.render();
     const renderMs = performance.now() - renderStart;
