@@ -1762,7 +1762,7 @@ class BarkSystem implements SlotSystem {
 입력        EventBus 구독(NPC_ACTION_CHANGED / COMBAT_HIT / RAID_ENDED / ROOM_REGISTERED / ROOM_TYPE_CHANGED / VILLAGE_LEVEL_UP / NPC_ARRIVED)
             → 계기를 큐에 모았다가 update 에서 처리한다. 발행 도중에 다른 발행을 끼워 넣지 않는다
 읽기        주민(registry), 시계, 플레이어 위치, 방 조회, 침대 배정 조회, 식사 구간, 저장소 food, 진행 대사 여부
-출력        NPC_BARK { npcId, topic, text }. 시스템 → 렌더 알림(5.1)이다. 다른 시스템은 구독하지 않는다
+출력        NPC_BARK { npcId, topic, text }. 시스템 → 렌더·UI 알림(5.1)이다. render/BarkBubbleView(말풍선)와 ui/audio/GameSounds(웅얼거림, TASK-BARK-002)만 구독한다
 문장        data/barks.ts 의 topic → { common, farmer?, cook?, carpenter?, villager? } 와 방 타입별 새 방 문장
 ```
 

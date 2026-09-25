@@ -1,10 +1,12 @@
 // 게임 소리 전체 (MVP_SPEC 30, TASK-050). 파일 에셋 없이 Web Audio 로 합성한다. 게임 상태를 소유하지 않고 이벤트만 구독한다.
 //   블록 파괴·설치(재질 4 종) / 발소리(재질별) / 방 인식 성공(★ 전용, 리버브) / 방 해제 경고음 / 감사 포인트 짧은 벨
 //   종(긴 종소리 + 리버브) / 습격 시작 스팅어 / 몬스터가 벽을 부수는 소리 / 낮·밤 BGM(생성 음악, 부드럽게 전환)
+//   주민의 한마디 웅얼거림(역할별 음높이, 거리 감쇠, 동시 두 주민. TASK-BARK-002)
 // 이벤트 안에서는 소리를 내지 않고 다음 작업으로 미룬다(방 판정·편집 예산에 오디오 비용을 섞지 않는다).
 import type { EventBus } from '../../game/EventBus';
-import type { DayPhase } from '../../game/types';
+import type { BarkTopic, DayPhase, NPCRole } from '../../game/types';
 import type { AudioEngine } from './AudioEngine';
+import { barkBlips, BarkVoiceLimiter, barkVolume } from './barkVoice';
 import { soundMaterial, type SoundMaterial } from './soundMaterial';
 
 /** 재질별 파괴음 필터 중심 주파수·길이, 설치음 음높이. */
@@ -44,6 +46,12 @@ const NIGHT_SCALE = [220.0, 246.94, 261.63, 329.63, 349.23, 440.0];
 /** BGM 음 간격(초). */
 const DAY_BEAT = 0.55;
 const NIGHT_BEAT = 0.95;
+/** 한마디 웅얼거림의 최대 음량과 동시에 내는 주민 수. */
+const BARK_GAIN = 0.09;
+const BARK_VOICES = 2;
+
+/** 말한 주민의 목소리 조회: 역할과 듣는 위치(카메라)까지 거리. 없는 주민이면 null. */
+export type BarkSpeaker = (npcId: string) => { role: NPCRole; distance: number } | null;
 
 /** 소리를 모은다. */
 export class GameSounds {
@@ -54,11 +62,14 @@ export class GameSounds {
   private nextBeat = 0;
   private step = 0;
   private footDistance = 0;
+  /** 동시에 웅얼거리는 주민 수 제한 */
+  private readonly barkVoices = new BarkVoiceLimiter(BARK_VOICES);
 
-  /** 엔진과 이벤트를 받는다. */
+  /** 엔진과 이벤트를 받는다. speaker 가 없으면 한마디 소리를 내지 않는다. */
   constructor(
     private readonly engine: AudioEngine,
     events: EventBus,
+    private readonly speaker?: BarkSpeaker,
   ) {
     const later = (fn: () => void): void => queueMicrotask(fn);
     events.on('ROOM_REGISTERED', () => later(() => this.roomSuccess()));
@@ -77,6 +88,7 @@ export class GameSounds {
     events.on('VILLAGE_LEVEL_UP', () => later(() => this.bell()));
     events.on('RAID_STARTED', () => later(() => this.stinger()));
     events.on('DAY_PHASE_CHANGED', (p) => void (this.night = isNight(p.phase)));
+    events.on('NPC_BARK', (b) => later(() => this.bark(b.npcId, b.text, b.topic)));
   }
 
   /** 시작 시간대를 맞춘다. */
@@ -118,6 +130,25 @@ export class GameSounds {
       this.tone(ctx, f, t0 + d, 1.6 - i * 0.12, 0.3, 'sine', true),
     );
     this.tone(ctx, 130.81, t0, 1.2, 0.18, 'triangle', true);
+  }
+
+  /**
+   * 주민의 한마디 웅얼거림. 듣는 위치에서 멀수록 작고 22 칸 밖은 내지 않는다.
+   * 이미 두 주민이 웅얼거리는 중이면 건너뛴다(여럿이 한꺼번에 말해도 시끄럽지 않게).
+   */
+  private bark(npcId: string, text: string, topic: BarkTopic): void {
+    const ctx = this.engine.ctx;
+    const who = this.speaker?.(npcId);
+    if (!ctx || !who) return;
+    const volume = barkVolume(who.distance);
+    if (volume <= 0) return;
+    const t0 = ctx.currentTime;
+    const blips = barkBlips(text, who.role, npcId, topic);
+    const last = blips[blips.length - 1];
+    if (!this.barkVoices.tryStart(t0, t0 + (last ? last.at + last.length : 0))) return;
+    for (const b of blips) {
+      this.tone(ctx, b.freq, t0 + b.at, b.length, BARK_GAIN * volume, 'triangle', false, 2400);
+    }
   }
 
   /** 방 해제 경고음. */

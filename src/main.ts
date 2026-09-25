@@ -772,7 +772,14 @@ async function start(): Promise<void> {
   );
   const gratitudeHud = new GratitudeHud(document.body, () => world.gratitude.total, world.events);
   const audio = new AudioEngine();
-  const sounds = new GameSounds(audio, world.events);
+  const sounds = new GameSounds(audio, world.events, (id) => {
+    const npc = world.registry.npcs.get(id);
+    if (!npc) return null;
+    const p = npc.body.pos;
+    const c = renderer.camera.position;
+    // 한마디 소리의 거리는 말풍선과 같이 카메라 기준이다 (TASK-BARK-002)
+    return { role: npc.role, distance: Math.hypot(p.x - c.x, p.y - c.y, p.z - c.z) };
+  });
   sounds.setPhase(world.clock.phase);
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyM' && !e.repeat) audio.setMuted(!audio.muted);
