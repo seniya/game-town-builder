@@ -186,6 +186,13 @@ export class Renderer3D {
     this.camera.position.z += dz;
   }
 
+  /** 가까이 보기(자동 관찰용): (x, z) 를 거리 d 에서 비스듬히 내려다본다. */
+  closeUp(x: number, z: number, d: number): void {
+    this.controls.target.set(x, 0, z);
+    this.camera.position.set(x, d * 0.7, z + d * 0.72);
+    this.controls.update();
+  }
+
   /** 끌어서 이동하지 못하게(놓기 모드에서 왼쪽 끌기를 칠하기로 쓴다). */
   setPanEnabled(on: boolean): void {
     if (this.controls) this.controls.enablePan = on;

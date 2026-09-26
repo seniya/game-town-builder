@@ -21,6 +21,7 @@ import {
   updateRumors,
   updateStats,
 } from './ui/panel';
+import { isHighlight, Notices } from './ui/notice';
 import { Toolbar, type ToolMode } from './ui/tools';
 
 const SAVE_KEY = 'dotori.save.v1';
@@ -101,6 +102,7 @@ function attach(w: World): void {
   computeStats(w);
   r3.rebuild(w);
   resetFeed(w);
+  notices.clear();
   w.out.length = 0;
   const host = w.party ? w.vs[w.party.host] : undefined;
   $('intro').innerHTML = host
@@ -152,6 +154,9 @@ function say(text: string): void {
   if (toast) clearTimeout(toast);
   toast = setTimeout(() => el.classList.add('hide'), 2200);
 }
+
+/** 큰 순간 알림 카드. 누르면 그 주민을 고르고 카메라를 옮긴다. */
+const notices = new Notices($('notices'), (vid) => select(vid, true));
 
 /** 도구 막대. */
 const tools = new Toolbar($('tools'), $('toolHint'), (m: ToolMode) => {
@@ -359,8 +364,10 @@ function loop(): void {
       if (n >= TIME.maxTicksPerFrame) acc = 0;
     }
     for (const ev of world.out) {
-      if (ev.type === 'log') appendFeed(ev.entry);
-      else if (ev.type === 'fx') r3.fx(world, ev.vid, ev.fx);
+      if (ev.type === 'log') {
+        appendFeed(ev.entry);
+        if (isHighlight(ev.entry)) notices.push(ev.entry);
+      } else if (ev.type === 'fx') r3.fx(world, ev.vid, ev.fx);
       else r3.siteFx(ev.x, ev.y, ev.fx);
     }
     world.out.length = 0;

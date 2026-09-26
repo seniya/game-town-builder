@@ -644,3 +644,83 @@ button:focus-visible {
     bottom: 80px;
   }
 }
+.notices {
+  position: absolute;
+  left: 12px;
+  bottom: 84px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+  max-width: min(340px, calc(100% - 24px));
+  pointer-events: none;
+}
+.notice {
+  pointer-events: auto;
+  text-align: left;
+  border: 0;
+  background: rgba(255, 253, 247, 0.96);
+  color: #243030;
+  border-radius: 14px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: 0 4px 16px rgba(20, 40, 30, 0.2);
+  cursor: pointer;
+  animation: notice-in 0.35s ease-out;
+  transition:
+    opacity 0.4s,
+    transform 0.4s;
+}
+.notice small {
+  display: block;
+  color: #6b7c77;
+  font-size: 11px;
+  margin-top: 2px;
+}
+.notice:hover {
+  background: #fff;
+}
+.notice.out {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notice {
+    animation: none;
+    transition: none;
+  }
+}
+@media (max-width: 860px) {
+  .notices {
+    bottom: 92px;
+  }
+}
+@media (max-width: 560px) {
+  .hud {
+    right: 12px;
+  }
+  .ctrl {
+    top: auto;
+    bottom: 96px;
+    right: 12px;
+  }
+  .stage .hint {
+    display: none;
+  }
+  .tools button small {
+    white-space: nowrap;
+  }
+  .notices {
+    bottom: 140px;
+  }
+}
