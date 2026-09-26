@@ -159,7 +159,8 @@ export function recomputeLocations(w: World): void {
           x >= TERRACE.x &&
           x < TERRACE.x + TERRACE.w;
         if (inTerrace) L.terrace.push({ x, y });
-        else if (Math.abs(x - FOUNTAIN.x) + Math.abs(y - FOUNTAIN.y) > 1) L.plaza.push({ x, y });
+        else if (Math.max(Math.abs(x - FOUNTAIN.x), Math.abs(y - FOUNTAIN.y)) > 1)
+          L.plaza.push({ x, y });
       } else if (t === TILE.SAND && hasNeighbor(w, x, y, (n) => n === TILE.WATER))
         L.shore.push({ x, y });
       if (

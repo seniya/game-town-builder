@@ -96,6 +96,7 @@ export class Renderer3D {
     r.shadowMap.type = THREE.PCFShadowMap;
     r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.ACESFilmicToneMapping;
+    r.localClippingEnabled = true;
     this.renderer = r;
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.Fog(0xbfe3f5, 60, 150);

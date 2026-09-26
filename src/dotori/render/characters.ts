@@ -19,6 +19,8 @@ import {
 
 /** 주민 키(타일 단위). */
 export const CHAR_H = 0.95;
+/** 벤치 좌판 높이(타일 단위, Kenney stall-bench 를 0.95 로 맞췄을 때). */
+const BENCH_SEAT_H = 0.2;
 
 export interface CharView {
   v: Villager;
@@ -234,6 +236,9 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
           clip = 'sit';
           if (v.trait === '외톨이' || v.id % 3 === 0) tool = 'book';
           face = a.face ?? { x: 0, y: 1 };
+          // 앉기 동작은 엉덩이를 바닥 높이에 둔다. 벤치 자리 가운데로 옮기고 좌판 높이만큼 올린다.
+          const bench = a.decor != null ? w.decor.find((d) => d.id === a.decor) : undefined;
+          if (bench) c.root.position.set(bench.x + 0.5, BENCH_SEAT_H, bench.y + 0.5);
         } else if (a.where === 'grass' || a.where === 'flower') {
           clip = (T * 0.3) % 4 < 2.4 ? 'pick-up' : 'idle';
           ts = 0.6;

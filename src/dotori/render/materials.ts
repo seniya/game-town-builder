@@ -79,3 +79,18 @@ export function matCloth(color: string): THREE.MeshStandardMaterial {
   }
   return m;
 }
+
+/** 공사 중인 모형용: 원래 재질을 복제해 자르는 면을 준다(원본은 다른 건물과 공유하므로 바꾸지 않는다). */
+export function matClipped(
+  src: THREE.Material | THREE.Material[],
+  plane: THREE.Plane,
+): THREE.Material | THREE.Material[] {
+  const one = (m: THREE.Material): THREE.Material => {
+    const c = m.clone();
+    c.clippingPlanes = [plane];
+    c.clipShadows = true;
+    c.side = THREE.DoubleSide;
+    return c;
+  };
+  return Array.isArray(src) ? src.map(one) : one(src);
+}

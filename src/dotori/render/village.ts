@@ -8,7 +8,7 @@ import type { Blueprint, Building, World } from '../sim/types';
 import { bakeryOpen } from '../sim/world';
 import { HOUSE_MODELS, instance, place, type InstanceItem, type ModelName } from './assets';
 import { groundTexture, paintGround, waterGeometry } from './ground';
-import { matBasic, matGlow, matGround, matStd, matWater } from './materials';
+import { matBasic, matClipped, matGlow, matGround, matStd, matWater } from './materials';
 import { FLOWER_COLORS, mesh } from './props';
 
 /** 밤에 켜지는 빛 번짐. test(h) 가 참일 때 켜진다. */
@@ -25,6 +25,9 @@ interface SiteView {
   pile: THREE.Group;
   pileN: number;
   fullH: number;
+  /** 집: 아래부터 차오르게 자르는 면(y ≤ constant 만 그린다)과 다 지었을 때 높이. */
+  clip: THREE.Plane | null;
+  houseH: number;
 }
 
 /** 모델의 문 방향 회전(KayKit 건물은 남쪽이 앞). */
@@ -444,6 +447,8 @@ export class VillageView {
     let rising: THREE.Object3D | null = null;
     let scaffold: THREE.Object3D | null = null;
     let fullH = 1;
+    let clip: THREE.Plane | null = null;
+    let houseH = 0;
     if (bp.kind === 'house') {
       const yaw = yawOf(bp.side);
       rising = place(
@@ -455,6 +460,14 @@ export class VillageView {
         g,
       );
       scaffold = place('building_scaffolding', cx, cz, Math.max(bp.w, bp.h) * 1.02, yaw, g);
+      // 집은 눌러 키우지 않고 아래부터 벽이 차오르게 자른다. 이 집만의 재질 복제에 자르는 면을 준다.
+      clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
+      houseH = (rising.userData.height as number) ?? 2.5;
+      const plane = clip;
+      rising.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) m.material = matClipped(m.material, plane);
+      });
     } else if (bp.kind === 'bench') rising = place('stall-bench', cx, cz, 0.95, Math.PI / 2, g);
     else if (bp.kind === 'lamp') rising = place('lantern', cx, cz, 0.2, 0, g);
     else if (bp.kind === 'flowerbed') {
@@ -465,13 +478,13 @@ export class VillageView {
       holder.add(fb);
       rising = holder;
     }
-    if (rising) {
+    if (rising && !clip) {
       fullH = rising.scale.y;
       rising.scale.y = fullH * 0.02;
     }
     const pile = new THREE.Group();
     g.add(pile);
-    this.sites.set(bp.id, { bp, group: g, rising, scaffold, pile, pileN: -1, fullH });
+    this.sites.set(bp.id, { bp, group: g, rising, scaffold, pile, pileN: -1, fullH, clip, houseH });
   }
 
   /** 목재 더미(n 개를 통나무 몇 개로). */
@@ -499,9 +512,11 @@ export class VillageView {
     for (const s of this.sites.values()) {
       const bp = s.bp;
       const done = 1 - bp.workLeft / bp.workTotal;
-      if (s.rising) {
-        const k = bp.kind === 'house' ? 0.02 + done * 0.98 : 0.02 + done * 0.98;
-        s.rising.scale.y = s.fullH * k;
+      if (s.rising && s.clip) {
+        s.clip.constant = 0.05 + done * (s.houseH + 0.1);
+        s.rising.visible = done > 0.001;
+      } else if (s.rising) {
+        s.rising.scale.y = s.fullH * (0.02 + done * 0.98);
         s.rising.visible = done > 0.001;
       }
       if (s.scaffold) s.scaffold.visible = done < 0.97;

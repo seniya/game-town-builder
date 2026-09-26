@@ -441,6 +441,14 @@ async function main(): Promise<void> {
     tools,
     r3,
     select,
+    /** 가꾸기 명령(UI 와 같은 sim 명령). */
+    place: (k: BuildKind, x: number, y: number) => place(world, k, x, y, 's'),
+    /** 조건을 만족할 때까지(최대 n 틱) 시뮬레이션을 돌린다. */
+    runUntil: (pred: (w: World) => boolean, n: number) => {
+      for (let i = 0; i < n && !pred(world); i++) step(world);
+      world.out.length = 0;
+      return world.t;
+    },
     setSpeed: (s: number) => {
       speed = s;
       for (const [id, val] of [
