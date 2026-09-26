@@ -31,7 +31,15 @@ for (const r of [...refs]) {
   for (const m of js.matchAll(/["'`]\.\/([\w.-]+\.js)["'`]/g)) refs.add(`assets/${m[1]}`);
 }
 for (const r of refs) fs.copyFileSync(path.join(dist, r), path.join(out, r));
-fs.cpSync(path.join(dist, 'dotori', 'assets'), path.join(out, 'dotori', 'assets'), { recursive: true });
-const files = [...refs, ...fs.readdirSync(path.join(out, 'dotori', 'assets')).map((f) => `dotori/assets/${f}`)];
-fs.writeFileSync(path.join(out, 'files.json'), JSON.stringify(Object.fromEntries(files.map((f) => [f, f])), null, 1));
+fs.cpSync(path.join(dist, 'dotori', 'assets'), path.join(out, 'dotori', 'assets'), {
+  recursive: true,
+});
+const files = [
+  ...refs,
+  ...fs.readdirSync(path.join(out, 'dotori', 'assets')).map((f) => `dotori/assets/${f}`),
+];
+fs.writeFileSync(
+  path.join(out, 'files.json'),
+  JSON.stringify(Object.fromEntries(files.map((f) => [f, f])), null, 1),
+);
 console.log(`index.html + ${files.length} 개 → ${out}`);
