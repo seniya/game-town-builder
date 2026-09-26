@@ -310,21 +310,50 @@ export class VillageView {
       0.4,
       G,
     );
-    // 밭 작물
-    const crop = new THREE.InstancedMesh(
-      new THREE.ConeGeometry(0.09, 0.32, 5),
-      matStd('#8cc063'),
-      w.L.farm.length * 3,
+    // 밭 작물: 줄마다 둥근 채소 포기(두 가지 초록)와 가끔 주황 당근 잎. 크기를 조금씩 흔든다.
+    const n = w.L.farm.length * 3;
+    const heads = [matStd('#8cc063', 0.7), matStd('#6fae4f', 0.7)].map(
+      (m) => new THREE.InstancedMesh(new THREE.SphereGeometry(0.13, 10, 7), m, n),
     );
+    const tops = new THREE.InstancedMesh(
+      new THREE.ConeGeometry(0.05, 0.12, 5),
+      matStd('#f08a3c', 0.7),
+      n,
+    );
+    const counts = [0, 0];
+    let tc = 0;
     const m4 = new THREE.Matrix4();
-    let ci = 0;
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3();
+    const p = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
     for (const f of w.L.farm)
       for (let i = 0; i < 3; i++) {
-        m4.makeTranslation(f.x + 0.2 + i * 0.3, 0.16, f.y + 0.42);
-        crop.setMatrixAt(ci++, m4);
+        const r = hash01(f.x * 37 + f.y * 11 + i);
+        const k = 0.8 + r * 0.45;
+        const x = f.x + 0.2 + i * 0.3;
+        const z = f.y + 0.42;
+        if (f.y % 3 === 0 && r < 0.5) {
+          m4.compose(p.set(x, 0.06, z), q.identity(), sc.setScalar(k));
+          tops.setMatrixAt(tc++, m4);
+          continue;
+        }
+        const which = f.y % 2;
+        const hm = heads[which];
+        if (!hm) continue;
+        q.setFromAxisAngle(up, r * 6);
+        m4.compose(p.set(x, 0.08 * k, z), q, sc.set(k, k * 0.72, k));
+        hm.setMatrixAt(counts[which] ?? 0, m4);
+        counts[which] = (counts[which] ?? 0) + 1;
       }
-    crop.castShadow = true;
-    G.add(crop);
+    heads.forEach((h, i) => {
+      h.count = counts[i] ?? 0;
+      h.castShadow = true;
+      G.add(h);
+    });
+    tops.count = tc;
+    tops.castShadow = true;
+    G.add(tops);
     // 밭 울타리(말뚝)
     const posts: [number, number][] = [];
     const fx0 = FARM.x;

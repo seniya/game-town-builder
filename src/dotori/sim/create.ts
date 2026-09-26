@@ -2,6 +2,8 @@
 import { START } from '../data/balance';
 import {
   MORE_NAMES,
+  NAME_SYLLABLES_A,
+  NAME_SYLLABLES_B,
   NAMES,
   PANTS,
   SKINS,
@@ -151,8 +153,19 @@ export function nextName(w: World, used: ReadonlySet<string>): string {
       return n;
     }
   }
+  // 목록을 다 썼다: 두 음절을 잇는다(순서대로 훑어 쓰지 않은 이름).
+  const A = NAME_SYLLABLES_A;
+  const B = NAME_SYLLABLES_B;
+  for (let i = 0; i < A.length * B.length; i++) {
+    const k = (w.namesUsed * 7 + i) % (A.length * B.length);
+    const n = `${A[k % A.length] ?? ''}${B[Math.floor(k / A.length)] ?? ''}`;
+    if (!used.has(n)) {
+      w.namesUsed++;
+      return n;
+    }
+  }
   w.namesUsed++;
-  return `${all[w.namesUsed % all.length] ?? '도토리'}${w.namesUsed}`;
+  return `도토리${w.namesUsed}`;
 }
 
 /** 주민 한 명을 만든다(처음 주민·새 주민 공용). 호감표 용량도 늘린다. */

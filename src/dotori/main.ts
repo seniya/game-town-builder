@@ -1,5 +1,6 @@
 // 도토리 마을(v2) 시작점: 에셋 불러오기 → 저장 불러오기(없으면 새 마을) → 입력·패널 연결 → 메인 루프.
-// 1× 에서 실제 1 초에 게임 8 분(SPEC 1). 주소 ?fresh=1 새 마을, ?seed=N 시드, ?ff=분 미리 진행, ?scene=grown 가꾼 마을.
+// 1× 에서 실제 1 초에 게임 6 분(SPEC 1). 주소 ?fresh=1 새 마을, ?seed=N 시드, ?ff=분 미리 진행, ?scene=grown 가꾼 마을,
+// ?residents=N 처음 주민 수(큰 마을 시험), ?debug=1 계측 표시.
 import './ui/style.css';
 import { TIME } from './data/balance';
 import { BUILDABLES, type BuildKind } from './data/buildables';
@@ -91,7 +92,8 @@ function grownScene(w: World): void {
 
 /** 새 마을을 만든다. */
 function freshWorld(seed: number): World {
-  const w = newWorld(seed);
+  const n = Number(params.get('residents')) || undefined;
+  const w = newWorld(seed, n ? { residents: n } : {});
   if (params.get('scene') === 'grown') grownScene(w);
   return w;
 }
@@ -349,9 +351,19 @@ function loop(): void {
   let acc = 0;
   let lastUI = 0;
   let lastR = 0;
+  // ?debug=1: 프레임·시뮬레이션 시간 계측(SPEC 7 측정용).
+  const dbg = params.get('debug') ? document.createElement('div') : null;
+  if (dbg) {
+    dbg.className = 'debug';
+    $('stage').append(dbg);
+  }
+  let simMs = 0;
+  let frames = 0;
+  let fpsT = performance.now();
   const frame = (now: number): void => {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
+    const s0 = performance.now();
     if (speed > 0) {
       acc += dt * speed * TIME.minPerSec;
       let n = 0;
@@ -362,6 +374,14 @@ function loop(): void {
         if (world.t % 60 === 0) writeSave();
       }
       if (n >= TIME.maxTicksPerFrame) acc = 0;
+    }
+    simMs += performance.now() - s0;
+    frames++;
+    if (dbg && now - fpsT > 1000) {
+      dbg.textContent = `${Math.round((frames * 1000) / (now - fpsT))} fps · 시뮬 ${(simMs / frames).toFixed(2)} ms/프레임 · 주민 ${world.vs.length}`;
+      frames = 0;
+      simMs = 0;
+      fpsT = now;
     }
     for (const ev of world.out) {
       if (ev.type === 'log') {
@@ -423,6 +443,13 @@ async function main(): Promise<void> {
     select,
     setSpeed: (s: number) => {
       speed = s;
+      for (const [id, val] of [
+        ['sp0', 0],
+        ['sp1', 1],
+        ['sp3', 3],
+        ['sp8', 8],
+      ] as const)
+        $(id).setAttribute('aria-pressed', String(val === s));
     },
   };
   loop();

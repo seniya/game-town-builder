@@ -724,3 +724,16 @@ button:focus-visible {
     bottom: 140px;
   }
 }
+.debug {
+  position: absolute;
+  right: 12px;
+  top: 56px;
+  background: rgba(20, 30, 28, 0.75);
+  color: #fff;
+  font:
+    12px/1.4 ui-monospace,
+    monospace;
+  padding: 4px 8px;
+  border-radius: 8px;
+  pointer-events: none;
+}

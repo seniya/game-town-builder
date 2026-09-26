@@ -52,6 +52,8 @@ describe('도토리 마을 시뮬레이션', () => {
   it('주민 100 명 마을이 하루 동안 오류 없이 돈다', () => {
     const w = newWorld(3, { residents: 100 });
     expect(w.vs.length).toBe(100);
+    expect(new Set(w.vs.map((v) => v.name)).size).toBe(100);
+    expect(w.vs.every((v) => !/\d/.test(v.name))).toBe(true);
     run(w, 1440);
     expect(w.vs.every((v) => Number.isFinite(v.x))).toBe(true);
     expect(w.aff.get(99, 0)).not.toBe(Number.NaN);

@@ -203,6 +203,48 @@ export const MORE_NAMES: readonly string[] = [
   '미소',
 ];
 
+/** 이름 목록을 다 쓰면 두 음절을 이어 새 이름을 만든다(주민 100 명 이상, ADR 017). */
+export const NAME_SYLLABLES_A: readonly string[] = [
+  '다',
+  '보',
+  '소',
+  '하',
+  '나',
+  '미',
+  '루',
+  '아',
+  '예',
+  '초',
+  '토',
+  '모',
+  '라',
+  '해',
+  '새',
+  '도',
+  '가',
+  '유',
+];
+export const NAME_SYLLABLES_B: readonly string[] = [
+  '롱',
+  '미',
+  '리',
+  '온',
+  '솔',
+  '빈',
+  '람',
+  '이',
+  '울',
+  '랑',
+  '비',
+  '윤',
+  '담',
+  '결',
+  '별',
+  '들',
+  '실',
+  '꽁',
+];
+
 export const SKINS: readonly string[] = ['#FFE3CC', '#FAD4B4', '#F2C29E', '#E2A882', '#C88E6A'];
 export const PANTS: readonly string[] = [
   '#4F5D75',
