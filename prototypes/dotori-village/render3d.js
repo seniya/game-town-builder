@@ -30,16 +30,41 @@ const portraitCache = new Map();
 const tmpV = new THREE.Vector3();
 
 /* ---------------- 불러오기 ---------------- */
-/** 모든 GLB 를 불러온다. onProgress(0~1) 로 진행률을 알린다. */
+/**
+ * glTF JSON(버퍼를 data URI 로 품음)을 받아 메모리에서 GLB 로 다시 조립해 파싱한다.
+ * 아티팩트 보기 화면의 보안 정책은 data:·blob: 주소로의 fetch 를 막는다. 그래서 GLTFLoader 가 data URI 버퍼를
+ * 직접 읽지 못한다("Failed to load buffer"). 같은 출처의 .json 은 fetch 할 수 있으므로, 버퍼를 직접 풀어
+ * GLB 바이트로 넘긴다.
+ */
+async function loadGltf(loader, url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} (${res.status})`);
+  const j = await res.json();
+  const uri = j.buffers[0].uri; delete j.buffers[0].uri;
+  const raw = atob(uri.slice(uri.indexOf(',') + 1));
+  const bin = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) bin[i] = raw.charCodeAt(i);
+  const js = new TextEncoder().encode(JSON.stringify(j));
+  const jsLen = Math.ceil(js.length / 4) * 4, binLen = Math.ceil(bin.length / 4) * 4;
+  const out = new Uint8Array(12 + 8 + jsLen + 8 + binLen), dv = new DataView(out.buffer);
+  dv.setUint32(0, 0x46546C67, true); dv.setUint32(4, 2, true); dv.setUint32(8, out.length, true);
+  dv.setUint32(12, jsLen, true); dv.setUint32(16, 0x4E4F534A, true);
+  out.fill(0x20, 20, 20 + jsLen); out.set(js, 20);
+  dv.setUint32(20 + jsLen, binLen, true); dv.setUint32(24 + jsLen, 0x004E4942, true); out.set(bin, 28 + jsLen);
+  return loader.parseAsync(out.buffer, '');
+}
+
+/** 모든 모델을 불러온다. onProgress(0~1) 로 진행률을 알린다. */
 async function loadAll(onProgress) {
   const loader = new GLTFLoader();
+  // 텍스처를 <img>(blob: 주소)로 읽게 한다. 기본 ImageBitmapLoader 는 blob: 주소를 fetch 해서 보안 정책에 막힌다.
+  loader.register(parser => { parser.textureLoader = new THREE.TextureLoader(parser.options.manager); return { name: 'dotori_img_textures' }; });
   const list = [
     ...CHAR_NAMES.map(n => ['c:' + n, `assets/kc_character-${n}.json`]),
     ...KK.map(n => [n, `assets/kk_${n}.json`]),
     ...KT.map(n => [n, `assets/kt_${n}.json`]),
   ];
   let done = 0;
-  await Promise.all(list.map(([k, url]) => loader.loadAsync(url).then(g => {
+  await Promise.all(list.map(([k, url]) => loadGltf(loader, url).then(g => {
     M[k] = g; done++; onProgress(done / list.length);
     g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   })));

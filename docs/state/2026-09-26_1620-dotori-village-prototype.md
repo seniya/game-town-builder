@@ -46,6 +46,14 @@ Date: 2026-09-26 16:20
 - `pnpm test` 547건 통과, `pnpm typecheck` 통과.
 - `pnpm lint` 와 `format:check` 경고는 모두 추적되지 않는 `.claude/`, `.mcp.json` 에서 나온다(이번 변경과 무관).
 
+## 추가 수정 (게시 후 오너 보고)
+
+- 오너: 3D 판에서 "fail to load buffer" 오류. 원인: 아티팩트 보기 화면의 보안 정책이 data:·blob: 주소로의 fetch 를 막는다.
+  GLTFLoader 가 `.json` 안 data URI 버퍼를 fetch 하다 실패했다. 기본 ImageBitmapLoader 도 blob: 주소를 fetch 하므로 같은 문제가 있다.
+- 수정(`render3d.js` `loadGltf`): `.json` 은 같은 출처라 fetch 가 된다. 받은 뒤 base64 버퍼를 직접 풀어 메모리에서 GLB 로 조립해 `parseAsync` 로 넘긴다.
+  텍스처는 플러그인으로 TextureLoader(`<img>`, blob: 허용)를 쓰게 했다.
+- 확인: 로컬 페이지에 `connect-src 'self'`, `img-src 'self' data: blob:` 보안 정책을 걸고 headless 로 열었다. 모델과 텍스처가 정상으로 떴다. 3D 판 Version 2 로 재게시했다.
+
 ## 다음 할 일
 
 - HR-037 오너 판단을 받는다. 계속 보고 싶은가, 2D와 3D 중 어느 쪽인가, 어색한 동작은 무엇인가.
