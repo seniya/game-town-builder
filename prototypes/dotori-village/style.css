@@ -1,0 +1,100 @@
+/* 도토리 마을 공용 스타일 (2D·3D 판) */
+:root{
+  --ground:#E7EFE8; --card:#FFFFFF; --ink:#1E2A2B; --muted:#5B6D69; --line:#D3DFD6;
+  --accent:#2F7D6D; --accent-ink:#FFFFFF; --acorn:#9C5B26; --soft:#F1F6F2;
+  --love:#C9496E; --warn:#B8503A; --bar-bg:#E1EAE3; --plant:#FFF4DC; --plant-ink:#7A4A12;
+  --stage:#7FB069;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#121918; --card:#1B2423; --ink:#E3ECE8; --muted:#97ABA5; --line:#2B3937;
+    --accent:#6CC3AE; --accent-ink:#0E1A17; --acorn:#DA9A5E; --soft:#172020;
+    --love:#EE8AA6; --warn:#E78A73; --bar-bg:#263331; --plant:#3A2E17; --plant-ink:#F4D49A;
+    --stage:#3F5A38;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#121918; --card:#1B2423; --ink:#E3ECE8; --muted:#97ABA5; --line:#2B3937;
+  --accent:#6CC3AE; --accent-ink:#0E1A17; --acorn:#DA9A5E; --soft:#172020;
+  --love:#EE8AA6; --warn:#E78A73; --bar-bg:#263331; --plant:#3A2E17; --plant-ink:#F4D49A;
+  --stage:#3F5A38;
+  color-scheme: dark;
+}
+html,body{height:100%}
+body{background:var(--ground);color:var(--ink);font-family:"Gowun Dodum",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:14px;line-height:1.5}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{height:100%;padding:16px;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px}
+.stage{position:relative;border-radius:20px;overflow:hidden;background:var(--stage);min-height:0}
+#world{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#world.drag{cursor:grabbing}
+#world.hover{cursor:pointer}
+.hud{position:absolute;left:12px;top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;pointer-events:none}
+.clock{pointer-events:auto;background:rgba(255,253,247,.92);color:#243030;border-radius:14px;padding:6px 12px;font-family:"Jua",sans-serif;font-size:18px;font-variant-numeric:tabular-nums;box-shadow:0 2px 10px rgba(20,40,30,.15);display:flex;gap:8px;align-items:baseline}
+.clock small{font-family:"Gowun Dodum",sans-serif;font-size:12px;color:#5B6D69}
+.ctrl{position:absolute;right:12px;top:12px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.seg{display:flex;background:rgba(255,253,247,.92);border-radius:14px;padding:3px;box-shadow:0 2px 10px rgba(20,40,30,.15)}
+.seg button{border:0;background:transparent;color:#243030;padding:5px 10px;border-radius:11px;cursor:pointer;font-family:"Jua",sans-serif;font-size:14px}
+.seg button[aria-pressed="true"]{background:#2F7D6D;color:#fff}
+.hint{position:absolute;left:12px;bottom:12px;right:12px;color:#fff;font-size:12px;text-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none}
+.side{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:auto;padding-right:2px}
+.brand h1{font-family:"Jua",sans-serif;font-weight:400;font-size:28px;margin:0;letter-spacing:.5px;color:var(--acorn)}
+.brand p{margin:2px 0 0;color:var(--muted);text-wrap:pretty}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.card h3{font-family:"Jua",sans-serif;font-weight:400;font-size:16px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card h3 small{font-family:"Gowun Dodum",sans-serif;font-size:12px;color:var(--muted)}
+.p-head{display:flex;gap:12px;align-items:center}
+.p-avatar{width:56px;height:56px;border-radius:50%;flex:none;background:var(--soft);border:1px solid var(--line)}
+.p-head h2{font-family:"Jua",sans-serif;font-weight:400;font-size:22px;margin:0;line-height:1.1}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.chip{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--soft);border:1px solid var(--line)}
+.mood{margin-left:auto;font-size:28px}
+.p-desc{margin:8px 0 0;color:var(--muted);font-size:13px}
+.now{margin-top:10px;padding:8px 10px;border-radius:10px;background:var(--soft);font-size:14px}
+.bars{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-top:10px}
+.bar{display:grid;grid-template-columns:44px 1fr;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.bar i{display:block;height:7px;border-radius:4px;background:var(--bar-bg);overflow:hidden}
+.bar b{display:block;height:100%;border-radius:4px;background:var(--accent);transition:width .3s}
+.bar b.low{background:var(--warn)}
+.rel{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:12px 0 0;font-size:13px}
+.rel dt{color:var(--muted)}
+.rel dd{margin:0}
+.vn{font-weight:700;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.vn:hover{color:var(--accent)}
+.sub{font-family:"Jua",sans-serif;font-weight:400;font-size:14px;margin:12px 0 4px;color:var(--muted)}
+.diary{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font-size:13px;max-height:150px;overflow:auto}
+.diary time,.feed time{color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums;margin-right:6px}
+.follow{margin-top:10px;width:100%;border:1px solid var(--line);background:var(--soft);border-radius:10px;padding:6px;cursor:pointer}
+.follow[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.plant-btns{display:flex;flex-direction:column;gap:6px}
+.plant-btns button{text-align:left;border:1px solid var(--line);background:var(--soft);border-radius:10px;padding:8px 10px;cursor:pointer}
+.plant-btns button:hover:not(:disabled){border-color:var(--accent)}
+.plant-btns button:disabled{opacity:.45;cursor:not-allowed}
+.note{margin:8px 0 0;font-size:12px;color:var(--muted);text-wrap:pretty}
+.rumors{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.rumors li{font-size:13px}
+.rumors .rb{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-top:2px}
+.rumors i{display:block;height:5px;border-radius:3px;background:var(--bar-bg);overflow:hidden}
+.rumors i b{display:block;height:100%;background:var(--acorn)}
+.rumors small{color:var(--muted);font-variant-numeric:tabular-nums}
+.empty{color:var(--muted);font-size:13px;margin:0}
+.feed-card{flex:1 0 auto}
+.feed{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.feed li{padding:6px 8px;border-radius:8px}
+.feed li.k-love{background:color-mix(in srgb,var(--love) 12%,transparent)}
+.feed li.k-plant{background:var(--plant);color:var(--plant-ink)}
+.feed li.k-party{background:color-mix(in srgb,var(--acorn) 12%,transparent)}
+.feed li.k-day{font-family:"Jua",sans-serif;color:var(--acorn)}
+.feed li.k-fight{background:color-mix(in srgb,var(--warn) 10%,transparent)}
+@media (max-width:860px){
+  .app{grid-template-columns:1fr;height:auto}
+  .stage{height:62vh;min-height:340px}
+  .side{overflow:visible}
+}
+@media (prefers-reduced-motion: reduce){ .bar b{transition:none} }
+
+.loading{position:absolute;inset:0;display:grid;place-items:center;background:rgba(20,30,28,.55);color:#fff;font-family:"Jua",sans-serif;font-size:20px}
+[hidden]{display:none!important}

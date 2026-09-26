@@ -13,7 +13,7 @@ const THREE_RESTRICTION = {
 };
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', 'graft/**', 'coverage/**'] },
+  { ignores: ['dist/**', 'node_modules/**', 'graft/**', 'coverage/**', 'prototypes/**'] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {

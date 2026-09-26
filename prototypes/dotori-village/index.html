@@ -1,0 +1,75 @@
+<meta charset="utf-8">
+<title>도토리 마을</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+
+<div class="app">
+  <main class="stage" id="stage">
+    <canvas id="world" aria-label="도토리 마을 지도. 주민을 눌러 자세히 볼 수 있습니다."></canvas>
+    <div class="hud"><div class="clock" id="clock">1일째 07:00</div></div>
+    <div class="ctrl">
+      <div class="seg" role="group" aria-label="시간 속도">
+        <button id="sp0" aria-pressed="false" title="멈춤 (스페이스)">멈춤</button>
+        <button id="sp1" aria-pressed="true">1×</button>
+        <button id="sp3" aria-pressed="false">3×</button>
+        <button id="sp8" aria-pressed="false">8×</button>
+      </div>
+      <div class="seg"><button id="reset" title="다른 주민과 지형으로 새로 시작">새 마을</button></div>
+    </div>
+    <div class="hint">끌어서 이동 · 휠이나 두 손가락으로 확대 · 주민을 누르면 그 사람의 하루가 보여요</div>
+  </main>
+
+  <aside class="side">
+    <header class="brand">
+      <h1>도토리 마을</h1>
+      <p id="intro">주민 30명이 제 성격대로 알아서 사는 작은 마을이에요. 오늘 밤 7시, 누군가 광장에서 파티를 열고 싶어 해요. 아직 아무도 모르지만요.</p>
+    </header>
+
+    <section class="card" id="personCard">
+      <div class="p-head">
+        <canvas class="p-avatar" id="pAvatar" width="112" height="112"></canvas>
+        <div>
+          <h2 id="pName">-</h2>
+          <div class="chips"><span class="chip" id="pTrait"></span><span class="chip" id="pJob"></span></div>
+        </div>
+        <span class="mood" id="pMood" aria-label="기분"></span>
+      </div>
+      <p class="p-desc" id="pDesc"></p>
+      <div class="now" id="pNow"></div>
+      <div class="bars">
+        <div class="bar"><span>배부름</span><i><b id="bHunger"></b></i></div>
+        <div class="bar"><span>기운</span><i><b id="bEnergy"></b></i></div>
+        <div class="bar"><span>어울림</span><i><b id="bSocial"></b></i></div>
+        <div class="bar"><span>즐거움</span><i><b id="bFun"></b></i></div>
+      </div>
+      <dl class="rel" id="pRel"></dl>
+      <div class="sub">일기</div>
+      <ol class="diary" id="pDiary"></ol>
+      <button class="follow" id="followBtn" aria-pressed="false">카메라로 따라가기</button>
+    </section>
+
+    <section class="card">
+      <h3>생각 심기 <small id="plantWho"></small></h3>
+      <div class="plant-btns">
+        <button id="plParty">🎉 "광장에서 파티를 열고 싶어"</button>
+        <button id="plLove">💌 "좋아하는 사람에게 고백하고 싶어"</button>
+        <button id="plGhost">👻 "숲에 유령이 나온대" 소문 내기</button>
+      </div>
+      <p class="note" id="plantNote">생각 하나만 심으면 나머지는 주민들이 알아서 해요. 소문을 퍼뜨리고, 모이고, 겁먹고, 사랑에 빠지죠.</p>
+    </section>
+
+    <section class="card">
+      <h3>도는 소문 <small>아는 사람 / 30</small></h3>
+      <ul class="rumors" id="rumorList"></ul>
+    </section>
+
+    <section class="card feed-card">
+      <h3>마을 소식</h3>
+      <ol class="feed" id="feed"></ol>
+    </section>
+  </aside>
+</div>
+
+<script type="module" src="main2d.js"></script>
