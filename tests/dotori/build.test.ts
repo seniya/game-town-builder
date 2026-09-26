@@ -138,3 +138,29 @@ describe('저장 (SPEC 6)', () => {
     expect(deserialize('not json')).toBeNull();
   });
 });
+
+describe('오래 돌리기', () => {
+  it('10 일 동안 집과 장식을 계속 놓으면 인구가 늘고, 행복이 버티고, 목재가 넘치지 않는다', () => {
+    const w = newWorld(777);
+    for (let d = 0; d < 20; d++) {
+      if (w.blueprints.filter((b) => b.kind === 'house').length < 2 && w.lumber >= 15) {
+        let done = false;
+        for (let y = 22; y < 48 && !done; y += 4)
+          for (let x = 44; x < 76 && !done; x += 4)
+            if (checkPlace(w, 'house', x, y, 's').ok) done = place(w, 'house', x, y, 's').ok;
+      }
+      if (w.stats.charm < w.vs.length * 0.5 + 3) {
+        let done = false;
+        for (let y = 10; y < 45 && !done; y += 3)
+          for (let x = 40; x < 76 && !done; x += 3)
+            if (checkPlace(w, 'flowerbed', x, y, 's').ok)
+              done = place(w, 'flowerbed', x, y, 's').ok;
+      }
+      run(w, 720);
+    }
+    expect(w.vs.length).toBeGreaterThanOrEqual(30);
+    expect(w.stats.happy).toBeGreaterThanOrEqual(40);
+    expect(w.lumber).toBeLessThanOrEqual(120);
+    expect(w.vs.every((v) => Number.isFinite(v.x) && Number.isFinite(v.y))).toBe(true);
+  });
+});

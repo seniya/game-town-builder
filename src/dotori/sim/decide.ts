@@ -1,5 +1,5 @@
 // 행동 고르기: 욕구·성격·시간으로 점수를 매겨(options) 가장 높은 행동을 만든다(buildAct) (SPEC 3.3, 시험판 규칙).
-import { DESTINATION } from '../data/balance';
+import { DESTINATION, LUMBER } from '../data/balance';
 import { JOBS } from '../data/people';
 import { startAct } from './act';
 import { carpenterAct, hasCarpentryWork } from './build';
@@ -78,6 +78,8 @@ function options(w: World, v: Villager, h: number): [Choice, number][] {
       (rain && outdoorJob ? 0.6 : 1);
     // 공사가 있으면 목수는 조금 더 일하고 싶어한다(청사진이 기다리고 있다).
     if (v.job === '목수' && hasCarpentryWork(w)) s *= 1.6;
+    // 야적장이 가득 차면 나무꾼은 나무하러 가지 않는다(다른 일을 하며 쉰다).
+    if (v.job === '나무꾼' && w.lumber >= LUMBER.yardCap) s *= 0.05;
     o.push(['work', s]);
   }
   let soc =
