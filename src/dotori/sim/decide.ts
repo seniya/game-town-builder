@@ -177,10 +177,11 @@ function buildAct(w: World, v: Villager, type: Choice, h: number): Act | null {
     case 'sleep':
       return mk(w, 'sleep', { bld: v.home, dur: 720 });
     case 'rest':
-      return mk(w, 'rest', { bld: v.home, dur: R.int(40, 90) });
+      return mk(w, 'rest', { bld: v.home, dur: R.int(60, 120) });
     case 'eat': {
       const bakery = bldKind(w, 'bakery');
-      if (bakeryOpen(h) && bakery.bread > 0 && (v.trait === '먹보' || R.next() < 0.6))
+      const near = dist(v, bakery.door) <= DESTINATION.bakeryMaxDist || v.trait === '먹보';
+      if (near && bakeryOpen(h) && bakery.bread > 0 && (v.trait === '먹보' || R.next() < 0.6))
         return mk(w, 'eat', { bld: bakery.id, dur: 25, where: 'bakery' });
       return mk(w, 'eat', { bld: v.home, dur: 30, where: 'home' });
     }
@@ -198,9 +199,12 @@ function buildAct(w: World, v: Villager, type: Choice, h: number): Act | null {
       }
       if (j.place === 'tavern') return mk(w, 'work', { bld: bldKind(w, 'tavern').id, dur });
       if (j.place === 'farm')
-        return mk(w, 'work', { dest: pickPt(L.farm), dur: Math.min(dur, 90) });
+        return mk(w, 'work', { dest: pickPt(L.farm), dur: Math.min(dur, 140) });
       if (j.place === 'shore')
-        return mk(w, 'work', { dest: pickPt(L.shore), dur: Math.min(dur, 120) });
+        return mk(w, 'work', {
+          dest: pickNear(w, L.shore, v, DESTINATION.funSamples),
+          dur: Math.min(dur, 150),
+        });
       if (j.place === 'forest') {
         if (v.fearGhost) {
           diary(w, v, '유령이 무서워서 오늘은 나무하러 못 갔다…');
@@ -208,7 +212,7 @@ function buildAct(w: World, v: Villager, type: Choice, h: number): Act | null {
         }
         return mk(w, 'work', {
           dest: pickNear(w, L.forestEdge, frontOf(bldKind(w, 'yard')), DESTINATION.woodSamples),
-          dur: Math.min(dur, 100),
+          dur: Math.min(dur, 150),
         });
       }
       return null;
@@ -245,9 +249,9 @@ function buildAct(w: World, v: Villager, type: Choice, h: number): Act | null {
             where: 'lamp',
             decor: lamp.id,
           });
-        return mk(w, 'social', { dest: pickPt(L.terrace), dur: R.int(40, 90), where: 'terrace' });
+        return mk(w, 'social', { dest: pickPt(L.terrace), dur: R.int(50, 120), where: 'terrace' });
       }
-      return mk(w, 'social', { dest: pickPt(L.plaza), dur: R.int(40, 90), where: 'plaza' });
+      return mk(w, 'social', { dest: pickPt(L.plaza), dur: R.int(50, 120), where: 'plaza' });
     }
     case 'fun': {
       const benches = w.decor.filter((d) => d.kind === 'bench');
@@ -272,7 +276,7 @@ function buildAct(w: World, v: Villager, type: Choice, h: number): Act | null {
           break;
         }
       }
-      const dur = R.int(40, 100);
+      const dur = R.int(60, 140);
       if (where === 'bench') {
         const b = pickDecor(w, benches);
         if (b) return mk(w, 'fun', { dest: { x: b.x, y: b.y }, dur, where: 'bench', decor: b.id });
@@ -289,7 +293,12 @@ function buildAct(w: World, v: Villager, type: Choice, h: number): Act | null {
           dur,
           where: 'forest',
         });
-      if (where === 'shore') return mk(w, 'fun', { dest: pickPt(L.shore), dur, where: 'shore' });
+      if (where === 'shore')
+        return mk(w, 'fun', {
+          dest: pickNear(w, L.shore, v, DESTINATION.funSamples),
+          dur,
+          where: 'shore',
+        });
       return mk(w, 'fun', {
         dest: pickNear(w, L.grass, v, DESTINATION.funSamples),
         dur,

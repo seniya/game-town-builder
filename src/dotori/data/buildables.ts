@@ -31,7 +31,7 @@ export const BUILDABLES: Record<BuildKind, BuildableDef> = {
     w: 3,
     h: 3,
     lumber: 20,
-    work: 240,
+    work: 160,
     charm: 0,
     ground: ['grass'],
     maxWorkers: 2,

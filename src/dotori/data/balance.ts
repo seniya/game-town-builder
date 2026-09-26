@@ -2,8 +2,8 @@
 
 /** 시간 (SPEC 1). */
 export const TIME = {
-  /** 1× 에서 실제 1 초에 흐르는 게임 분(= 틱). */
-  minPerSec: 8,
+  /** 1× 에서 실제 1 초에 흐르는 게임 분(= 틱). 넓어진 지도에서 걷는 시간을 줄이려고 시험판 8 에서 6 으로 늦췄다. */
+  minPerSec: 6,
   /** 한 프레임에 돌릴 수 있는 최대 틱. */
   maxTicksPerFrame: 200,
   /** 새 마을의 시작 시각(분). */
@@ -79,11 +79,21 @@ export const LUMBER = {
   /** 등짐이 이만큼 차면 야적장으로 간다. */
   packFull: 5,
   /** 목수가 한 번에 나르는 최대 목재. */
-  carryMax: 10,
+  carryMax: 20,
   /** 목수 한 명이 1 분에 줄이는 짓는 일. */
   workRate: 1,
   workRateWorkaholic: 1.3,
   workRateLazy: 0.7,
+} as const;
+
+/** 걷는 속도(타일/틱, 길 위 기준). 화면 속도 = 값 × minPerSec ≈ 2 타일/초(시험판 1.6). */
+export const WALK = {
+  base: 0.33,
+  /** 누군가를 찾아가는 중(방문·초대·고백). */
+  visit: 0.45,
+  flee: 0.6,
+  /** 등짐이 무거울 때(목재 6 개 이상·이삿짐). */
+  heavy: 0.26,
 } as const;
 
 /** 목적지 고르기 (SPEC 3.3): 후보를 몇 개 뽑아 가장 가까운 곳으로 간다. */
@@ -91,8 +101,10 @@ export const DESTINATION = {
   /** 나무꾼: 야적장에서 가까운 숲 가장자리. */
   woodSamples: 10,
   /** 놀기(숲·들판)·보물찾기: 지금 자리에서 가까운 곳. */
-  funSamples: 3,
-  wanderSamples: 2,
+  funSamples: 5,
+  wanderSamples: 3,
+  /** 빵집이 이보다 멀면(타일) 집에서 먹는다. */
+  bakeryMaxDist: 30,
   /** 플레이어가 지은 장식을 고르는 가중치(처음 장식은 1). */
   playerDecorWeight: 3,
 } as const;

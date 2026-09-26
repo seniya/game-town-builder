@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>도토리 마을</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <main class="stage" id="stage">
+        <canvas
+          id="world"
+          aria-label="도토리 마을. 주민을 눌러 자세히 보고, 아래 도구로 마을을 가꿀 수 있습니다."
+        ></canvas>
+        <div class="hud">
+          <div class="clock" id="clock">1일째 07:00</div>
+          <div class="stats" id="stats"></div>
+        </div>
+        <div class="ctrl">
+          <div class="seg" role="group" aria-label="시간 속도">
+            <button id="sp0" aria-pressed="false" title="멈춤 (스페이스)">멈춤</button>
+            <button id="sp1" aria-pressed="true">1×</button>
+            <button id="sp3" aria-pressed="false">3×</button>
+            <button id="sp8" aria-pressed="false">8×</button>
+          </div>
+          <div class="seg"><button id="reset" title="저장을 지우고 새로 시작">새 마을</button></div>
+        </div>
+        <div class="hint" id="camHint">
+          끌어서 이동 · 오른쪽 버튼(두 손가락)으로 회전 · 휠로 확대 · 주민을 누르면 그 사람의 하루가
+          보여요
+        </div>
+        <div class="tool-hint" id="toolHint" hidden></div>
+        <div class="toast hide" id="toast" role="status" aria-live="polite"></div>
+        <nav class="tools" id="tools" aria-label="가꾸기 도구"></nav>
+        <div class="loading" id="loading">마을을 불러오는 중… <b id="loadPct">0%</b></div>
+      </main>
+
+      <aside class="side">
+        <header class="brand">
+          <h1>도토리 마을</h1>
+          <p id="intro">
+            제멋대로인 주민들이 저마다의 하루를 사는 작은 마을이에요. 아래 도구로 집과 꽃밭을 놓으면
+            목수들이 목재를 날라 직접 지어요.
+          </p>
+        </header>
+
+        <section class="card village-card">
+          <h3>마을 <small id="villageRank"></small></h3>
+          <div id="goals"></div>
+        </section>
+
+        <section class="card" id="personCard">
+          <div class="p-head">
+            <canvas class="p-avatar" id="pAvatar" width="112" height="112"></canvas>
+            <div>
+              <h2 id="pName">-</h2>
+              <div class="chips">
+                <span class="chip" id="pTrait"></span><span class="chip" id="pJob"></span>
+              </div>
+            </div>
+            <span class="mood" id="pMood" aria-label="기분"></span>
+          </div>
+          <p class="p-desc" id="pDesc"></p>
+          <div class="now" id="pNow"></div>
+          <div class="bars">
+            <div class="bar">
+              <span>배부름</span><i><b id="bHunger"></b></i>
+            </div>
+            <div class="bar">
+              <span>기운</span><i><b id="bEnergy"></b></i>
+            </div>
+            <div class="bar">
+              <span>어울림</span><i><b id="bSocial"></b></i>
+            </div>
+            <div class="bar">
+              <span>즐거움</span><i><b id="bFun"></b></i>
+            </div>
+          </div>
+          <dl class="rel" id="pRel"></dl>
+          <div class="sub">일기</div>
+          <ol class="diary" id="pDiary"></ol>
+          <button class="follow" id="followBtn" aria-pressed="false">카메라로 따라가기</button>
+        </section>
+
+        <section class="card">
+          <h3>생각 심기 <small id="plantWho"></small></h3>
+          <div class="plant-btns">
+            <button id="plParty">🎉 "광장에서 파티를 열고 싶어"</button>
+            <button id="plLove">💌 "좋아하는 사람에게 고백하고 싶어"</button>
+            <button id="plGhost">👻 "숲에 유령이 나온대" 소문 내기</button>
+          </div>
+          <p class="note">
+            생각 하나만 심으면 나머지는 주민들이 알아서 해요. 소문을 퍼뜨리고, 모이고, 겁먹고,
+            사랑에 빠지죠.
+          </p>
+        </section>
+
+        <section class="card">
+          <h3>도는 소문 <small id="rumorHead">아는 사람</small></h3>
+          <ul class="rumors" id="rumorList"></ul>
+        </section>
+
+        <section class="card feed-card">
+          <h3>마을 소식</h3>
+          <ol class="feed" id="feed"></ol>
+        </section>
+      </aside>
+    </div>
+    <script type="module" src="/src/dotori/main.ts"></script>
+  </body>
+</html>

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""도토리 마을 3D 판에 쓸 CC0 에셋을 골라 assets/ 에 모은다(최종 형식은 데이터를 품은 glTF JSON).
+"""도토리 마을(v2, src/dotori)에 쓸 CC0 에셋을 골라 public/dotori/assets/ 에 모은다(최종 형식은 데이터를 품은 glTF JSON).
 
 KayKit 팩은 .gltf + .bin + 공용 텍스처 PNG 로 나뉘어 있다. 아티팩트에 올릴 파일 수를 줄이려고
 하나의 GLB(버퍼와 이미지를 모두 담은 바이너리)로 합친다. Kenney GLB 는 외부 텍스처(Textures/colormap.png)를
 참조하므로 그 이미지를 GLB 안에 넣는다.
 
-사용법: python3 tools/pack_assets.py <내려받은 팩들이 있는 폴더>
+사용법: python3 tools/dotori/pack_assets.py <내려받은 팩들이 있는 폴더>
   - <폴더>/KayKit-Medieval-Hexagon-Pack-1.0   (git clone)
   - <폴더>/mini   (kenney_mini-characters.zip 압축 해제)
   - <폴더>/town   (kenney_fantasy-town-kit_2.0.zip 압축 해제)
@@ -26,8 +26,11 @@ KAYKIT = [
     'rock_single_A', 'rock_single_C', 'rock_single_E', 'waterlily_A', 'waterlily_B', 'waterplant_A',
     'barrel', 'sack', 'crate_A_small', 'crate_open', 'wheelbarrow', 'bucket_water', 'resource_lumber',
     'flag_red', 'flag_yellow', 'flag_blue', 'flag_green',
+    # v2 가꾸기·공사·풍경
+    'building_scaffolding', 'building_lumbermill_yellow', 'building_well_blue', 'fence_wood_straight',
+    'tree_single_A_cut', 'trees_A_small', 'trees_B_medium', 'pallet', 'crate_long_A',
 ]
-KENNEY_TOWN = ['fountain-round', 'lantern', 'stall-red', 'stall-green', 'stall-bench', 'cart']
+KENNEY_TOWN = ['fountain-round', 'lantern', 'stall-red', 'stall-green', 'stall-bench', 'cart', 'hedge', 'stall-stool']
 
 
 def pad4(b, fill=b'\x00'):
@@ -133,7 +136,7 @@ def glb_json(path):
 if __name__ == '__main__':
     ROOT = sys.argv[1]
     here = os.path.dirname(os.path.abspath(__file__))
-    out = os.path.join(here, '..', 'assets')
+    out = os.path.join(here, '..', '..', 'public', 'dotori', 'assets')
     os.makedirs(out, exist_ok=True)
     hexroot = os.path.join(ROOT, 'KayKit-Medieval-Hexagon-Pack-1.0')
     for name in KAYKIT:

@@ -1,0 +1,646 @@
+/* 도토리 마을(v2) 화면 스타일. 시험판(prototypes/dotori-village/style.css)에서 이어받고 가꾸기 도구를 더했다. */
+:root {
+  --ground: #e7efe8;
+  --card: #ffffff;
+  --ink: #1e2a2b;
+  --muted: #5b6d69;
+  --line: #d3dfd6;
+  --accent: #2f7d6d;
+  --accent-ink: #ffffff;
+  --acorn: #9c5b26;
+  --soft: #f1f6f2;
+  --love: #c9496e;
+  --warn: #b8503a;
+  --bar-bg: #e1eae3;
+  --plant: #fff4dc;
+  --plant-ink: #7a4a12;
+  --stage: #7fb069;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ground: #121918;
+    --card: #1b2423;
+    --ink: #e3ece8;
+    --muted: #97aba5;
+    --line: #2b3937;
+    --accent: #6cc3ae;
+    --accent-ink: #0e1a17;
+    --acorn: #da9a5e;
+    --soft: #172020;
+    --love: #ee8aa6;
+    --warn: #e78a73;
+    --bar-bg: #263331;
+    --plant: #3a2e17;
+    --plant-ink: #f4d49a;
+    --stage: #3f5a38;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --ground: #121918;
+  --card: #1b2423;
+  --ink: #e3ece8;
+  --muted: #97aba5;
+  --line: #2b3937;
+  --accent: #6cc3ae;
+  --accent-ink: #0e1a17;
+  --acorn: #da9a5e;
+  --soft: #172020;
+  --love: #ee8aa6;
+  --warn: #e78a73;
+  --bar-bg: #263331;
+  --plant: #3a2e17;
+  --plant-ink: #f4d49a;
+  --stage: #3f5a38;
+  color-scheme: dark;
+}
+html,
+body {
+  height: 100%;
+}
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family:
+    'Gowun Dodum',
+    system-ui,
+    -apple-system,
+    'Apple SD Gothic Neo',
+    'Malgun Gothic',
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+* {
+  box-sizing: border-box;
+}
+button {
+  font: inherit;
+  color: inherit;
+}
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.app {
+  height: 100%;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+}
+.stage {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--stage);
+  min-height: 0;
+}
+#world {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+#world.drag {
+  cursor: grabbing;
+}
+#world.hover {
+  cursor: pointer;
+}
+.hud {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  pointer-events: none;
+}
+.clock {
+  pointer-events: auto;
+  background: rgba(255, 253, 247, 0.92);
+  color: #243030;
+  border-radius: 14px;
+  padding: 6px 12px;
+  font-family: 'Jua', sans-serif;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 10px rgba(20, 40, 30, 0.15);
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.clock small {
+  font-family: 'Gowun Dodum', sans-serif;
+  font-size: 12px;
+  color: #5b6d69;
+}
+.ctrl {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.seg {
+  display: flex;
+  background: rgba(255, 253, 247, 0.92);
+  border-radius: 14px;
+  padding: 3px;
+  box-shadow: 0 2px 10px rgba(20, 40, 30, 0.15);
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  color: #243030;
+  padding: 5px 10px;
+  border-radius: 11px;
+  cursor: pointer;
+  font-family: 'Jua', sans-serif;
+  font-size: 14px;
+}
+.seg button[aria-pressed='true'] {
+  background: #2f7d6d;
+  color: #fff;
+}
+.hint {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  right: 12px;
+  color: #fff;
+  font-size: 12px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+.brand h1 {
+  font-family: 'Jua', sans-serif;
+  font-weight: 400;
+  font-size: 28px;
+  margin: 0;
+  letter-spacing: 0.5px;
+  color: var(--acorn);
+}
+.brand p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+}
+.card h3 {
+  font-family: 'Jua', sans-serif;
+  font-weight: 400;
+  font-size: 16px;
+  margin: 0 0 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.card h3 small {
+  font-family: 'Gowun Dodum', sans-serif;
+  font-size: 12px;
+  color: var(--muted);
+}
+.p-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.p-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--soft);
+  border: 1px solid var(--line);
+}
+.p-head h2 {
+  font-family: 'Jua', sans-serif;
+  font-weight: 400;
+  font-size: 22px;
+  margin: 0;
+  line-height: 1.1;
+}
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.chip {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+}
+.mood {
+  margin-left: auto;
+  font-size: 28px;
+}
+.p-desc {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.now {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--soft);
+  font-size: 14px;
+}
+.bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  margin-top: 10px;
+}
+.bar {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.bar i {
+  display: block;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--bar-bg);
+  overflow: hidden;
+}
+.bar b {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+.bar b.low {
+  background: var(--warn);
+}
+.rel {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+.rel dt {
+  color: var(--muted);
+}
+.rel dd {
+  margin: 0;
+}
+.vn {
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+.vn:hover {
+  color: var(--accent);
+}
+.sub {
+  font-family: 'Jua', sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  margin: 12px 0 4px;
+  color: var(--muted);
+}
+.diary {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+  max-height: 150px;
+  overflow: auto;
+}
+.diary time,
+.feed time {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  margin-right: 6px;
+}
+.follow {
+  margin-top: 10px;
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--soft);
+  border-radius: 10px;
+  padding: 6px;
+  cursor: pointer;
+}
+.follow[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+.plant-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.plant-btns button {
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--soft);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.plant-btns button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.plant-btns button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+.rumors {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rumors li {
+  font-size: 13px;
+}
+.rumors .rb {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+}
+.rumors i {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bar-bg);
+  overflow: hidden;
+}
+.rumors i b {
+  display: block;
+  height: 100%;
+  background: var(--acorn);
+}
+.rumors small {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.empty {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+.feed-card {
+  flex: 1 0 auto;
+}
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+.feed li {
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+.feed li.k-love {
+  background: color-mix(in srgb, var(--love) 12%, transparent);
+}
+.feed li.k-plant {
+  background: var(--plant);
+  color: var(--plant-ink);
+}
+.feed li.k-party {
+  background: color-mix(in srgb, var(--acorn) 12%, transparent);
+}
+.feed li.k-day {
+  font-family: 'Jua', sans-serif;
+  color: var(--acorn);
+}
+.feed li.k-fight {
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+@media (max-width: 860px) {
+  .app {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .stage {
+    height: 62vh;
+    min-height: 340px;
+  }
+  .side {
+    overflow: visible;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar b {
+    transition: none;
+  }
+}
+
+.loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(20, 30, 28, 0.55);
+  color: #fff;
+  font-family: 'Jua', sans-serif;
+  font-size: 20px;
+}
+[hidden] {
+  display: none !important;
+}
+
+/* ---------- v2: 마을 통계 HUD, 가꾸기 도구 막대, 알림 ---------- */
+.stats {
+  pointer-events: auto;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.stat {
+  background: rgba(255, 253, 247, 0.92);
+  color: #243030;
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 13px;
+  box-shadow: 0 2px 10px rgba(20, 40, 30, 0.15);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stat b {
+  font-family: 'Jua', sans-serif;
+  font-weight: 400;
+  font-size: 15px;
+  margin-left: 2px;
+}
+.stat.warn {
+  background: #ffe9dd;
+  color: #8a3b1c;
+}
+.tools {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 253, 247, 0.94);
+  border-radius: 18px;
+  padding: 5px;
+  box-shadow: 0 4px 18px rgba(20, 40, 30, 0.22);
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+}
+.tools button {
+  border: 0;
+  background: transparent;
+  color: #243030;
+  border-radius: 13px;
+  padding: 5px 9px 4px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 52px;
+  font-family: 'Jua', sans-serif;
+  font-size: 13px;
+  line-height: 1.1;
+}
+.tools button .ic {
+  font-size: 20px;
+  line-height: 1.2;
+}
+.tools button small {
+  font-family: 'Gowun Dodum', sans-serif;
+  font-size: 10px;
+  color: #6b7c77;
+}
+.tools button[aria-pressed='true'] {
+  background: #2f7d6d;
+  color: #fff;
+}
+.tools button[aria-pressed='true'] small {
+  color: #d9f1ea;
+}
+.tools button:hover:not([aria-pressed='true']) {
+  background: #eaf3ee;
+}
+.tools .sep {
+  width: 1px;
+  background: #d3dfd6;
+  margin: 4px 2px;
+}
+.tool-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 86px;
+  transform: translateX(-50%);
+  background: rgba(30, 42, 43, 0.86);
+  color: #fff;
+  border-radius: 12px;
+  padding: 6px 12px;
+  font-size: 13px;
+  max-width: min(560px, calc(100% - 24px));
+  text-align: center;
+  pointer-events: none;
+}
+.tool-hint.bad {
+  background: rgba(160, 52, 40, 0.92);
+}
+.stage .hint {
+  top: auto;
+  bottom: auto;
+  left: 12px;
+  right: auto;
+  top: 96px;
+  max-width: 300px;
+  transition: opacity 0.6s;
+}
+.stage .hint.hide {
+  opacity: 0;
+}
+.toast {
+  position: absolute;
+  left: 50%;
+  top: 64px;
+  transform: translateX(-50%);
+  background: rgba(30, 42, 43, 0.9);
+  color: #fff;
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 14px;
+  pointer-events: none;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
+  transition: opacity 0.3s;
+}
+.toast.hide {
+  opacity: 0;
+}
+.feed li.k-build {
+  background: color-mix(in srgb, #e2b85a 18%, transparent);
+}
+.feed li.k-arrive {
+  background: color-mix(in srgb, #7fa8d6 18%, transparent);
+}
+.village-card .goal {
+  font-size: 13px;
+  margin: 4px 0 0;
+  color: var(--ink);
+}
+.village-card .goal small {
+  color: var(--muted);
+}
+@media (max-width: 860px) {
+  .tools button {
+    min-width: 44px;
+    padding: 4px 6px;
+  }
+  .tool-hint {
+    bottom: 80px;
+  }
+}

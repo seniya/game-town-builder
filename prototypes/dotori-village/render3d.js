@@ -59,9 +59,9 @@ async function loadAll(onProgress) {
   // 텍스처를 <img>(blob: 주소)로 읽게 한다. 기본 ImageBitmapLoader 는 blob: 주소를 fetch 해서 보안 정책에 막힌다.
   loader.register(parser => { parser.textureLoader = new THREE.TextureLoader(parser.options.manager); return { name: 'dotori_img_textures' }; });
   const list = [
-    ...CHAR_NAMES.map(n => ['c:' + n, `assets/kc_character-${n}.json`]),
-    ...KK.map(n => [n, `assets/kk_${n}.json`]),
-    ...KT.map(n => [n, `assets/kt_${n}.json`]),
+    ...CHAR_NAMES.map(n => ['c:' + n, `../../public/dotori/assets/kc_character-${n}.json`]),
+    ...KK.map(n => [n, `../../public/dotori/assets/kk_${n}.json`]),
+    ...KT.map(n => [n, `../../public/dotori/assets/kt_${n}.json`]),
   ];
   let done = 0;
   await Promise.all(list.map(([k, url]) => loadGltf(loader, url).then(g => {

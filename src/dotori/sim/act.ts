@@ -1,5 +1,5 @@
 // 행동의 시작·이동·도착·진행·끝 (시험판 규칙 + 가꾸기·이사 행동, SPEC 3.3·4.3·4.4).
-import { BAKERY, LUMBER, NEEDS } from '../data/balance';
+import { BAKERY, LUMBER, NEEDS, WALK } from '../data/balance';
 import { FINDS } from '../data/people';
 import { arriveSite, buildTick, useDecor } from './build';
 import { decide, mk } from './decide';
@@ -297,8 +297,15 @@ function stepMove(w: World, v: Villager): boolean {
   if (v.pi >= v.path.length) return true;
   const a = v.act;
   const heavy = v.pack != null && (v.pack.kind === 'bag' || v.pack.n >= 6);
-  const spd = a && a.type === 'flee' ? 0.42 : a && a.target != null ? 0.3 : heavy ? 0.16 : 0.2;
-  let budget = spd;
+  const spd =
+    a && a.type === 'flee'
+      ? WALK.flee
+      : a && a.target != null
+        ? WALK.visit
+        : heavy
+          ? WALK.heavy
+          : WALK.base;
+  let budget: number = spd;
   while (budget > 0.0001 && v.pi < v.path.length) {
     const n = v.path[v.pi];
     if (!n) break;

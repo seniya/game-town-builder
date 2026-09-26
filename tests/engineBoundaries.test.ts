@@ -18,13 +18,24 @@ describe('구조 규칙 (AGENTS 5, ARCHITECTURE 9.4)', () => {
       .filter(([, src]) => /new\s+(THREE\.)?\w*Material\s*\(/.test(src))
       .map(([path]) => path);
     expect(offenders).toEqual([]);
-    const materials = Object.entries(sources).find(([p]) => p.endsWith('/render/materials.ts'));
+    // v1 은 src/render/materials.ts, v2(도토리 마을)는 src/dotori/render/materials.ts 가 재질을 만든다.
+    const materials = Object.entries(sources).find(
+      ([p]) => p.endsWith('/render/materials.ts') && !p.includes('/dotori/'),
+    );
     expect(materials?.[1]).toMatch(/new THREE\.ShaderMaterial\(/);
   });
 
   it('game / ui / workers 는 three 를 import 하지 않는다 (lint 규칙의 이중 확인)', () => {
     const offenders = Object.entries(sources)
       .filter(([path]) => /\/src\/(game|ui|workers)\//.test(path))
+      .filter(([, src]) => /from\s+['"]three(\/[^'"]*)?['"]|import\(\s*['"]three/.test(src))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
+  });
+
+  it('도토리 마을 sim·data·ui 는 three 를 import 하지 않는다 (docs/dotori/ARCHITECTURE 1)', () => {
+    const offenders = Object.entries(sources)
+      .filter(([path]) => /\/src\/dotori\/(sim|data|ui)\//.test(path))
       .filter(([, src]) => /from\s+['"]three(\/[^'"]*)?['"]|import\(\s*['"]three/.test(src))
       .map(([path]) => path);
     expect(offenders).toEqual([]);
