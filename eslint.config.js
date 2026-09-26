@@ -40,4 +40,22 @@ export default tseslint.config(
       'no-restricted-imports': ['error', THREE_RESTRICTION],
     },
   },
+  // 도토리 마을(v2, ADR 049): sim·data·ui 는 three 를 모른다(docs/dotori/ARCHITECTURE 1).
+  {
+    files: ['src/dotori/sim/**', 'src/dotori/data/**', 'src/dotori/ui/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['three', 'three/*'],
+              message:
+                'src/dotori/sim·data·ui 에서는 three 를 import 하지 않는다 (docs/dotori/ARCHITECTURE 1).',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
