@@ -5,12 +5,14 @@ import type { Side } from '../data/villageMap';
 import { mk } from './decide';
 import { getT, inb, passableTile, recomputeLocations, setT } from './map';
 import { startAct } from './act';
+import { setCrop } from './produce';
 import { J, NJ, NV } from './text';
 import type { Act, Blueprint, Building, Decor, DecorKind, Pt, Villager, World } from './types';
 import { TILE } from './types';
 import {
   bldKind,
   diary,
+  dist,
   doorOf,
   emote,
   frontOf,
@@ -28,6 +30,9 @@ export interface PlaceCheck {
   /** 집 문 앞에서 길까지 새로 깔 칸. */
   road: Pt[];
 }
+
+/** 새 장식을 궁금해하는 주민 수. */
+const CURIOUS_COUNT = 2;
 
 const DECOR_NAME: Record<DecorKind, string> = { bench: '벤치', lamp: '등불', flowerbed: '꽃밭' };
 
@@ -160,6 +165,16 @@ export function placeBlueprint(
   const def = BUILDABLES[kind];
   if (kind === 'road') {
     setT(w, x, y, TILE.PATH);
+    w.staticVersion++;
+    recomputeLocations(w);
+    return { ...chk, id: -1 };
+  }
+  if (kind === 'farm') {
+    for (let yy = y; yy < y + def.h; yy++)
+      for (let xx = x; xx < x + def.w; xx++) {
+        setT(w, xx, yy, TILE.FARM);
+        setCrop(w, xx, yy, 0);
+      }
     w.staticVersion++;
     recomputeLocations(w);
     return { ...chk, id: -1 };
@@ -386,6 +401,9 @@ export function completeBlueprint(w: World, bp: Blueprint, by: Villager | null):
       name: `${no}번지`,
       residents: [],
       bread: 0,
+      flour: 0,
+      wheat: 0,
+      fish: 0,
       variant: no,
       playerBuilt: true,
       builtAt: w.t,
@@ -412,6 +430,21 @@ export function completeBlueprint(w: World, bp: Blueprint, by: Villager | null):
       firstUse: null,
     };
     w.decor.push(d);
+    // 가까이 있는 한가한 주민 한두 명이 새것을 궁금해한다(SPEC 4.3).
+    const idle = w.vs
+      .filter(
+        (o) =>
+          o.inside == null &&
+          o.talk == null &&
+          o.curious == null &&
+          !(
+            o.act &&
+            ['sleep', 'work', 'build', 'fetch', 'deliver', 'haul', 'movein'].includes(o.act.type)
+          ),
+      )
+      .sort((p, q) => dist(p, d) - dist(q, d))
+      .slice(0, CURIOUS_COUNT);
+    for (const o of idle) o.curious = d.id;
     log(
       w,
       `${def.e} 새 ${J(def.label, '가', '이')} 생겼다.${builders.length ? ` ${namesJ(builders, '가', '이')} 만들었다.` : ''}`,

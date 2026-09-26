@@ -2,6 +2,7 @@
 import { PERF, TIME } from '../data/balance';
 import { actTick } from './act';
 import { arrivalTick } from './arrival';
+import { growthTick, millTick } from './produce';
 import { morning, needsTick, partyTick, weatherTick } from './events';
 import { convTick, socialTick } from './social';
 import { computeStats } from './stats';
@@ -16,6 +17,8 @@ export function step(w: World): void {
   weatherTick(w);
   partyTick(w);
   arrivalTick(w);
+  growthTick(w);
+  millTick(w);
   for (const v of w.vs) {
     v.px = v.x;
     v.py = v.y;

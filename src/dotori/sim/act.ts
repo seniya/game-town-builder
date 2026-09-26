@@ -1,10 +1,11 @@
 // 행동의 시작·이동·도착·진행·끝 (시험판 규칙 + 가꾸기·이사 행동, SPEC 3.3·4.3·4.4).
-import { BAKERY, LUMBER, NEEDS, WALK } from '../data/balance';
+import { LUMBER, NEEDS, PRODUCE, WALK } from '../data/balance';
 import { FINDS } from '../data/people';
 import { arriveSite, buildTick, useDecor } from './build';
 import { decide, mk } from './decide';
 import { getT, neighborDir, passable, tileCost } from './map';
 import { findPath } from './path';
+import { bakeTick, dropPack, farmerAct, finishFarmWork, fishTick, takeFlour } from './produce';
 import { rumor, startConv } from './social';
 import { J, NJ, NV } from './text';
 import type { Act, Villager, World } from './types';
@@ -92,7 +93,15 @@ function arrive(w: World, v: Villager): void {
   }
   switch (a.type) {
     case 'eat':
-      if (a.where === 'bakery') {
+      if (a.where === 'tavern') {
+        const t = bldKind(w, 'tavern');
+        if (t.fish >= 1) {
+          t.fish -= 1;
+          v.social += PRODUCE.supperSocial;
+          v.carry = { item: 'mug', until: w.t + a.dur };
+          diary(w, v, '주점에서 생선구이를 먹었다. 다들 모여 왁자지껄 🐟🍺');
+        } else diary(w, v, '주점에 갔는데 생선이 다 떨어졌다 😅');
+      } else if (a.where === 'bakery') {
         const bakery = bldKind(w, 'bakery');
         const take = v.trait === '먹보' ? 3 : 1;
         bakery.bread = Math.max(0, bakery.bread - take);
@@ -182,19 +191,34 @@ function arrive(w: World, v: Villager): void {
       if (a.decor != null) useDecor(w, v, a.decor);
       break;
     case 'haul': {
-      const n = v.pack?.kind === 'lumber' ? v.pack.n : 0;
-      if (n > 0) {
-        w.lumber += n;
-        v.pack = null;
-        if (!v.daily.haulLog) {
-          v.daily.haulLog = true;
-          diary(w, v, `야적장에 목재를 ${n}개 쌓았다 🪵`);
-        }
+      const kind = v.pack?.kind;
+      const n = dropPack(w, v);
+      if (n > 0 && kind && !v.daily[`haul-${kind}`]) {
+        v.daily[`haul-${kind}`] = true;
+        const where =
+          kind === 'lumber'
+            ? '야적장에 목재를'
+            : kind === 'wheat'
+              ? '방앗간에 밀을'
+              : kind === 'flour'
+                ? '빵집에 밀가루를'
+                : '주점에 생선을';
+        const e =
+          kind === 'lumber' ? '🪵' : kind === 'wheat' ? '🌾' : kind === 'flour' ? '🥖' : '🐟';
+        diary(w, v, `${where} ${n}${kind === 'wheat' ? '단' : '개'} 날랐다 ${e}`);
       }
       a.until = w.t;
       break;
     }
     case 'fetch':
+      if (a.where === 'flour') {
+        a.until = w.t;
+        const next = takeFlour(w, v);
+        if (next) startAct(w, v, next);
+        break;
+      }
+      arriveSite(w, v, a);
+      break;
     case 'deliver':
     case 'build':
       arriveSite(w, v, a);
@@ -232,8 +256,23 @@ function doTick(w: World, v: Villager, a: Act, h: number): boolean {
       if (v.trait === '일벌레') v.fun += 0.06;
       else v.fun -= 0.02;
       v.energy -= 0.03;
-      if (v.job === '제빵사' && w.t % BAKERY.bakeEvery === 0) bldKind(w, 'bakery').bread += 1;
-      if (v.job === '어부' && w.t % 15 === 0 && R.next() < 0.2) emote(w, v, '🐟', 12);
+      if (v.job === '제빵사' && a.bld != null) bakeTick(w, v);
+      if (v.job === '어부' && fishTick(w, v)) return true;
+      if (v.job === '농부' && a.where != null && w.t >= a.until) {
+        finishFarmWork(w, v, a);
+        // 한 번 밭에 나가면 여러 칸을 이어서 일한다(SPEC 9.2). 등짐이 차거나 퇴근·배고픔이면 멈춘다.
+        const chain = (a.repath || 0) + 1;
+        const full = v.pack?.kind === 'wheat' && v.pack.n >= PRODUCE.wheatPack;
+        if (chain < PRODUCE.fieldChain && !full && workHours(v, h) && v.hunger > 20) {
+          const next = farmerAct(w, v, a.where);
+          if (next) {
+            next.repath = chain;
+            startAct(w, v, next);
+            return false;
+          }
+        }
+        return true;
+      }
       if (v.job === '나무꾼' && (w.t - a.started) % LUMBER.chopEvery === LUMBER.chopEvery - 1) {
         if (!v.pack || v.pack.kind !== 'lumber') v.pack = { kind: 'lumber', n: 0, site: null };
         v.pack.n += 1;

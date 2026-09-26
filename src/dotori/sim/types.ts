@@ -40,8 +40,11 @@ export interface Building {
   door: Pt;
   name: string;
   residents: number[];
-  /** 빵집의 빵 수(다른 건물은 0). */
+  /** 재고(SPEC 9): 빵집 빵·밀가루, 방앗간 밀·밀가루, 주점 생선. 다른 건물은 0. */
   bread: number;
+  flour: number;
+  wheat: number;
+  fish: number;
   /** 겉모습 변형 번호(render 가 모델·지붕 색을 고른다). */
   variant: number;
   playerBuilt: boolean;
@@ -109,7 +112,17 @@ export type ActType =
 
 export type ConvKind = 'chat' | 'invite' | 'date' | 'confess' | 'welcome';
 export type FunWhere = 'shore' | 'plaza' | 'grass' | 'forest' | 'bench' | 'flower';
-export type ActWhere = FunWhere | 'bakery' | 'home' | 'terrace' | 'lamp';
+export type ActWhere =
+  | FunWhere
+  | 'bakery'
+  | 'home'
+  | 'terrace'
+  | 'lamp'
+  | 'tavern'
+  | 'harvest'
+  | 'plant'
+  | 'tend'
+  | 'flour';
 
 export interface Act {
   type: ActType;
@@ -133,6 +146,8 @@ export interface Act {
 }
 
 export type CarryItem = 'bread' | 'flower' | 'book' | 'mug';
+/** 등짐 종류: 목재·이삿짐·밀·밀가루·생선. */
+export type PackKind = 'lumber' | 'bag' | 'wheat' | 'flour' | 'fish';
 
 export interface Villager {
   id: number;
@@ -158,6 +173,8 @@ export interface Villager {
   confess: number | null;
   /** 인사하러 갈 새 주민 id. */
   welcome: number | null;
+  /** 새로 생긴 장식이 궁금해 써 보러 갈 장식 id. */
+  curious: number | null;
   fearGhost: boolean;
   hunting: boolean;
   diary: { t: number; text: string }[];
@@ -173,7 +190,7 @@ export interface Villager {
   /** 손에 든 것. */
   carry: { item: CarryItem; until: number } | null;
   /** 등에 진 것: 목재 n 개 또는 이삿짐. */
-  pack: { kind: 'lumber' | 'bag'; n: number; site: number | null } | null;
+  pack: { kind: PackKind; n: number; site: number | null } | null;
   look: { skin: string; pants: string; umb: string; model: number };
   arrivedAt: number;
 }
@@ -230,7 +247,8 @@ export type FeedKind =
   | 'weather'
   | 'plant'
   | 'build'
-  | 'arrive';
+  | 'arrive'
+  | 'work';
 
 export interface FeedEntry {
   t: number;
@@ -261,6 +279,9 @@ export interface Locations {
 }
 
 export interface Stats {
+  wheat: number;
+  bread: number;
+  fish: number;
   pop: number;
   beds: number;
   happy: number;
@@ -300,6 +321,13 @@ export interface World {
   arrivalsToday: number;
   /** 플레이어가 심은 나무 수(매력). */
   treesPlanted: number;
+  /** 칸별 작물 단계(0~4)와 지금 단계에서 자란 틱(SPEC 9.1). 밭이 아닌 칸은 0. */
+  crop: Uint8Array;
+  growth: Uint16Array;
+  /** 작물 단계가 바뀔 때마다 1 씩 는다(render 가 작물만 다시 그린다). */
+  cropVersion: number;
+  /** 누계: 구운 빵·거둔 밀·잡은 생선. */
+  tally: { bread: number; wheat: number; fish: number };
   /** 건물·장식·청사진·지형이 바뀔 때마다 1 씩 는다(render 가 다시 짓는다). */
   staticVersion: number;
   stats: Stats;

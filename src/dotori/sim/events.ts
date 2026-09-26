@@ -1,5 +1,5 @@
 // 하루의 사건: 아침 갱신, 날씨, 파티, 욕구 감소와 유령 공포 (SPEC 1·3.2·3.4, 시험판 규칙).
-import { BAKERY, NEEDS, WEATHER } from '../data/balance';
+import { NEEDS, WEATHER } from '../data/balance';
 import { TRAITS } from '../data/people';
 import { endAct, startAct } from './act';
 import { mk } from './decide';
@@ -50,7 +50,6 @@ export function morning(w: World): void {
     v.welcome = null;
   }
   log(w, `☀️ ${dayOf(w.t)}일째 아침이 밝았다.`, [], 'day');
-  bldKind(w, 'bakery').bread = BAKERY.morningBread;
   for (const r of w.rumors) if (r.kind !== 'party') r.juicy *= 0.8;
   w.rumors = w.rumors.filter((r) =>
     r.kind === 'party' ? r.active || w.t - r.born < 1440 : r.juicy > 0.15,

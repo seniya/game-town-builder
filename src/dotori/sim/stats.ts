@@ -20,5 +20,8 @@ export function computeStats(w: World): void {
     charm: charmOf(w),
     lumber: w.lumber,
     sites: w.blueprints.length,
+    wheat: Math.floor(w.buildings.find((b) => b.kind === 'mill')?.wheat ?? 0),
+    bread: Math.floor(w.buildings.find((b) => b.kind === 'bakery')?.bread ?? 0),
+    fish: Math.floor(w.buildings.find((b) => b.kind === 'tavern')?.fish ?? 0),
   };
 }

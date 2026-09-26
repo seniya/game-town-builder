@@ -1,8 +1,9 @@
 // 행동 고르기: 욕구·성격·시간으로 점수를 매겨(options) 가장 높은 행동을 만든다(buildAct) (SPEC 3.3, 시험판 규칙).
-import { DESTINATION, LUMBER } from '../data/balance';
+import { DESTINATION, LUMBER, PRODUCE } from '../data/balance';
 import { JOBS } from '../data/people';
 import { startAct } from './act';
 import { carpenterAct, hasCarpentryWork } from './build';
+import { bakerAct, dropTarget, farmerAct, hasRipe, supperScore } from './produce';
 import { knows, rumorById } from './social';
 import type { Act, ActType, Decor, Pt, Villager, World } from './types';
 import {
@@ -20,7 +21,7 @@ import {
 } from './world';
 import { passable } from './map';
 
-type Choice = ActType | 'date' | 'confess' | 'welcome';
+type Choice = ActType | 'date' | 'confess' | 'welcome' | 'supper' | 'curious';
 
 /** 행동 하나를 만든다. 넘기지 않은 칸은 기본값. */
 export function mk(w: World, type: ActType, o: Partial<Act> = {}): Act {
@@ -68,6 +69,8 @@ function options(w: World, v: Villager, h: number): [Choice, number][] {
     Math.pow(hun, 1.4) * 3.2 * (tr === '먹보' ? 1.7 : 1) +
       (tr === '먹보' && bakeryOpen(h) && v.hunger < 80 ? 0.5 : 0),
   ]);
+  const sup = supperScore(w, v, h);
+  if (sup > 0) o.push(['supper', sup]);
   if (sleeping) return o;
   if (workHours(v, h)) {
     const place = JOBS[v.job].place;
@@ -78,6 +81,7 @@ function options(w: World, v: Villager, h: number): [Choice, number][] {
       (rain && outdoorJob ? 0.6 : 1);
     // 공사가 있으면 목수는 조금 더 일하고 싶어한다(청사진이 기다리고 있다).
     if (v.job === '목수' && hasCarpentryWork(w)) s *= 1.6;
+    if (v.job === '농부' && hasRipe(w)) s *= PRODUCE.farmUrge;
     // 야적장이 가득 차면 나무꾼은 나무하러 가지 않는다(다른 일을 하며 쉰다).
     if (v.job === '나무꾼' && w.lumber >= LUMBER.yardCap) s *= 0.05;
     o.push(['work', s]);
@@ -97,6 +101,7 @@ function options(w: World, v: Villager, h: number): [Choice, number][] {
     if (outdoor(p) && !(p.act && p.act.type === 'sleep'))
       o.push(['date', lon * 1.2 + (h >= 16 && h < 21 ? 0.9 : 0.2)]);
   }
+  if (v.curious != null) o.push(['curious', 3.2]);
   if (v.welcome != null) {
     const nb = vil(w, v.welcome);
     if (outdoor(nb) && !(nb.act && nb.act.type === 'sleep')) o.push(['welcome', 3]);
@@ -187,12 +192,37 @@ function buildAct(w: World, v: Villager, type: Choice, h: number): Act | null {
         return mk(w, 'eat', { bld: bakery.id, dur: 25, where: 'bakery' });
       return mk(w, 'eat', { bld: v.home, dur: 30, where: 'home' });
     }
+    case 'curious': {
+      const d = w.decor.find((e) => e.id === v.curious);
+      v.curious = null;
+      if (!d) return null;
+      const where = d.kind === 'bench' ? 'bench' : d.kind === 'flowerbed' ? 'flower' : null;
+      if (!where)
+        return mk(w, 'social', {
+          dest: nearSpot(w, d),
+          dur: R.int(40, 80),
+          where: 'lamp',
+          decor: d.id,
+        });
+      return mk(w, 'fun', {
+        dest: where === 'bench' ? { x: d.x, y: d.y } : decorSpot(w, d),
+        dur: R.int(50, 100),
+        where,
+        decor: d.id,
+      });
+    }
+    case 'supper':
+      return mk(w, 'eat', {
+        bld: bldKind(w, 'tavern').id,
+        dur: PRODUCE.supperDur,
+        where: 'tavern',
+      });
     case 'work': {
       const j = JOBS[v.job];
       if (!j.hours) return null;
       const end = j.hours[1] + (v.trait === '일벌레' ? 2 : 0);
       const dur = Math.min(150, Math.max(30, Math.round((end - h) * 60)));
-      if (j.place === 'bakery') return mk(w, 'work', { bld: bldKind(w, 'bakery').id, dur });
+      if (j.place === 'bakery') return bakerAct(w, v, dur);
       if (j.place === 'workshop') {
         const site = carpenterAct(w, v);
         if (site) return site;
@@ -200,8 +230,7 @@ function buildAct(w: World, v: Villager, type: Choice, h: number): Act | null {
         return mk(w, 'work', { dest: { x: ws.door.x + R.int(-1, 1), y: ws.door.y - 1 }, dur });
       }
       if (j.place === 'tavern') return mk(w, 'work', { bld: bldKind(w, 'tavern').id, dur });
-      if (j.place === 'farm')
-        return mk(w, 'work', { dest: pickPt(L.farm), dur: Math.min(dur, 140) });
+      if (j.place === 'farm') return farmerAct(w, v);
       if (j.place === 'shore')
         return mk(w, 'work', {
           dest: pickNear(w, L.shore, v, DESTINATION.funSamples),
@@ -344,13 +373,19 @@ function buildAct(w: World, v: Villager, type: Choice, h: number): Act | null {
 
 /** 등짐이 있으면 먼저 내려놓으러 간다(목수는 공사장, 그 밖은 야적장). */
 function packFirst(w: World, v: Villager, h: number): Act | null {
-  if (!v.pack || v.pack.kind !== 'lumber' || v.pack.n <= 0) return null;
-  if (v.job === '목수' && workHours(v, h)) {
+  const p = v.pack;
+  if (!p || p.kind === 'bag' || p.n <= 0) return null;
+  if (p.kind === 'lumber' && v.job === '목수' && workHours(v, h)) {
     const a = carpenterAct(w, v);
     if (a) return a;
   }
-  const yard = bldKind(w, 'yard');
-  return mk(w, 'haul', { dest: frontOf(yard), dur: 1 });
+  // 농부는 밀이 조금 모였을 때는 계속 거두고, 차거나 일이 끝나면 방앗간으로 간다.
+  if (p.kind === 'wheat' && p.n < PRODUCE.wheatPack && workHours(v, h) && hasRipe(w)) return null;
+  // 어부는 등짐이 덜 찼으면 계속 낚는다.
+  if (p.kind === 'fish' && p.n < PRODUCE.fishPack && workHours(v, h)) return null;
+  const to = dropTarget(w, p.kind);
+  if (!to) return null;
+  return mk(w, 'haul', { dest: frontOf(to), dur: 1 });
 }
 
 /** 다음 행동을 고르고 시작한다. */

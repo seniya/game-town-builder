@@ -57,13 +57,57 @@ export const WEATHER = {
   rainMax: 180,
 } as const;
 
-/** 빵집(시험판). */
+/** 빵집 여는 시간(시험판). 빵 굽기는 PRODUCE. */
 export const BAKERY = {
-  morningBread: 24,
   openFrom: 6,
   openTo: 20,
-  /** 제빵사 한 명이 빵 하나를 굽는 틱 간격. */
+} as const;
+
+/** 생산 사슬 (SPEC 9, ADR 050). */
+export const PRODUCE = {
+  /** 작물이 한 단계 자라는 틱(1~3 단계). */
+  stageTicks: 420,
+  /** 비 올 때 자람 배율. */
+  rainGrowth: 1.5,
+  /** 익은 단계. */
+  ripe: 4,
+  /** 자람을 모아서 처리하는 간격(틱). */
+  growEvery: 10,
+  harvestTicks: 12,
+  plantTicks: 8,
+  tendTicks: 20,
+  tendBoost: 120,
+  /** 농부 밀 등짐이 이만큼이면 방앗간으로 간다. */
+  wheatPack: 6,
+  /** 이만큼 이상이면 손수레를 민다(화면). */
+  cartFrom: 4,
+  /** 한 번 나가 이어서 일하는 밭 칸 수. */
+  fieldChain: 10,
+  /** 빈 밭이 있을 때 밭일을 심기부터 시작할 확률. */
+  plantChance: 0.35,
+  /** 익은 칸이 있을 때 농부 일 점수 배율. */
+  farmUrge: 1.3,
+  millEvery: 20,
+  millWheatCap: 60,
+  /** 방앗간 밀가루 창고 용량. 가득 차면 빻지 않는다. */
+  millFlourCap: 60,
+  /** 빵집 밀가루가 이보다 적으면 가지러 간다. */
+  flourLow: 3,
+  flourCarry: 8,
   bakeEvery: 10,
+  flourPerBread: 0.5,
+  breadCap: 40,
+  fishEvery: 15,
+  fishChance: 0.2,
+  fishPack: 4,
+  fishCap: 30,
+  supperFrom: 17,
+  supperTo: 23,
+  supperMaxHunger: 70,
+  supperDur: 40,
+  supperSocial: 10,
+  tavernMaxDist: 30,
+  start: { bread: 24, bakeryFlour: 6, millFlour: 4, millWheat: 0 },
 } as const;
 
 /** 처음 마을 (SPEC 3.1·4.3). */

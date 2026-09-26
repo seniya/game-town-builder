@@ -1,5 +1,5 @@
 // 새 마을 만들기: 지형 → 건물 → 장식 → 주민 → 처음 인연 → 첫날 파티 계획 (SPEC 2·3.1).
-import { START } from '../data/balance';
+import { PRODUCE, START } from '../data/balance';
 import {
   MORE_NAMES,
   NAME_SYLLABLES_A,
@@ -54,7 +54,21 @@ export function emptyWorld(seed: number, W = MAP_W, H = MAP_H): World {
     arrivalsToday: 0,
     treesPlanted: 0,
     staticVersion: 1,
-    stats: { pop: 0, beds: 0, happy: 0, charm: 0, lumber: 0, sites: 0 },
+    stats: {
+      pop: 0,
+      beds: 0,
+      happy: 0,
+      charm: 0,
+      lumber: 0,
+      sites: 0,
+      wheat: 0,
+      bread: 0,
+      fish: 0,
+    },
+    crop: new Uint8Array(W * H),
+    growth: new Uint16Array(W * H),
+    cropVersion: 1,
+    tally: { bread: 0, wheat: 0, fish: 0 },
     L: {
       farm: [],
       forest: [],
@@ -106,6 +120,9 @@ function placeStartBuildings(w: World): void {
       name: s.name ?? `${houseNo}번지`,
       residents: [],
       bread: 0,
+      flour: 0,
+      wheat: 0,
+      fish: 0,
       variant: s.kind === 'house' ? houseNo : 0,
       playerBuilt: false,
       builtAt: 0,
@@ -203,6 +220,7 @@ export function makeVillager(
     partner: null,
     confess: null,
     welcome: null,
+    curious: null,
     fearGhost: false,
     hunting: false,
     diary: [],
@@ -267,6 +285,22 @@ export function newWorld(seed: number, opts: NewWorldOptions = {}): World {
   recomputeLocations(w);
   w.t = 7 * 60;
   w.lumber = START.lumber;
+  // 생산 사슬의 처음 재고와 밭(SPEC 9.1·9.4): 칸마다 1~4 단계를 흩어 둔다.
+  const S0 = PRODUCE.start;
+  for (const b of w.buildings) {
+    if (b.kind === 'bakery') {
+      b.bread = S0.bread;
+      b.flour = S0.bakeryFlour;
+    } else if (b.kind === 'mill') {
+      b.flour = S0.millFlour;
+      b.wheat = S0.millWheat;
+    }
+  }
+  for (const f of w.L.farm) {
+    const i = f.y * w.W + f.x;
+    w.crop[i] = 1 + Math.floor(w.rng.next() * PRODUCE.ripe);
+    w.growth[i] = Math.floor(w.rng.next() * PRODUCE.stageTicks);
+  }
   const N = opts.residents ?? START.residents;
   const R = w.rng;
   const traits: TraitName[] = [];

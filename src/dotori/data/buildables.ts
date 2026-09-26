@@ -1,6 +1,6 @@
 // 가꾸기로 놓을 수 있는 것 (SPEC 4.1). 로직은 sim/build.ts 에 있다.
 
-export type BuildKind = 'house' | 'flowerbed' | 'bench' | 'lamp' | 'tree' | 'road';
+export type BuildKind = 'house' | 'flowerbed' | 'bench' | 'lamp' | 'farm' | 'tree' | 'road';
 
 export interface BuildableDef {
   kind: BuildKind;
@@ -76,6 +76,19 @@ export const BUILDABLES: Record<BuildKind, BuildableDef> = {
     maxWorkers: 1,
     hint: '밤에 불을 밝히고 주민이 모여요. 매력 +0.5',
   },
+  farm: {
+    kind: 'farm',
+    label: '밭',
+    e: '🌾',
+    w: 3,
+    h: 3,
+    lumber: 0,
+    work: 0,
+    charm: 0,
+    ground: ['grass'],
+    maxWorkers: 0,
+    hint: '농부가 밀을 심고 거둬요. 밀은 방앗간에서 밀가루가 되고 빵이 돼요',
+  },
   tree: {
     kind: 'tree',
     label: '나무',
@@ -104,7 +117,7 @@ export const BUILDABLES: Record<BuildKind, BuildableDef> = {
   },
 };
 
-/** 도구 막대 순서(단축키 1~6). 치우기는 7. */
+/** 도구 막대 순서(단축키 1~7). 치우기는 8. */
 export const BUILD_ORDER: readonly BuildKind[] = [
   'house',
   'flowerbed',
