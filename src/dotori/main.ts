@@ -304,11 +304,25 @@ function bindControls(): void {
   $('sp1').addEventListener('click', () => setSpeed(1));
   $('sp3').addEventListener('click', () => setSpeed(3));
   $('sp8').addEventListener('click', () => setSpeed(8));
+  // 확인 창(confirm)은 아티팩트 보기 화면에서 막혀 있어, 한 번 더 누르면 새로 시작하는 방식으로 묻는다.
+  let resetArmed: ReturnType<typeof setTimeout> | null = null;
   $('reset').addEventListener('click', () => {
-    if (!window.confirm('지금 마을을 지우고 새 마을을 시작할까요?')) return;
+    const btn = $('reset');
+    if (!resetArmed) {
+      btn.textContent = '정말 새로? 한 번 더';
+      resetArmed = setTimeout(() => {
+        resetArmed = null;
+        btn.textContent = '새 마을';
+      }, 3000);
+      return;
+    }
+    clearTimeout(resetArmed);
+    resetArmed = null;
+    btn.textContent = '새 마을';
     clearSave();
     attach(freshWorld((Math.random() * 1e9) | 0));
     writeSave();
+    say('🌱 새 마을을 시작했어요');
   });
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && !(e.target instanceof HTMLButtonElement)) {

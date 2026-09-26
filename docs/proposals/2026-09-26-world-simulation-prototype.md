@@ -1,7 +1,7 @@
 # 제안: 살아 있는 마을 시뮬레이션 시험판 (도토리 마을)
 
 Date: 2026-09-26
-Status: 진행 중 (오너 지시로 시험판 개발)
+Status: 채택 — 2026-09-26 오너 위임으로 에이전트가 본 게임 방향으로 채택([ADR 049](../adr/049-direction-dotori-living-village.md)). 이후 기준은 `docs/dotori/`
 Evidence: [Generative Agents 조사](../research/2026-09-26-generative-agents.md), [CC0 3D 에셋 팩 조사](../research/2026-09-26-cc0-3d-asset-packs.md)
 
 이 문서는 본 게임의 정본(GAME_DESIGN / MVP_SPEC / ARCHITECTURE / TASKS)을 바꾸지 않는다.

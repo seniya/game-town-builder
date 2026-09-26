@@ -2,6 +2,12 @@
 
 작은 마을 복구 게임 프로젝트의 에이전트 작업 규약이다.
 
+> **2026-09-26 두 번째 전면 개정(v2 도토리 마을, [ADR 049](docs/adr/049-direction-dotori-living-village.md)).**
+> 오너가 방향 결정을 에이전트에게 맡겼다. 지금 개발 기준은 `docs/dotori/` 네 문서와 `src/dotori/` 다.
+> v1(1인칭 복셀 빌더, `docs/project/`·`src/game`·`src/render`·`src/ui`·`src/workers`)은 동결 보존한다.
+> 아래 규칙에서 "MVP_SPEC / ARCHITECTURE / TASKS / GAME_DESIGN" 은 v2 작업에서는
+> 각각 `docs/dotori/SPEC.md`·`ARCHITECTURE.md`·`TASKS.md`·`DESIGN.md` 로 읽는다.
+
 게임의 최우선 목표는 **아름답게 만든 공간에서 정감 있는 주민이 실제로 살아가는 순간** 이다.
 공간을 가꾸는 즐거움과 주민에 대한 애착을 기준으로 판단한다. 구체적인 의도는
 `GAME_DESIGN.md`를 따르며, 이 목표를 이유로 MVP 범위를 임의로 넓히지 않는다.
@@ -13,14 +19,16 @@
 
 ## 1. 문서를 먼저 읽는다
 
-작업을 시작하기 전에 다음 순서로 읽는다.
+작업을 시작하기 전에 다음 순서로 읽는다(v2).
 
 ```text
-docs/project/GAME_DESIGN.md   왜 만드는가 / 무엇이 재미여야 하는가
-docs/project/MVP_SPEC.md      무엇을 만드는가 (수치와 조건식의 정본)
-docs/project/ARCHITECTURE.md  어떤 구조로 만드는가 (인터페이스의 정본)
-docs/project/TASKS.md         어떤 순서로 만드는가 (Acceptance Criteria 의 정본)
+docs/dotori/DESIGN.md         왜 만드는가 / 무엇이 재미여야 하는가
+docs/dotori/SPEC.md           무엇을 만드는가 (수치와 조건식의 정본)
+docs/dotori/ARCHITECTURE.md   어떤 구조로 만드는가 (인터페이스의 정본)
+docs/dotori/TASKS.md          어떤 순서로 만드는가 (로드맵·완료 조건의 정본)
 ```
+
+v1 을 고칠 때만 `docs/project/GAME_DESIGN.md`·`MVP_SPEC.md`·`ARCHITECTURE.md`·`TASKS.md` 를 읽는다.
 
 부수 문서:
 
@@ -67,9 +75,9 @@ docs/state/     작업 완료 기록과 다음 할 일
 - 모든 함수에 주석을 작성한다.
 - `any` / `@ts-ignore` / `@ts-nocheck` 를 사용하지 않는다. 불가피하면 이유를 주석으로 남긴다.
 - **`src/game/` 아래의 어느 파일도 `three` 를 import 하지 않는다.**
-  `src/ui/` 와 `src/workers/` 도 마찬가지다. ESLint 가 이를 강제한다.
-- 밸런스 수치를 로직 안에 직접 쓰지 않는다. `src/game/data/` 에 둔다.
-- `THREE.Material` 생성은 `src/render/materials.ts` 한 곳에서만 한다.
+  `src/ui/` 와 `src/workers/` 도 마찬가지다. v2 에서는 `src/dotori/sim`·`data`·`ui` 가 같다. ESLint 가 이를 강제한다.
+- 밸런스 수치를 로직 안에 직접 쓰지 않는다. `src/game/data/`(v2 는 `src/dotori/data/`)에 둔다.
+- `THREE.Material` 생성은 `src/render/materials.ts`(v2 는 `src/dotori/render/materials.ts`) 한 곳에서만 한다.
 - 좌표 변환 함수 이름에 기준점을 명시한다.
   `blockToWorldMin` / `blockToWorldCenter` 는 있고, `blockToWorld` 는 없다.
 
@@ -112,6 +120,15 @@ React 도입
 
 ## 8. 두 개의 검증 지점에서 멈춘다
 
+v1 의 두 지점(TASK-022·033)은 사람의 플레이로 통과했다. v2 의 지점은 다음 둘이다(`docs/dotori/TASKS.md`).
+
+```text
+VG1   가꾸는 마을: 내가 놓은 것이 지어지고 주민이 쓰는 모습을 계속 보고 싶은가
+VG2   분주한 마을: 생산과 짐 나르기가 마을을 더 살아 있게 하는가
+```
+
+v1 의 원래 두 지점:
+
 ```text
 TASK-022   방을 만들고 인식시키는 과정이 즐거운가
 TASK-033   밤에 주민이 내가 만든 방으로 걸어 들어가는 것이 만족스러운가
@@ -122,7 +139,11 @@ TASK-033   밤에 주민이 내가 만든 방으로 걸어 들어가는 것이 �
 방 조건 변경이 필요하면 먼저 MVP_SPEC과 관련 ADR·완료 조건을 함께 개정한다.
 두 검증 지점의 실패는 작업 기록만 남기고 건너뛸 수 없다.
 
-## 9. 이 프로젝트는 한 번 전면 개정되었다
+## 9. 이 프로젝트는 두 번 전면 개정되었다
+
+2026-09-26 v2(도토리 마을)로 두 번째 개정을 했다([ADR 049](docs/adr/049-direction-dotori-living-village.md)).
+v1 문서와 코드는 지우지 않았고 동결했다. v1 정본의 본문은 v2 작업의 기준이 아니다.
+
 
 Version 0.2 는 2D Top-down / Phaser 3 / Prefab 건물 4 종이었다.
 Version 1.0 에서 드래곤 퀘스트 빌더즈 2 형 3D 복셀 게임으로 재정의되었다.

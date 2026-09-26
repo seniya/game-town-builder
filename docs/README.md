@@ -1,5 +1,13 @@
 # 문서 안내
 
+> **2026-09-26 v2 도토리 마을로 방향을 바꿨다**([ADR 049](adr/049-direction-dotori-living-village.md)).
+> 오너가 로드맵과 방향 결정을 에이전트에게 맡겼다. 지금 기준은 [docs/dotori/](dotori/) 의 네 정본이다:
+> [DESIGN](dotori/DESIGN.md)(의도) → [SPEC](dotori/SPEC.md)(수치) → [ARCHITECTURE](dotori/ARCHITECTURE.md)(구조) → [TASKS](dotori/TASKS.md)(로드맵·완료 조건).
+> 코드는 `src/dotori/`, 화면은 `/dotori.html`, 관찰판은 <https://claude.ai/artifact/SK3HbC93q1kHEuvtwAqXLD>.
+> V0(이식)·V1(가꾸는 마을)을 마쳤고 **게이트 VG1**(사람 관찰, [HUMAN_REVIEW 4 장](project/HUMAN_REVIEW.md))을 기다린다.
+> 아래 내용은 v1(1인칭 복셀 빌더) 기록이며 동결됐다.
+
+
 현재는 **Phase D(시간과 이동) 완료, TASK-033 재미 검증(분기점 2, G2) 통과** 상태다.
 PERF-001·TASK-030(농사)·031(요리)·032(식사)·SHAPE-001(기존 블록 모양)·039(World State)·035(감사 포인트)·036(마을의 종)·037(해금)·038(새 주민 도착)·040(대사)·041(목표)·042·043(진행 이벤트)·044(습격 스케줄)·045(몬스터 AI)·046(전투)·047(도피)·048(수리)·049(피해 보고)·PERF-002(역할 부하)·050(오디오)·051(저장)·052(엔딩) 을 마쳤다. TASK-053(밸런스와 성능)은 2026-09-25 오너 통과 판정으로 완료했다([기록](state/2026-09-25_1930-task-053-owner-pass.md)). MVP Task 목록(TASKS 2.3)이 모두 끝났다. 사용자 결정으로 PERF-003(몬스터 추적 재탐색 비용)·ANIM-001(캐릭터 동작)을 마쳤다([기록](state/2026-09-25_0830-perf-003-chase-anim-001-motion.md)). 이어서 사용자 결정으로 BARK-001(주민의 한마디)·BARK-002(한마디 소리)를 마쳤다([기록](state/2026-09-25_0905-bark-001-resident-barks.md), [소리](state/2026-09-25_1730-bark-002-bark-voice.md)). 오너 확인 1 차(확인판 25 건)를 반영했다([기록](state/2026-09-25_1900-owner-review-round1-fixes.md), ADR 043). 다음 계획은 [확장 로드맵](project/EXPANSION_ROADMAP.md)이다. 콘텐츠 확장 전에 미술 방향 전환(X0 귀여운 마을, ADR 044)부터 한다. X0 의 첫 작업 STYLE-001(스타일 시안 장면 `?scene=style-lab`, ADR 045)을 마친 뒤, 오너가 "최신 그래픽 느낌에 맞게 알아서 진행" 하라고 해 V1 선택을 위임받았다(ADR 046). STYLE-005(그림자·후처리·하늘)·004(블록)·002(사람)·003(가구, ADR 047)·007(몬스터·UI)·006(측정)을 마쳤고, 오너가 **게이트 V2** 를 개발 중 수준으로 통과시켰다([기록](state/2026-09-25_2340-style-006-x0-measure-v2.md)). 다듬기 STYLE-008 을 마쳤고([기록](state/2026-09-25_2400-style-008-polish-1.md)), 오너 확인 2 차(건너뛴 밤의 습격·나침반·관찰 장면 절차, ADR 048)를 반영했다([기록](state/2026-09-26_0010-owner-review-round2.md)). 다음은 TASK-ANIM-002(행동별 동작 다듬기, HR-030)와 X1 착수 전 오너 결정 D4·D5 다. 전체 순서는 TASKS 2.3을 따른다.
 게이트 결과는 [G1 기록](state/2026-09-23_1400-task-022-gate-g1-passed.md), Phase D 는
