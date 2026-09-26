@@ -2,6 +2,7 @@
 import { ARRIVAL } from '../data/balance';
 import { GOALS, RANKS, type GoalDef } from '../data/goals';
 import { JOBS, TRAITS } from '../data/people';
+import { FARM } from '../data/villageMap';
 import { loveTarget } from '../sim/commands';
 import { convById, knows } from '../sim/social';
 import { J, NJ, NV, dayOf, fmtClock, fmtT, hourOf, phaseName } from '../sim/text';
@@ -56,6 +57,8 @@ export function nowLabel(w: World, v: Villager): string {
           ? '집에서 빗소리 듣는 중 ☔'
           : '집에서 뒹구는 중 🏠';
     case 'eat':
+      if (a.where === 'tavern')
+        return go ? '주점에 저녁 먹으러 가는 중 🍺' : '주점에서 생선구이 먹는 중 🐟';
       return a.where === 'bakery'
         ? go
           ? '빵집에 가는 중 🍞'
@@ -64,6 +67,15 @@ export function nowLabel(w: World, v: Villager): string {
           ? '밥 먹으러 집에 가는 중 🍚'
           : '집에서 밥 먹는 중 🍚';
     case 'work':
+      if (a.where === 'harvest')
+        return go
+          ? '익은 밀을 거두러 가는 중 🌾'
+          : `밀을 거두는 중 🌾 (밀단 ${v.pack?.kind === 'wheat' ? v.pack.n : 0})`;
+      if (a.where === 'plant') return go ? '씨 뿌리러 가는 중 🌱' : '밀 씨앗을 심는 중 🌱';
+      if (a.where === 'tend') return go ? '밭 돌보러 가는 중 🌱' : '괭이로 밭을 돌보는 중 🌱';
+      if (v.job === '제빵사' && !go) return '빵을 굽는 중 🥖';
+      if (v.job === '어부' && !go && v.pack?.kind === 'fish')
+        return `물고기를 낚는 중 🎣 (생선 ${v.pack.n})`;
       return go
         ? `일하러 가는 중 ${JOBS[v.job].e}`
         : `${JOBS[v.job].label} ${JOBS[v.job].e}${v.pack?.kind === 'lumber' ? ` (목재 ${v.pack.n})` : ''}`;
@@ -118,10 +130,21 @@ export function nowLabel(w: World, v: Villager): string {
       return '비명을 지르며 집으로 도망치는 중 😱';
     case 'idle':
       return '멍하니 서 있는 중 💭';
-    case 'haul':
-      return `야적장에 목재 ${v.pack?.n ?? 0}개를 나르는 중 🪵`;
+    case 'haul': {
+      const p = v.pack;
+      if (!p) return '짐을 내려놓는 중';
+      const m: Record<string, string> = {
+        lumber: `야적장에 목재 ${p.n}개를 나르는 중 🪵`,
+        wheat: `방앗간에 밀 ${p.n}단을 나르는 중 🌾`,
+        flour: `빵집에 밀가루 ${p.n}자루를 나르는 중 🥖`,
+        fish: `주점에 생선 ${p.n}마리를 나르는 중 🐟`,
+      };
+      return m[p.kind] ?? '짐을 나르는 중';
+    }
     case 'fetch':
-      return '공사에 쓸 목재를 가지러 가는 중 🪵';
+      return a.where === 'flour'
+        ? '방앗간에 밀가루 가지러 가는 중 🥖'
+        : '공사에 쓸 목재를 가지러 가는 중 🪵';
     case 'deliver':
       return `공사장에 목재 ${v.pack?.n ?? 0}개를 나르는 중 🪵`;
     case 'build':
@@ -255,6 +278,12 @@ function goalValue(w: World, stat: GoalDef['stat']): number {
       return w.stats.charm;
     case 'couples':
       return w.vs.filter((v) => v.partner != null).length / 2;
+    case 'fields':
+      return w.L.farm.length - FARM.w * FARM.h;
+    case 'bread':
+      return w.tally.bread;
+    case 'fish':
+      return w.tally.fish;
   }
 }
 
@@ -272,6 +301,9 @@ export function updateStats(w: World): void {
       `<span class="stat${happyLow ? ' warn' : ''}" title="마을 행복(이사 조건 ${ARRIVAL.minHappiness} 이상)">😊<b>${s.happy}</b></span>`,
       `<span class="stat${charmLow ? ' warn' : ''}" title="마을 매력(이사 조건: 주민 수 × ${ARRIVAL.charmPerResident} = ${needCharm})">🌷<b>${s.charm}</b>/${needCharm}</span>`,
       `<span class="stat" title="야적장 목재">🪵<b>${w.lumber}</b></span>`,
+      `<span class="stat" title="방앗간에 쌓인 밀">🌾<b>${s.wheat}</b></span>`,
+      `<span class="stat${s.bread < 3 ? ' warn' : ''}" title="빵집의 빵">🥖<b>${s.bread}</b></span>`,
+      `<span class="stat" title="주점의 생선">🐟<b>${s.fish}</b></span>`,
       s.sites ? `<span class="stat" title="공사 중">🔨<b>${s.sites}</b></span>` : '',
     ].join(''),
   );

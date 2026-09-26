@@ -146,6 +146,53 @@ export function makeBagPack(color: string): THREE.Group {
   return g;
 }
 
+/** 등에 진 밀단(n 에 따라 1~3 다발). 몸통 뼈 기준. */
+export function makeWheatPack(n: number): THREE.Group {
+  const g = new THREE.Group();
+  const k = Math.max(1, Math.min(3, Math.ceil(n / 2)));
+  for (let i = 0; i < k; i++) {
+    const sh = mesh(
+      new THREE.CylinderGeometry(0.07, 0.1, 0.5, 7),
+      '#e3c05c',
+      (i - (k - 1) / 2) * 0.13,
+      0.35,
+      -0.27,
+    );
+    sh.rotation.x = 0.25;
+    g.add(sh);
+    g.add(mesh(new THREE.TorusGeometry(0.08, 0.018, 5, 10), '#b98552', sh.position.x, 0.33, -0.27));
+  }
+  return g;
+}
+
+/** 등에 진 밀가루 자루. */
+export function makeFlourPack(): THREE.Group {
+  const g = new THREE.Group();
+  const sack = mesh(new THREE.SphereGeometry(0.22, 12, 9), '#f3ead8', 0, 0.3, -0.3);
+  sack.scale.set(1, 1.2, 0.8);
+  g.add(sack);
+  g.add(mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.08, 8), '#c9a86a', 0, 0.56, -0.28));
+  return g;
+}
+
+/** 등에 멘 생선 꾸러미(바구니와 꼬리). */
+export function makeFishPack(n: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(mesh(new THREE.CylinderGeometry(0.17, 0.14, 0.24, 10), '#b98552', 0, 0.28, -0.28));
+  for (let i = 0; i < Math.min(4, n); i++) {
+    const f = mesh(
+      new THREE.CapsuleGeometry(0.035, 0.14, 3, 6),
+      '#9fc3d8',
+      -0.08 + i * 0.055,
+      0.44,
+      -0.28,
+    );
+    f.rotation.z = 0.3 * (i % 2 ? 1 : -1);
+    g.add(f);
+  }
+  return g;
+}
+
 /** 꽃밭 한 칸의 꽃(줄기+꽃송이) 색 목록. */
 export const FLOWER_COLORS: readonly string[] = [
   '#f7a1c4',

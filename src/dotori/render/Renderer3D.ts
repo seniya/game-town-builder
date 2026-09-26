@@ -387,7 +387,7 @@ export class Renderer3D {
       c.root.position.set(v.px + (v.x - v.px) * alpha, 0, v.py + (v.y - v.py) * alpha);
       animate(w, c, ctx);
     }
-    this.village.update(w);
+    this.village.update(w, dtA);
     const sel = this.view.selected != null ? w.vs[this.view.selected] : undefined;
     if (this.view.follow && sel) {
       const p = this.posOf(w, sel, alpha);

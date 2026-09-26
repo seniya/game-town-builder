@@ -6,7 +6,7 @@ import { mk } from './decide';
 import { rumor, rumorById, knows } from './social';
 import { J, NJ, dayOf, hourOf } from './text';
 import type { Villager, World } from './types';
-import { addAff, bldKind, diary, emote, log, vil } from './world';
+import { addAff, diary, emote, log, vil } from './world';
 
 /** 파티를 계획한다(19:00~22:00, 광장). planted 면 플레이어가 심은 생각이라 계획 소식을 따로 남기지 않는다. */
 export function schedParty(w: World, host: Villager, planted: boolean): void {

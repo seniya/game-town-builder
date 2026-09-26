@@ -30,6 +30,16 @@ interface SiteView {
   houseH: number;
 }
 
+/** 작물 단계 모양(SPEC 9.1): 반지름·높이·색. */
+const CROP_STAGES = [
+  { r: 0.05, h: 0.1, color: '#8fd06a' },
+  { r: 0.07, h: 0.22, color: '#74bd52' },
+  { r: 0.08, h: 0.36, color: '#8fb548' },
+  { r: 0.085, h: 0.42, color: '#e2bf52' },
+] as const;
+/** 밭 한 칸의 포기 수(2 × 2). */
+const CROP_TUFTS = 4;
+
 /** 모델의 문 방향 회전(KayKit 건물은 남쪽이 앞). */
 function yawOf(side: Building['side']): number {
   return side === 's' ? 0 : side === 'n' ? Math.PI : side === 'e' ? Math.PI / 2 : -Math.PI / 2;
@@ -64,6 +74,14 @@ export class VillageView {
   private sites = new Map<number, SiteView>();
   private yardPile = new THREE.Group();
   private yardN = -1;
+  /** 풍차 날개(방앗간이 빻을 때 돈다). */
+  millFan: THREE.Object3D | null = null;
+  /** 작물 단계별 묶음과 마지막으로 그린 작물 판. */
+  private crops: THREE.InstancedMesh[] = [];
+  private cropV = -1;
+  /** 재고 더미(방앗간 밀단·밀가루 자루, 주점 생선 상자)와 마지막 수. */
+  private stock = new THREE.Group();
+  private stockKey = '';
   private groundCanvas: HTMLCanvasElement | null = null;
   private groundTex: THREE.CanvasTexture | null = null;
   version = -1;
@@ -172,6 +190,10 @@ export class VillageView {
     this.addPartyDeco();
     // 공사장
     for (const bp of w.blueprints) this.addSite(bp);
+    // 재고 더미
+    this.stock = new THREE.Group();
+    this.stockKey = '';
+    G.add(this.stock);
     // 야적장 목재 더미
     this.yardPile = new THREE.Group();
     this.yardN = -1;
@@ -200,7 +222,10 @@ export class VillageView {
       o = place('building_blacksmith_blue', cx, cz, b.w * 0.9, yaw, G);
     else if (b.kind === 'yard')
       o = place('building_lumbermill_yellow', cx, cz - 0.2, b.w * 0.8, yaw, G);
-    else o = place('building_windmill_yellow', cx, cz, 2.2, 0.4, G);
+    else {
+      o = place('building_windmill_yellow', cx, cz, 2.2, 0.4, G);
+      this.millFan = o.getObjectByName('building_windmill_top_fan_yellow') ?? null;
+    }
     this.roofH.set(b.id, (o.userData.height as number) ?? 2.5);
     if (b.kind === 'mill' || b.kind === 'yard') return;
     const d = b.side;
@@ -313,51 +338,10 @@ export class VillageView {
       0.4,
       G,
     );
-    // 밭 작물: 줄마다 둥근 채소 포기(두 가지 초록)와 가끔 주황 당근 잎. 크기를 조금씩 흔든다.
-    const n = w.L.farm.length * 3;
-    const heads = [matStd('#8cc063', 0.7), matStd('#6fae4f', 0.7)].map(
-      (m) => new THREE.InstancedMesh(new THREE.SphereGeometry(0.13, 10, 7), m, n),
-    );
-    const tops = new THREE.InstancedMesh(
-      new THREE.ConeGeometry(0.05, 0.12, 5),
-      matStd('#f08a3c', 0.7),
-      n,
-    );
-    const counts = [0, 0];
-    let tc = 0;
-    const m4 = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const sc = new THREE.Vector3();
-    const p = new THREE.Vector3();
-    const up = new THREE.Vector3(0, 1, 0);
-    for (const f of w.L.farm)
-      for (let i = 0; i < 3; i++) {
-        const r = hash01(f.x * 37 + f.y * 11 + i);
-        const k = 0.8 + r * 0.45;
-        const x = f.x + 0.2 + i * 0.3;
-        const z = f.y + 0.42;
-        if (f.y % 3 === 0 && r < 0.5) {
-          m4.compose(p.set(x, 0.06, z), q.identity(), sc.setScalar(k));
-          tops.setMatrixAt(tc++, m4);
-          continue;
-        }
-        const which = f.y % 2;
-        const hm = heads[which];
-        if (!hm) continue;
-        q.setFromAxisAngle(up, r * 6);
-        m4.compose(p.set(x, 0.08 * k, z), q, sc.set(k, k * 0.72, k));
-        hm.setMatrixAt(counts[which] ?? 0, m4);
-        counts[which] = (counts[which] ?? 0) + 1;
-      }
-    heads.forEach((h, i) => {
-      h.count = counts[i] ?? 0;
-      h.castShadow = true;
-      G.add(h);
-    });
-    tops.count = tc;
-    tops.castShadow = true;
-    G.add(tops);
+    // 밭 작물은 단계가 자주 바뀌므로 update() 가 따로 그린다(cropVersion).
+    this.buildCrops(w);
     // 밭 울타리(말뚝)
+    const m4 = new THREE.Matrix4();
     const posts: [number, number][] = [];
     const fx0 = FARM.x;
     const fx1 = FARM.x + FARM.w;
@@ -382,6 +366,115 @@ export class VillageView {
     });
     post.castShadow = true;
     G.add(post);
+  }
+
+  /** 작물 단계별 InstancedMesh 를 밭 칸 수만큼 잡는다(1 새싹 · 2 어린 밀 · 3 자란 밀 · 4 익은 밀). */
+  private buildCrops(w: World): void {
+    const cap = Math.max(1, w.L.farm.length * CROP_TUFTS);
+    this.crops = CROP_STAGES.map((st) => {
+      const geo = new THREE.ConeGeometry(st.r, st.h, 5);
+      geo.translate(0, st.h / 2, 0);
+      const im = new THREE.InstancedMesh(geo, matStd(st.color, 0.75), cap);
+      im.count = 0;
+      im.castShadow = true;
+      this.group.add(im);
+      return im;
+    });
+    // 익은 밀의 이삭(작은 구)
+    const ear = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(0.045, 6, 5),
+      matStd('#f1d27a', 0.6),
+      cap,
+    );
+    ear.count = 0;
+    this.group.add(ear);
+    this.crops.push(ear);
+    this.cropV = -1;
+  }
+
+  /** 작물 단계가 바뀌었으면 다시 채운다. */
+  private updateCrops(w: World): void {
+    if (this.cropV === w.cropVersion || !this.crops.length) return;
+    this.cropV = w.cropVersion;
+    const counts = this.crops.map(() => 0);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    const p = new THREE.Vector3();
+    const sc = new THREE.Vector3();
+    const earIdx = this.crops.length - 1;
+    for (const f of w.L.farm) {
+      const st = w.crop[f.y * w.W + f.x] ?? 0;
+      if (st < 1) continue;
+      const mesh = this.crops[st - 1];
+      if (!mesh) continue;
+      for (let k = 0; k < CROP_TUFTS; k++) {
+        const r = hash01(f.x * 53 + f.y * 17 + k);
+        const x = f.x + 0.25 + (k % 2) * 0.5 + (r - 0.5) * 0.12;
+        const z = f.y + 0.25 + Math.floor(k / 2) * 0.5 + (hash01(r * 91) - 0.5) * 0.12;
+        const s = 0.85 + r * 0.3;
+        q.setFromAxisAngle(up, r * 6);
+        m.compose(p.set(x, 0, z), q, sc.set(s, s, s));
+        mesh.setMatrixAt(counts[st - 1] ?? 0, m);
+        counts[st - 1] = (counts[st - 1] ?? 0) + 1;
+        if (st === 4) {
+          m.compose(p.set(x, (CROP_STAGES[3]?.h ?? 0.42) * s, z), q, sc.set(1, 1.4, 1));
+          this.crops[earIdx]?.setMatrixAt(counts[earIdx] ?? 0, m);
+          counts[earIdx] = (counts[earIdx] ?? 0) + 1;
+        }
+      }
+    }
+    this.crops.forEach((im, i) => {
+      im.count = counts[i] ?? 0;
+      im.instanceMatrix.needsUpdate = true;
+    });
+  }
+
+  /** 재고 더미: 방앗간 옆 밀단·밀가루 자루, 주점 옆 생선 상자. 수가 바뀔 때만 다시 놓는다. */
+  private updateStock(w: World): void {
+    const mill = w.buildings.find((b) => b.kind === 'mill');
+    const tav = w.buildings.find((b) => b.kind === 'tavern');
+    const sheaves = mill ? Math.min(6, Math.ceil(mill.wheat / 8)) : 0;
+    const sacks = mill ? Math.min(6, Math.ceil(mill.flour / 8)) : 0;
+    const crates = tav ? Math.min(4, Math.ceil(tav.fish / 6)) : 0;
+    const key = `${sheaves}|${sacks}|${crates}`;
+    if (key === this.stockKey) return;
+    this.stockKey = key;
+    for (const o of [...this.stock.children]) this.stock.remove(o);
+    if (mill) {
+      for (let i = 0; i < sheaves; i++) {
+        const sh = mesh(
+          new THREE.CylinderGeometry(0.09, 0.13, 0.42, 7),
+          '#e3c05c',
+          mill.x - 0.35 - (i % 3) * 0.3,
+          0.21,
+          mill.y + 0.3 + Math.floor(i / 3) * 0.32,
+        );
+        sh.rotation.z = 0.12 * (i % 2 ? 1 : -1);
+        this.stock.add(sh);
+        this.stock.add(
+          mesh(
+            new THREE.TorusGeometry(0.1, 0.02, 5, 10),
+            '#b98552',
+            sh.position.x,
+            0.24,
+            sh.position.z,
+          ),
+        );
+      }
+      for (let i = 0; i < sacks; i++)
+        place(
+          'sack',
+          mill.x + mill.w + 0.3 + (i % 3) * 0.3,
+          mill.y + 0.4 + Math.floor(i / 3) * 0.35,
+          0.34,
+          i,
+          this.stock,
+        );
+    }
+    if (tav)
+      for (let i = 0; i < crates; i++)
+        place('crate_open', tav.x + tav.w + 0.5, tav.y + 0.5 + i * 0.55, 0.5, 0.2, this.stock);
   }
 
   /** 파티 장식(깃발과 전구 줄). 파티가 있을 때만 보인다. */
@@ -507,8 +600,12 @@ export class VillageView {
     }
   }
 
-  /** 프레임마다: 공사 진행(차오르는 모형·비계), 공사장·야적장 목재 더미. */
-  update(w: World): void {
+  /** 프레임마다: 공사 진행(차오르는 모형·비계), 공사장·야적장 목재 더미, 작물, 재고, 풍차. */
+  update(w: World, dtA = 0): void {
+    this.updateCrops(w);
+    this.updateStock(w);
+    const mill = w.buildings.find((b) => b.kind === 'mill');
+    if (this.millFan && mill && mill.wheat >= 1) this.millFan.rotation.z += dtA * 1.6;
     for (const s of this.sites.values()) {
       const bp = s.bp;
       const done = 1 - bp.workLeft / bp.workTotal;

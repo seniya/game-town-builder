@@ -5,7 +5,17 @@ export interface GoalDef {
   label: string;
   /** 목표 값(통계와 비교). */
   target: number;
-  stat: 'playerHouses' | 'arrivals' | 'flowerbeds' | 'benches' | 'pop' | 'charm' | 'couples';
+  stat:
+    | 'playerHouses'
+    | 'arrivals'
+    | 'flowerbeds'
+    | 'benches'
+    | 'pop'
+    | 'charm'
+    | 'couples'
+    | 'fields'
+    | 'bread'
+    | 'fish';
 }
 
 export const GOALS: readonly GoalDef[] = [
@@ -13,8 +23,11 @@ export const GOALS: readonly GoalDef[] = [
   { id: 'house', label: '🏠 새 집 한 채 짓기', target: 1, stat: 'playerHouses' },
   { id: 'arrive', label: '🧳 새 주민 맞이하기', target: 1, stat: 'arrivals' },
   { id: 'flower', label: '🌷 꽃밭 두 곳 가꾸기', target: 2, stat: 'flowerbeds' },
+  { id: 'field', label: '🌾 밭 하나 더 일구기', target: 9, stat: 'fields' },
+  { id: 'bread100', label: '🥖 빵 100 개 굽기', target: 100, stat: 'bread' },
   { id: 'couple', label: '💑 커플 세 쌍', target: 3, stat: 'couples' },
   { id: 'pop30', label: '👥 주민 30 명', target: 30, stat: 'pop' },
+  { id: 'fish50', label: '🐟 생선 50 마리 잡기', target: 50, stat: 'fish' },
   { id: 'charm30', label: '✨ 마을 매력 30', target: 30, stat: 'charm' },
   { id: 'pop50', label: '👥 주민 50 명', target: 50, stat: 'pop' },
 ];

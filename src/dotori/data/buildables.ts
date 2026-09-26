@@ -123,6 +123,7 @@ export const BUILD_ORDER: readonly BuildKind[] = [
   'flowerbed',
   'bench',
   'lamp',
+  'farm',
   'tree',
   'road',
 ];

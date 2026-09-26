@@ -10,6 +10,8 @@ export function isHighlight(e: FeedEntry): boolean {
   if (e.kind === 'love') return h.startsWith('💑');
   if (e.kind === 'party') return h.startsWith('🎉 파티가 시작됐다');
   if (e.kind === 'find') return h.startsWith('🌰');
+  if (e.kind === 'work') return h.includes('밀 1 단');
+  if (e.kind === 'funny') return h.includes('밀가루가 떨어졌다');
   return false;
 }
 

@@ -1,6 +1,6 @@
 // 지면 텍스처와 수면. 풀·길·광장·밭·모래·물가를 한 장의 캔버스에 칠한다. 건물·나무는 모델로 따로 놓는다.
 import * as THREE from 'three';
-import { FARM, PLAZA, TERRACE } from '../data/villageMap';
+import { PLAZA, TERRACE } from '../data/villageMap';
 import { getT } from '../sim/map';
 import { hash01 } from '../sim/rng';
 import type { World } from '../sim/types';
@@ -46,8 +46,9 @@ export function paintGround(w: World, canvas?: HTMLCanvasElement): HTMLCanvasEle
         g.fillRect(x * TS, y * TS, TS, TS);
       }
     }
-  for (let y = FARM.y; y < FARM.y + FARM.h; y++)
-    for (let x = FARM.x; x < FARM.x + FARM.w; x++) {
+  // 밭(처음 밭과 플레이어가 일군 밭 모두): 갈아 놓은 흙과 고랑.
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
       if (getT(w, x, y) !== TILE.FARM) continue;
       g.fillStyle = '#a8784c';
       g.fillRect(x * TS, y * TS, TS, TS);

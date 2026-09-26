@@ -4,13 +4,17 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { JOBS } from '../data/people';
 import { convById } from '../sim/social';
 import type { Villager, World } from '../sim/types';
-import { CHAR_NAMES, model, sizeOf, type ModelName } from './assets';
+import { PRODUCE } from '../data/balance';
+import { CHAR_NAMES, model, place, sizeOf, type ModelName } from './assets';
 import { matLine } from './materials';
 import type { Overlay } from './overlay';
 import {
   makeBagPack,
+  makeFishPack,
+  makeFlourPack,
   makeHat,
   makeLumberPack,
+  makeWheatPack,
   makeTool,
   makeUmbrella,
   mesh,
@@ -45,6 +49,7 @@ export interface CharView {
   lastCatch: number | null;
   bubbleRef: Villager['bubble'];
   bubbleT0: number;
+  cart: THREE.Object3D | null;
 }
 
 /** 주민 한 명의 3D 캐릭터를 만든다. */
@@ -106,6 +111,7 @@ export function makeChar(v: Villager, parent: THREE.Object3D): CharView {
     lastCatch: null,
     bubbleRef: null,
     bubbleT0: 0,
+    cart: null,
   };
 }
 
@@ -135,14 +141,23 @@ function setTool(c: CharView, kind: ToolKind | null): void {
 /** 등짐을 바꾼다(목재 개수·보따리). */
 function setPack(c: CharView): void {
   const p = c.v.pack;
-  const key = p ? `${p.kind}:${p.kind === 'lumber' ? Math.min(6, p.n) : 1}` : '';
+  const key = p ? `${p.kind}:${p.kind === 'bag' || p.kind === 'flour' ? 1 : Math.min(6, p.n)}` : '';
   if (key === c.packKey) return;
   c.packKey = key;
   if (c.pack) c.back.remove(c.pack);
   c.pack = null;
-  if (!p || (p.kind === 'lumber' && p.n <= 0)) return;
-  c.pack = p.kind === 'lumber' ? makeLumberPack(p.n) : makeBagPack(c.v.look.umb);
-  c.back.add(c.pack);
+  if (!p || (p.kind !== 'bag' && p.n <= 0)) return;
+  c.pack =
+    p.kind === 'lumber'
+      ? makeLumberPack(p.n)
+      : p.kind === 'wheat'
+        ? makeWheatPack(p.n)
+        : p.kind === 'flour'
+          ? makeFlourPack()
+          : p.kind === 'fish'
+            ? makeFishPack(p.n)
+            : makeBagPack(c.v.look.umb);
+  if (c.pack) c.back.add(c.pack);
 }
 
 /** 그림에 쓰는 시간(초)과 연출 층. */
@@ -204,9 +219,15 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
       case 'work': {
         const pl = JOBS[v.job].place;
         if (pl === 'farm') {
-          clip = 'attack-melee-right';
-          ts = 0.6;
-          tool = 'hoe';
+          // 거두기·심기는 허리를 굽혀 줍는 동작, 가꾸기는 괭이질(SPEC 9.2).
+          if (a.where === 'harvest' || a.where === 'plant') {
+            clip = 'pick-up';
+            ts = a.where === 'harvest' ? 0.9 : 0.7;
+          } else {
+            clip = 'attack-melee-right';
+            ts = 0.6;
+            tool = 'hoe';
+          }
         } else if (pl === 'forest') {
           clip = 'attack-melee-right';
           ts = 0.8;
@@ -273,6 +294,17 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
   play(c, clip, ts, once);
   setTool(c, tool);
   setPack(c);
+  // 무거운 밀·밀가루는 손수레에 싣고 민다(SPEC 9.2).
+  const cart =
+    moving &&
+    v.pack != null &&
+    (v.pack.kind === 'wheat' || v.pack.kind === 'flour') &&
+    v.pack.n >= PRODUCE.cartFrom;
+  if (cart && !c.cart) {
+    c.cart = place('wheelbarrow', 0, 0.62, 0.62, 0, c.root);
+  }
+  if (c.cart) c.cart.visible = cart;
+  if (c.pack) c.pack.visible = !cart;
   // 방향: 걷는 방향, 대화 상대, 일하는 대상 쪽을 본다.
   const d = face ?? (moving ? { x: v.x - v.px, y: v.y - v.py } : v.dir);
   if (spin) c.spin += dtA * 6;
