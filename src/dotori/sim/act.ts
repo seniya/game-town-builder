@@ -7,11 +7,11 @@ import { getT, neighborDir, passable, tileCost } from './map';
 import { findPath } from './path';
 import { bakeTick, dropPack, farmerAct, finishFarmWork, fishTick, takeFlour } from './produce';
 import { rumor, startConv } from './social';
+import { say } from './lines';
 import { J, NJ, NV } from './text';
 import type { Act, Villager, World } from './types';
 import { TILE } from './types';
 import { addAff, bld, bldKind, diary, dist, emote, inSleep, log, vil, workHours } from './world';
-
 
 /** 빵집·주점에서 먹으면 식사를 시작할 때 즐거움·어울림을 한 번 더한다(SPEC 10.1). 100 을 넘지 않는다. */
 function mealBonus(v: Villager, where: 'bakery' | 'tavern'): void {
@@ -107,7 +107,7 @@ function arrive(w: World, v: Villager): void {
           w.tally.suppers += 1;
           mealBonus(v, 'tavern');
           v.carry = { item: 'mug', until: w.t + a.dur };
-          diary(w, v, '주점에서 생선구이를 먹었다. 다들 모여 왁자지껄 🐟🍺');
+          diary(w, v, say(w, v, 'supper'));
         } else diary(w, v, '주점에 갔는데 생선이 다 떨어졌다 😅');
       } else if (a.where === 'bakery') {
         const bakery = bldKind(w, 'bakery');
@@ -115,17 +115,12 @@ function arrive(w: World, v: Villager): void {
         bakery.bread -= take;
         w.tally.breadEaten += take;
         if (take > 0) mealBonus(v, 'bakery');
-        diary(
-          w,
-          v,
-          v.trait === '먹보'
-            ? '빵집에서 빵을 세 개나 먹었다 🍞🍞🍞'
-            : '빵집에서 갓 구운 빵을 먹었다 🍞',
-        );
+        diary(w, v, say(w, v, v.trait === '먹보' ? 'eatBakeryGlutton' : 'eatBakery'));
         if (v.trait === '먹보' || R.next() < 0.2)
           v.carry = { item: 'bread', until: w.t + a.dur + 40 };
         if (bakery.bread === 0 && !w.daily.breadOut) {
           w.daily.breadOut = true;
+          w.week.breadOutDays++;
           if (v.trait === '먹보') {
             log(
               w,
@@ -137,7 +132,7 @@ function arrive(w: World, v: Villager): void {
             rumor(w, v, 'bread', `${J(v.name, '가', '이')} 빵을 싹쓸이했대`, '🍞', 0.6, [v.id]);
           } else log(w, '🍞 빵집 빵이 동났다.', [], 'funny');
         }
-      } else diary(w, v, '집에서 밥을 먹었다 🍚');
+      } else diary(w, v, say(w, v, 'eatHome'));
       break;
     case 'nap':
       if (!v.daily.napLog) {
@@ -236,7 +231,13 @@ function arrive(w: World, v: Villager): void {
     case 'movein': {
       v.pack = null;
       const home = bld(w, v.home);
-      diary(w, v, `${home ? home.name : '새 집'}에 짐을 풀었다. 오늘부터 도토리 마을 주민이다 🏡`);
+      diary(
+        w,
+        v,
+        w.t - v.arrivedAt < 600
+          ? `${home ? home.name : '새 집'}에 짐을 풀었다. 오늘부터 도토리 마을 주민이다 🏡`
+          : `${home ? home.name : '새 집'}에 짐을 풀었다. 여기가 우리 집이다 🏡`,
+      );
       break;
     }
   }
@@ -250,7 +251,7 @@ function doTick(w: World, v: Villager, a: Act, h: number): boolean {
       v.energy += NEEDS.sleepGain;
       v.hunger += NEEDS.sleepHungerGain;
       if ((!inSleep(v, h) && v.energy > 55) || v.hunger < 6) {
-        diary(w, v, v.trait === '게으름뱅이' && h > 9 ? '늦잠을 잤다. 개운하다 😌' : '잘 잤다 ☀️');
+        diary(w, v, say(w, v, v.trait === '게으름뱅이' && h > 9 ? 'wakeLate' : 'wake'));
         return true;
       }
       break;
@@ -415,6 +416,7 @@ export function actTick(w: World, v: Villager, h: number): void {
       if (tg.talk == null) {
         startConv(w, v, tg, a.kind ?? 'chat');
         if (a.kind === 'welcome') v.welcome = null;
+        if (a.kind === 'birthday') v.celebrate = null;
         v.act = null;
       }
       return;

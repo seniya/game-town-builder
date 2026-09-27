@@ -1,5 +1,6 @@
 // 행동 고르기: 욕구·성격·시간으로 점수를 매겨(options) 가장 높은 행동을 만든다(buildAct) (SPEC 3.3, 시험판 규칙).
 import { DESTINATION, LUMBER, MEALS, PRODUCE } from '../data/balance';
+import { BIRTHDAY } from '../data/story';
 import { JOBS } from '../data/people';
 import { startAct } from './act';
 import { carpenterAct, hasCarpentryWork } from './build';
@@ -21,7 +22,7 @@ import {
 } from './world';
 import { passable } from './map';
 
-type Choice = ActType | 'date' | 'confess' | 'welcome' | 'supper' | 'curious';
+type Choice = ActType | 'date' | 'confess' | 'welcome' | 'supper' | 'curious' | 'celebrate';
 
 /** 행동 하나를 만든다. 넘기지 않은 칸은 기본값. */
 export function mk(w: World, type: ActType, o: Partial<Act> = {}): Act {
@@ -106,13 +107,18 @@ function options(w: World, v: Villager, h: number): [Choice, number][] {
     const nb = vil(w, v.welcome);
     if (outdoor(nb) && !(nb.act && nb.act.type === 'sleep')) o.push(['welcome', 3]);
   }
+  if (v.celebrate != null && h >= 8 && h < 21) {
+    const bd = vil(w, v.celebrate);
+    if (outdoor(bd) && !(bd.act && bd.act.type === 'sleep'))
+      o.push(['celebrate', BIRTHDAY.visitScore]);
+  }
   if (tr === '게으름뱅이' && h >= 11 && h < 17 && !rain) o.push(['nap', 0.35 + tir * 1.6]);
   if (v.confess != null) o.push(['confess', 4]);
   if (v.hunting && !v.fearGhost && !rain && h >= 7 && h < 18) o.push(['hunt', 1.8]);
   if (rain && tr === '로맨티스트' && !v.daily.rainDance) o.push(['raindance', 1.6]);
   if (P && w.t >= P.start - 40 && w.t < P.end - 15) {
     const pr = rumorById(w, P.rumor);
-    if (P.host === v.id) o.push(['party', 10]);
+    if (P.host === v.id || (P.wedding && P.wedding.includes(v.id))) o.push(['party', 10]);
     else if (pr && knows(v, pr) && w.t >= P.start - 15) {
       const base: Partial<Record<Villager['trait'], number>> = {
         파티광: 2,
@@ -188,7 +194,12 @@ function buildAct(w: World, v: Villager, type: Choice, h: number): Act | null {
     case 'eat': {
       const bakery = bldKind(w, 'bakery');
       const near = dist(v, bakery.door) <= DESTINATION.bakeryMaxDist || v.trait === '먹보';
-      if (near && bakeryOpen(h) && bakery.bread > 0 && (v.trait === '먹보' || R.next() < MEALS.bakeryChance))
+      if (
+        near &&
+        bakeryOpen(h) &&
+        bakery.bread > 0 &&
+        (v.trait === '먹보' || R.next() < MEALS.bakeryChance)
+      )
         return mk(w, 'eat', { bld: bakery.id, dur: 25, where: 'bakery' });
       return mk(w, 'eat', { bld: v.home, dur: 30, where: 'home' });
     }
@@ -349,6 +360,8 @@ function buildAct(w: World, v: Villager, type: Choice, h: number): Act | null {
       return v.partner == null ? null : mk(w, 'visit', { target: v.partner, kind: 'date' });
     case 'welcome':
       return v.welcome == null ? null : mk(w, 'visit', { target: v.welcome, kind: 'welcome' });
+    case 'celebrate':
+      return v.celebrate == null ? null : mk(w, 'visit', { target: v.celebrate, kind: 'birthday' });
     case 'confess': {
       if (v.confess == null) return null;
       const t = vil(w, v.confess);

@@ -29,7 +29,10 @@
             <button id="sp3" aria-pressed="false">3×</button>
             <button id="sp8" aria-pressed="false">8×</button>
           </div>
-          <div class="seg"><button id="reset" title="저장을 지우고 새로 시작">새 마을</button></div>
+          <div class="seg">
+            <button id="paperBtn" title="도토리 신문 최근 호" hidden>📰 신문</button>
+            <button id="reset" title="저장을 지우고 새로 시작">새 마을</button>
+          </div>
         </div>
         <div class="hint" id="camHint">
           끌어서 이동 · 오른쪽 버튼(두 손가락)으로 회전 · 휠로 확대 · 주민을 누르면 그 사람의 하루가
@@ -38,6 +41,20 @@
         <div class="tool-hint" id="toolHint" hidden></div>
         <div class="toast hide" id="toast" role="status" aria-live="polite"></div>
         <div class="notices" id="notices" aria-live="polite"></div>
+        <div class="paper-wrap" id="paperWrap" hidden>
+          <article class="paper" role="dialog" aria-modal="true" aria-labelledby="paperTitle">
+            <header>
+              <small id="paperNo"></small>
+              <h2 id="paperTitle">도토리 신문</h2>
+              <p class="paper-head" id="paperHead"></p>
+            </header>
+            <ul class="paper-items" id="paperItems"></ul>
+            <footer>
+              <button id="paperPrev" type="button">← 지난 호</button>
+              <button id="paperClose" type="button">닫기</button>
+            </footer>
+          </article>
+        </div>
         <nav class="tools" id="tools" aria-label="가꾸기 도구"></nav>
         <div class="loading" id="loading">마을을 불러오는 중… <b id="loadPct">0%</b></div>
       </main>

@@ -13,6 +13,7 @@ import { startAct } from './act';
 import { makeVillager, nextName } from './create';
 import { mk } from './decide';
 import { computeStats } from './stats';
+import { remember } from './story';
 import { J, NJ } from './text';
 import type { Building, Villager, World } from './types';
 import { diary, log, vil } from './world';
@@ -107,6 +108,8 @@ export function spawnNewcomer(w: World, home: Building): Villager {
   v.energy = w.rng.int(70, 90);
   w.arrivalsToday++;
   diary(w, v, `도토리 마을에 이사 왔다. ${home.name}이 내 집이래! 두근두근 🧳`);
+  remember(w, v, 'arrive', null, '도토리 마을에 이사 온 날');
+  w.week.arrivals.push(v.id);
   log(
     w,
     `🧳 새 주민 ${NJ(v, '가', '이')} 마을에 왔다. ${TRAITS[trait].e} ${trait}, ${job}. ${J(home.name, '로', '으로')} 이사 온대!`,
@@ -145,6 +148,11 @@ export function arrivalTick(w: World): void {
   }
   if (chk.reason === 'food' && !w.daily.foodHint) {
     w.daily.foodHint = true;
-    log(w, '🍞 "빵집 빵이 넉넉하면 이사 오고 싶다" 며 망설이는 사람이 있다는 소문이다.', [], 'arrive');
+    log(
+      w,
+      '🍞 "빵집 빵이 넉넉하면 이사 오고 싶다" 며 망설이는 사람이 있다는 소문이다.',
+      [],
+      'arrive',
+    );
   }
 }

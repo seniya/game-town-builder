@@ -6,6 +6,9 @@ import { FARM } from '../data/villageMap';
 import { loveTarget } from '../sim/commands';
 import { convById, knows } from '../sim/social';
 import { J, NJ, NV, dayOf, fmtClock, fmtT, hourOf, phaseName } from '../sim/text';
+import { MEMORY } from '../data/story';
+import { couplesApart } from '../sim/family';
+import { dayOfYear, daysAgo } from '../sim/story';
 import type { FeedEntry, FoodLevel, Villager, World } from '../sim/types';
 import { aff, vil } from '../sim/world';
 
@@ -33,6 +36,10 @@ export function nowLabel(w: World, v: Villager): string {
         ? `${NV(o)}에게 고백하는 중 💌`
         : `${NJ(o, '가', '이')} 고백하는 중… 😳`;
     if (conv.kind === 'date') return `${NJ(o, '와', '과')} 데이트 중 💕`;
+    if (conv.kind === 'birthday')
+      return conv.a === v.id
+        ? `${NV(o)}의 생일을 축하하는 중 🎂`
+        : `${NJ(o, '가', '이')} 생일을 축하하러 왔다 🎂`;
     if (conv.kind === 'welcome')
       return conv.a === v.id
         ? `새로 온 ${NV(o)}에게 인사하는 중 👋`
@@ -102,7 +109,9 @@ export function nowLabel(w: World, v: Villager): string {
             ? `${NV(t)}에게 고백하러 가는 중 💌`
             : a.kind === 'welcome'
               ? `새로 온 ${NV(t)}에게 인사하러 가는 중 👋`
-              : `${NV(t)}에게 말 걸러 가는 중 🚶`;
+              : a.kind === 'birthday'
+                ? `${NV(t)}에게 생일 축하하러 가는 중 🎂`
+                : `${NV(t)}에게 말 걸러 가는 중 🚶`;
     }
     case 'fun': {
       const m: Record<string, [string, string]> = {
@@ -203,12 +212,16 @@ export function updatePerson(
     .sort((a, b) => aff(w, v, a) - aff(w, v, b))
     .slice(0, 2);
   const known = w.rumors.filter((r) => knows(v, r)).length;
-  let rel = `<dt>짝</dt><dd>${v.partner != null ? `${NV(vil(w, v.partner))} 💑` : '없음'}</dd>`;
+  let rel = `<dt>짝</dt><dd>${v.partner != null ? `${NV(vil(w, v.partner))} ${v.married ? '💍 부부' : '💑'}` : '없음'}</dd>`;
   if (v.crush != null)
     rel += `<dt>짝사랑</dt><dd>${NV(vil(w, v.crush))} 💘 <small style="color:var(--muted)">(비밀)</small></dd>`;
   rel += `<dt>친한 이웃</dt><dd>${fr.length ? fr.map(NV).join(', ') : '아직 없음'}</dd>`;
   if (en.length) rel += `<dt>앙숙</dt><dd>${en.map(NV).join(', ')} ⚡</dd>`;
   rel += `<dt>아는 소문</dt><dd>${known}개${v.fearGhost ? ' · 숲이 무섭다 👻' : ''}${v.hunting ? ' · 보물 찾을 생각뿐 🗺️' : ''}</dd>`;
+  rel += `<dt>생일</dt><dd>🎂 올해 ${v.birthday}일${v.birthday === dayOfYear(w.t) ? ' <b>오늘!</b>' : ''}</dd>`;
+  const mem = v.memories.slice(0, MEMORY.shown);
+  if (mem.length)
+    rel += `<dt>기억</dt><dd class="mem">${mem.map((m) => `<span>💭 ${daysAgo(w, m)}일 전 · ${m.text}</span>`).join('')}</dd>`;
   setHTML($('pRel'), rel);
   setHTML(
     $('pDiary'),
@@ -314,18 +327,21 @@ export function updateStats(w: World): void {
   const rank = RANKS.find(([n]) => s.pop < n)?.[1] ?? '';
   $('villageRank').textContent = `${rank} · 주민 ${s.pop}명`;
   const open = GOALS.filter((g) => goalValue(w, g.stat) < g.target).slice(0, 3);
+  const apart = couplesApart(w);
   const hint =
-    vacant > 0
-      ? charmLow
-        ? '빈 집이 있지만 매력이 모자라요. 꽃밭·벤치를 놓아 보세요.'
-        : happyLow
-          ? '빈 집이 있지만 주민들이 지쳐 있어요.'
-          : s.foodLevel === 'tight'
-            ? '빈 집이 있지만 빵과 생선이 빠듯해요. 밭을 일구거나 기다려 보세요.'
-            : s.foodLevel === 'plenty'
-              ? '빈 집이 있고 먹거리가 넉넉해요. 9시·12시·3시에 누군가 이사 올지도 몰라요.'
-              : '빈 집이 있어요. 아침 9시나 오후 3시에 누군가 이사 올지도 몰라요.'
-      : '빈 집이 없어요. 집을 지으면 새 주민이 이사 와요.';
+    apart > 0
+      ? `신혼부부 ${apart}쌍이 둘만 살 빈 집을 기다려요. 집을 지으면 먼저 옮겨 가요.`
+      : vacant > 0
+        ? charmLow
+          ? '빈 집이 있지만 매력이 모자라요. 꽃밭·벤치를 놓아 보세요.'
+          : happyLow
+            ? '빈 집이 있지만 주민들이 지쳐 있어요.'
+            : s.foodLevel === 'tight'
+              ? '빈 집이 있지만 빵과 생선이 빠듯해요. 밭을 일구거나 기다려 보세요.'
+              : s.foodLevel === 'plenty'
+                ? '빈 집이 있고 먹거리가 넉넉해요. 9시·12시·3시에 누군가 이사 올지도 몰라요.'
+                : '빈 집이 있어요. 아침 9시나 오후 3시에 누군가 이사 올지도 몰라요.'
+        : '빈 집이 없어요. 집을 지으면 새 주민이 이사 와요.';
   setHTML(
     $('goals'),
     `<p class="goal"><small>${hint}</small></p>` +

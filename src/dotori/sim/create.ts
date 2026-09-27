@@ -1,5 +1,6 @@
 // 새 마을 만들기: 지형 → 건물 → 장식 → 주민 → 처음 인연 → 첫날 파티 계획 (SPEC 2·3.1).
 import { PRODUCE, START } from '../data/balance';
+import { BIRTHDAY } from '../data/story';
 import {
   MORE_NAMES,
   NAME_SYLLABLES_A,
@@ -19,7 +20,7 @@ import { schedParty } from './events';
 import { getT, paintTerrain, recomputeLocations, scatterTrees, setT } from './map';
 import { Rng } from './rng';
 import { NJ, NV } from './text';
-import type { Building, Villager, World } from './types';
+import type { Building, Tally, Villager, WeekLog, World } from './types';
 import { TILE } from './types';
 import { doorOf, log, pairFlag, reindexBuildings, sideDir, vil } from './world';
 import { computeStats } from './stats';
@@ -71,6 +72,8 @@ export function emptyWorld(seed: number, W = MAP_W, H = MAP_H): World {
     growth: new Uint16Array(W * H),
     cropVersion: 1,
     tally: { bread: 0, wheat: 0, fish: 0, breadEaten: 0, suppers: 0 },
+    week: emptyWeek(0, { bread: 0, wheat: 0, fish: 0, breadEaten: 0, suppers: 0 }),
+    papers: [],
     L: {
       farm: [],
       forest: [],
@@ -187,6 +190,30 @@ export function nextName(w: World, used: ReadonlySet<string>): string {
   return `도토리${w.namesUsed}`;
 }
 
+/** 생일 날짜(1~28). 난수를 쓰지 않아 처음 마을의 난수 흐름이 바뀌지 않는다(SPEC 11.3). */
+export function birthdayOf(w: World, id: number): number {
+  return ((id * BIRTHDAY.hashMul + w.seed) % BIRTHDAY.yearDays) + 1;
+}
+
+/** 빈 주간 기록. tally0 은 주를 시작할 때의 누계. */
+export function emptyWeek(from: number, tally0: Tally): WeekLog {
+  return {
+    from,
+    arrivals: [],
+    couples: [],
+    weddings: [],
+    breakups: [],
+    rejects: [],
+    built: {},
+    parties: 0,
+    bestParty: null,
+    birthdays: [],
+    breadOutDays: 0,
+    bigFish: [],
+    tally0: { ...tally0 },
+  };
+}
+
 /** 주민 한 명을 만든다(처음 주민·새 주민 공용). 호감표 용량도 늘린다. */
 export function makeVillager(
   w: World,
@@ -258,6 +285,11 @@ export function makeVillager(
       model: id % 12,
     },
     arrivedAt: w.t,
+    memories: [],
+    birthday: birthdayOf(w, id),
+    celebrate: null,
+    married: false,
+    coupledAt: null,
   };
   home.residents.push(id);
   w.vs.push(v);
@@ -337,6 +369,7 @@ export function newWorld(seed: number, opts: NewWorldOptions = {}): World {
   if (c1 && c2 && c1.home !== c2.home) {
     c1.partner = c2.id;
     c2.partner = c1.id;
+    c1.coupledAt = c2.coupledAt = w.t;
     w.aff.set(c1.id, c2.id, 75);
     w.aff.set(c2.id, c1.id, 72);
     pairFlag(w, c1, c2, 'couple');

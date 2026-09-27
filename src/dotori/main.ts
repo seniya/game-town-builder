@@ -23,6 +23,7 @@ import {
   updateStats,
 } from './ui/panel';
 import { isHighlight, Notices } from './ui/notice';
+import { PaperView } from './ui/paper';
 import { Toolbar, type ToolMode } from './ui/tools';
 
 const SAVE_KEY = 'dotori.save.v1';
@@ -105,6 +106,8 @@ function attach(w: World): void {
   r3.rebuild(w);
   resetFeed(w);
   notices.clear();
+  paper.close();
+  paper.sync(w);
   w.out.length = 0;
   const host = w.party ? w.vs[w.party.host] : undefined;
   $('intro').innerHTML = host
@@ -124,6 +127,7 @@ function refreshPanels(): void {
   updateRumors(world);
   const v = view.selected != null ? (world.vs[view.selected] ?? null) : null;
   updatePerson(world, v, drawPortrait);
+  paper.sync(world);
 }
 
 /** 초상화를 카드 캔버스에 그린다(같은 사람이면 다시 그리지 않는다). */
@@ -159,6 +163,13 @@ function say(text: string): void {
 
 /** 큰 순간 알림 카드. 누르면 그 주민을 고르고 카메라를 옮긴다. */
 const notices = new Notices($('notices'), (vid) => select(vid, true));
+const paper = new PaperView((vid) => select(vid, true));
+
+/** 새 신문이 나오면 카드를 연다(SPEC 11.4). */
+function showPaper(w: World, no: number): void {
+  paper.sync(w);
+  paper.open(w, no);
+}
 
 /** 도구 막대. */
 const tools = new Toolbar($('tools'), $('toolHint'), (m: ToolMode) => {
@@ -308,6 +319,7 @@ function bindControls(): void {
     if (speed) lastSpeed = speed;
     setSpeed(0);
   });
+  $('paperBtn').addEventListener('click', () => paper.open(world));
   $('sp1').addEventListener('click', () => setSpeed(1));
   $('sp3').addEventListener('click', () => setSpeed(3));
   $('sp8').addEventListener('click', () => setSpeed(8));
@@ -388,7 +400,8 @@ function loop(): void {
         appendFeed(ev.entry);
         if (isHighlight(ev.entry)) notices.push(ev.entry);
       } else if (ev.type === 'fx') r3.fx(world, ev.vid, ev.fx);
-      else r3.siteFx(ev.x, ev.y, ev.fx);
+      else if (ev.type === 'siteFx') r3.siteFx(ev.x, ev.y, ev.fx);
+      else showPaper(world, ev.no);
     }
     world.out.length = 0;
     const dtA = speed > 0 ? dt * (speed >= 8 ? 1.6 : speed >= 3 ? 1.25 : 1) : 0;
@@ -403,6 +416,7 @@ function loop(): void {
     if (now - lastR > 1000) {
       lastR = now;
       updateRumors(world);
+      paper.sync(world);
     }
     requestAnimationFrame(frame);
   };

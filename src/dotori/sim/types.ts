@@ -110,7 +110,7 @@ export type ActType =
   | 'build'
   | 'movein';
 
-export type ConvKind = 'chat' | 'invite' | 'date' | 'confess' | 'welcome';
+export type ConvKind = 'chat' | 'invite' | 'date' | 'confess' | 'welcome' | 'birthday';
 export type FunWhere = 'shore' | 'plaza' | 'grass' | 'forest' | 'bench' | 'flower';
 export type ActWhere =
   | FunWhere
@@ -193,6 +193,54 @@ export interface Villager {
   pack: { kind: PackKind; n: number; site: number | null } | null;
   look: { skin: string; pants: string; umb: string; model: number };
   arrivedAt: number;
+  /** 기억 (SPEC 11.1). 최근 것이 앞. */
+  memories: Memory[];
+  /** 생일: 한 해(28 일) 안의 날(1~28, SPEC 11.3). */
+  birthday: number;
+  /** 축하하러 갈 생일 주민 id. */
+  celebrate: number | null;
+  /** 부부인가(짝은 partner). */
+  married: boolean;
+  /** 사귀기 시작한 시각(기념일·결혼 조건). */
+  coupledAt: number | null;
+}
+
+/** 기억 종류 (SPEC 11.1). */
+export type MemoryKind =
+  'arrive' | 'meet' | 'couple' | 'reject' | 'party' | 'wedding' | 'guest' | 'birthday';
+
+/** 기억 하나. text 는 "…한 날" 로 끝난다. */
+export interface Memory {
+  t: number;
+  kind: MemoryKind;
+  with: number | null;
+  text: string;
+}
+
+/** 이번 주 기록 (SPEC 11.4). 주민은 id 로 가리킨다. */
+export interface WeekLog {
+  from: number;
+  arrivals: number[];
+  couples: [number, number][];
+  weddings: [number, number][];
+  breakups: [number, number][];
+  rejects: number[];
+  built: Record<string, number>;
+  parties: number;
+  bestParty: { host: number; came: number } | null;
+  birthdays: number[];
+  breadOutDays: number;
+  bigFish: number[];
+  tally0: Tally;
+}
+
+/** 신문 한 호. items 는 이름 링크를 품은 html 줄. */
+export interface Paper {
+  no: number;
+  t: number;
+  headline: string;
+  items: string[];
+  ids: number[];
 }
 
 export interface Rumor {
@@ -223,6 +271,8 @@ export interface Conversation {
   r2: number | null;
   topic: string;
   speaker: number;
+  /** 대화에서 꺼낸 기억 문장(SPEC 11.1). */
+  recall: string | null;
 }
 
 export interface Party {
@@ -233,6 +283,8 @@ export interface Party {
   att: Set<number>;
   prepLogged: boolean;
   startLogged: boolean;
+  /** 결혼식이면 두 사람(SPEC 11.2). */
+  wedding?: [number, number];
 }
 
 export type FeedKind =
@@ -248,7 +300,8 @@ export type FeedKind =
   | 'plant'
   | 'build'
   | 'arrive'
-  | 'work';
+  | 'work'
+  | 'story';
 
 export interface FeedEntry {
   t: number;
@@ -264,7 +317,8 @@ export type FxKind =
 export type OutEvent =
   | { type: 'log'; entry: FeedEntry }
   | { type: 'fx'; vid: number; fx: FxKind }
-  | { type: 'siteFx'; x: number; y: number; fx: FxKind };
+  | { type: 'siteFx'; x: number; y: number; fx: FxKind }
+  | { type: 'paper'; no: number };
 
 /** 지도에서 뽑은 장소 목록. 지도가 바뀔 때 다시 계산한다(저장하지 않는다). */
 export interface Locations {
@@ -343,6 +397,9 @@ export interface World {
   cropVersion: number;
   /** 누계: 구운 빵·거둔 밀·잡은 생선·먹은 빵·주점 저녁상. */
   tally: Tally;
+  /** 이번 주 기록과 지난 신문(최근 8 호, SPEC 11.4). */
+  week: WeekLog;
+  papers: Paper[];
   /** 건물·장식·청사진·지형이 바뀔 때마다 1 씩 는다(render 가 다시 짓는다). */
   staticVersion: number;
   stats: Stats;

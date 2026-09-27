@@ -1,7 +1,7 @@
 // 저장: World ↔ JSON (SPEC 6). 파생 상태(장소 목록·숲 거리·색인·알림 큐)는 불러온 뒤 다시 계산한다.
 import { PRODUCE } from '../data/balance';
 import { Affinity } from './affinity';
-import { emptyWorld } from './create';
+import { birthdayOf, emptyWeek, emptyWorld } from './create';
 import { recomputeLocations } from './map';
 import { computeStats } from './stats';
 import type {
@@ -11,9 +11,11 @@ import type {
   Decor,
   FeedEntry,
   Party,
+  Paper,
   Rumor,
   Tally,
   Villager,
+  WeekLog,
   World,
 } from './types';
 import { reindexBuildings } from './world';
@@ -55,6 +57,9 @@ export interface SaveData {
   crop?: number[];
   growth?: number[];
   tally?: Partial<Tally>;
+  /** V3: 이번 주 기록과 신문(SPEC 11.6). */
+  week?: WeekLog;
+  papers?: Paper[];
 }
 
 /** World 를 JSON 으로 옮길 수 있는 객체로 만든다. */
@@ -90,6 +95,8 @@ export function toSave(w: World): SaveData {
     crop: Array.from(w.crop),
     growth: Array.from(w.growth),
     tally: w.tally,
+    week: w.week,
+    papers: w.papers,
   };
 }
 
@@ -135,6 +142,16 @@ export function fromSave(raw: unknown): World | null {
   w.arrivalsToday = d.arrivalsToday ?? 0;
   w.treesPlanted = d.treesPlanted ?? 0;
   w.tally = { bread: 0, wheat: 0, fish: 0, breadEaten: 0, suppers: 0, ...d.tally };
+  w.week = d.week ?? emptyWeek(w.t, w.tally);
+  w.papers = d.papers ?? [];
+  for (const v of w.vs) {
+    // V3 이전 저장: 기억·생일·부부가 없다.
+    v.memories ??= [];
+    v.birthday ??= birthdayOf(w, v.id);
+    v.celebrate ??= null;
+    v.married ??= false;
+    v.coupledAt ??= v.partner != null ? w.t : null;
+  }
   for (const b of w.buildings) {
     b.flour ??= 0;
     b.wheat ??= 0;

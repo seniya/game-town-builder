@@ -1,6 +1,7 @@
 // 생산 사슬 (SPEC 9, ADR 050): 작물 자람, 농부의 거두기·심기·가꾸기, 방앗간, 제빵사의 밀가루 나르기와 굽기,
 // 어부의 생선, 등짐 내려놓기. 재고는 건물에 있고, 사람이 등짐으로 나른다.
 import { FOOD, PRODUCE } from '../data/balance';
+import { PAPER } from '../data/story';
 import { mk } from './decide';
 import { getT } from './map';
 import type { Act, Building, FoodLevel, PackKind, Pt, Villager, World } from './types';
@@ -163,7 +164,8 @@ export function bakeTick(w: World, v: Villager): boolean {
 export function foodOf(w: World): { food: number; level: FoodLevel } {
   const food = Math.floor(bakery(w).bread) + Math.floor(tavern(w).fish);
   const per = food / Math.max(1, w.vs.length);
-  const level: FoodLevel = per < FOOD.tightBelow ? 'tight' : per >= FOOD.plentyFrom ? 'plenty' : 'ok';
+  const level: FoodLevel =
+    per < FOOD.tightBelow ? 'tight' : per >= FOOD.plentyFrom ? 'plenty' : 'ok';
   return { food, level };
 }
 
@@ -172,8 +174,17 @@ export function fishTick(w: World, v: Villager): boolean {
   if (w.t % PRODUCE.fishEvery !== 0 || w.rng.next() >= PRODUCE.fishChance) return false;
   emote(w, v, '🐟', 12);
   if (!v.pack || v.pack.kind !== 'fish') v.pack = { kind: 'fish', n: 0, site: null };
-  v.pack.n += 1;
-  w.tally.fish += 1;
+  // 가끔 월척이 걸린다(SPEC 11.4): 생선을 더 얻고 신문 기삿거리가 된다.
+  const big = w.rng.next() < PAPER.bigFishChance;
+  const n = big ? 1 + PAPER.bigFishBonus : 1;
+  v.pack.n += n;
+  w.tally.fish += n;
+  if (big) {
+    w.week.bigFish.push(v.id);
+    emote(w, v, '🎣', 40);
+    diary(w, v, '월척이다! 이렇게 큰 물고기는 처음이야 🎣');
+    log(w, `🎣 ${NJ(v, '가', '이')} 팔뚝만 한 월척을 낚았다!`, [v], 'find');
+  }
   return v.pack.n >= PRODUCE.fishPack;
 }
 

@@ -1,5 +1,7 @@
 // 가꾸기: 놓기 검사, 청사진, 목수의 목재 나르기와 망치질, 완성, 치우기, 장식 첫 사용 (SPEC 4).
 import { BASE_CHARM, LUMBER } from '../data/balance';
+import { nestTick } from './family';
+import { weekBuilt } from './story';
 import { BUILDABLES, HOUSE_ROAD_MAX, REFUND_DONE, type BuildKind } from '../data/buildables';
 import type { Side } from '../data/villageMap';
 import { mk } from './decide';
@@ -458,6 +460,9 @@ export function completeBlueprint(w: World, bp: Blueprint, by: Villager | null):
   }
   w.out.push({ type: 'siteFx', x: bp.x + bp.w / 2, y: bp.y + bp.h / 2, fx: 'done' });
   w.staticVersion++;
+  weekBuilt(w, bp.kind);
+  // 새 집이 생기면 따로 사는 부부가 먼저 옮겨 간다(SPEC 11.2).
+  if (bp.kind === 'house') nestTick(w);
 }
 
 /** (x, y) 에 있는 플레이어가 놓은 것을 치운다 (SPEC 4.1). */

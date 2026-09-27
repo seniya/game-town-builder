@@ -7,9 +7,10 @@ export function isHighlight(e: FeedEntry): boolean {
   const h = e.html;
   if (e.kind === 'arrive') return h.startsWith('🧳');
   if (e.kind === 'build') return h.includes('다 지어졌다') || h.includes('처음');
-  if (e.kind === 'love') return h.startsWith('💑');
+  if (e.kind === 'love') return h.startsWith('💑') || h.startsWith('💍');
+  if (e.kind === 'story') return h.startsWith('🎂 오늘은');
   if (e.kind === 'party') return h.startsWith('🎉 파티가 시작됐다');
-  if (e.kind === 'find') return h.startsWith('🌰');
+  if (e.kind === 'find') return h.startsWith('🌰') || h.startsWith('🎣');
   if (e.kind === 'work') return h.includes('밀 1 단');
   if (e.kind === 'funny') return h.includes('밀가루가 떨어졌다');
   return false;

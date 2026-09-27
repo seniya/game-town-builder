@@ -1,5 +1,8 @@
 // 대화·궁합·소문·고백·커플 (SPEC 3.4, 시험판 규칙). 이웃 찾기는 공간 격자로 한다.
 import { NEEDS, PERF, SOCIAL } from '../data/balance';
+import { MARRIAGE } from '../data/story';
+import { say } from './lines';
+import { birthdayVisit, recallDiary, recallFor, remember } from './story';
 import { GENERIC_TOPICS, JOBS, REACTS, TRAIT_COMPAT, TRAITS } from '../data/people';
 import { SpatialGrid } from './spatial';
 import { J, NJ, NV } from './text';
@@ -160,8 +163,9 @@ export function startConv(w: World, a: Villager, b: Villager, kind: ConvKind): v
     r2: null,
     topic: '',
     speaker: a.id,
+    recall: null,
   };
-  if (kind !== 'confess' && kind !== 'welcome') {
+  if (kind !== 'confess' && kind !== 'welcome' && kind !== 'birthday') {
     let pa = 0.04;
     if (a.trait === '투덜이' || b.trait === '투덜이') pa += 0.22;
     if ((aff(w, a, b) + aff(w, b, a)) / 2 < -20) pa += 0.3;
@@ -181,6 +185,14 @@ export function startConv(w: World, a: Villager, b: Villager, kind: ConvKind): v
       [b.id, '😳'],
       [a.id, '💗'],
       [b.id, c.success ? '💖' : '🙇'],
+    ];
+  } else if (kind === 'birthday') {
+    c.topic = '🎂';
+    c.lines = [
+      [a.id, '🎂'],
+      [b.id, '🥹'],
+      [a.id, R.pick(['🎁', '💐', '🍰', '🧁']) ?? '🎁'],
+      [b.id, '🥳'],
     ];
   } else if (kind === 'welcome') {
     c.topic = '👋';
@@ -207,6 +219,12 @@ export function startConv(w: World, a: Villager, b: Villager, kind: ConvKind): v
       [a.id, r2 ? '😮' : (R.pick(REACTS) ?? '🙂')],
     ];
     if (kind === 'date') c.lines.unshift([a.id, '💕'], [b.id, '💕']);
+    // 함께한 기억이 있으면 "그때" 이야기를 꺼낸다(SPEC 11.1).
+    const mem = recallFor(w, a, b);
+    if (mem) {
+      c.recall = mem.text;
+      c.lines.splice(1, 0, [a.id, '💭'], [b.id, '😊']);
+    }
   }
   if (kind === 'date' && a.carry && a.carry.item === 'flower') {
     a.carry = null;
@@ -230,6 +248,11 @@ export function startConv(w: World, a: Villager, b: Villager, kind: ConvKind): v
 function couple(w: World, x: Villager, y: Villager): void {
   x.partner = y.id;
   y.partner = x.id;
+  x.coupledAt = y.coupledAt = w.t;
+  x.married = y.married = false;
+  remember(w, x, 'couple', y.id, `${J(y.name, '와', '과')} 사귀기 시작한 날`);
+  remember(w, y, 'couple', x.id, `${J(x.name, '와', '과')} 사귀기 시작한 날`);
+  w.week.couples.push([x.id, y.id]);
   x.crush = y.crush = null;
   x.confess = y.confess = null;
   addAff(w, x, y, 15);
@@ -287,6 +310,8 @@ function resolveConv(w: World, c: Conversation): void {
       emote(w, b, '😅', 20);
       addAff(w, a, b, -5);
       diary(w, a, `${b.name}에게 고백했다가 차였다… 💔`);
+      remember(w, a, 'reject', b.id, `${b.name}에게 고백했다가 차인 날`);
+      w.week.rejects.push(a.id);
       diary(w, b, `${J(a.name, '가', '이')} 고백했는데, 거절했다 😅`);
       log(w, `💔 ${NJ(a, '가', '이')} ${NV(b)}에게 고백했다가 정중하게 차였다.`, [a, b], 'love');
       rumor(w, b, 'reject', `${J(a.name, '가', '이')} ${b.name}에게 차였대`, '💔', 0.95, [
@@ -296,12 +321,20 @@ function resolveConv(w: World, c: Conversation): void {
     }
     return;
   }
+  if (c.kind === 'birthday') {
+    birthdayVisit(w, a, b);
+    return;
+  }
   if (c.kind === 'welcome') {
     addAff(w, a, b, SOCIAL.welcomeAff);
     addAff(w, b, a, SOCIAL.welcomeAff);
     a.social += NEEDS.talkSocial;
     b.social += NEEDS.talkSocial;
     diary(w, a, `새로 이사 온 ${J(b.name, '에게', '에게')} 인사했다 👋`);
+    if (!b.memories.some((m) => m.kind === 'meet' && m.with === a.id)) {
+      remember(w, a, 'meet', b.id, `${J(b.name, '와', '과')} 처음 인사한 날`);
+      remember(w, b, 'meet', a.id, `${J(a.name, '와', '과')} 처음 인사한 날`);
+    }
     diary(w, b, `${J(a.name, '가', '이')} 인사하러 와 줬다. 좋은 이웃이다 😊`);
     if (!w.daily[`welcome-${b.id}`]) {
       w.daily[`welcome-${b.id}`] = true;
@@ -326,19 +359,30 @@ function resolveConv(w: World, c: Conversation): void {
   b.social += b.trait === '외톨이' ? NEEDS.talkSocialLoner : NEEDS.talkSocial;
   a.fun += 4;
   b.fun += 4;
-  const verb = c.argue
-    ? '말다툼을 했다 💢'
-    : c.kind === 'date'
-      ? '데이트를 했다 💕'
-      : `수다를 떨었다 ${c.topic}`;
-  diary(w, a, `${J(b.name, '와', '과')} ${verb}`);
-  diary(w, b, `${J(a.name, '와', '과')} ${verb}`);
+  const key = c.argue ? 'argue' : c.kind === 'date' ? 'date' : 'chat';
+  for (const [x, y] of [
+    [a, b],
+    [b, a],
+  ] as const)
+    diary(
+      w,
+      x,
+      say(w, x, key, { wa: J(y.name, '와', '과'), ga: J(y.name, '가', '이'), topic: c.topic }),
+    );
+  if (c.recall) {
+    const mem = a.memories.find((m) => m.text === c.recall && m.with === b.id);
+    if (mem) recallDiary(w, a, b, mem);
+  }
 
   const partners = a.partner === b.id;
   if (c.argue) {
     if (partners) {
-      if (aff(w, a, b) < 15 || aff(w, b, a) < 15) {
+      const limit = 15 * (a.married ? MARRIAGE.breakupFactor : 1);
+      if (aff(w, a, b) < limit || aff(w, b, a) < limit) {
         a.partner = b.partner = null;
+        a.married = b.married = false;
+        a.coupledAt = b.coupledAt = null;
+        w.week.breakups.push([a.id, b.id]);
         log(
           w,
           `💔 ${NJ(a, '와', '과')} ${NJ(b, '가', '이')} 크게 싸우고 헤어졌다.`,

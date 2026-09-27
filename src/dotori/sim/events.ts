@@ -4,7 +4,10 @@ import { TRAITS } from '../data/people';
 import { endAct, startAct } from './act';
 import { mk } from './decide';
 import { rumor, rumorById, knows } from './social';
-import { J, NJ, dayOf, hourOf } from './text';
+import { marry, morningProposals, nestTick } from './family';
+import { morningBirthdays, morningMemories, remember } from './story';
+import { say } from './lines';
+import { J, NJ, NV, dayOf, hourOf } from './text';
 import type { Villager, World } from './types';
 import { addAff, diary, emote, log, vil } from './world';
 
@@ -60,6 +63,10 @@ export function morning(w: World): void {
       diary(w, v, '오늘은 꼭 마음을 전해야지…');
     }
   }
+  morningMemories(w);
+  morningBirthdays(w);
+  morningProposals(w);
+  nestTick(w);
   if (!w.party) {
     for (const h of w.vs.filter((v) => v.trait === '파티광')) {
       if (w.rng.next() < 0.2) {
@@ -100,22 +107,34 @@ export function partyTick(w: World): void {
   if (!P) return;
   const host = vil(w, P.host);
   const pr = rumorById(w, P.rumor);
+  const couple = P.wedding ? P.wedding.map((id) => vil(w, id)) : null;
   if (!P.prepLogged && w.t >= P.start - 40) {
     P.prepLogged = true;
-    log(w, `🏮 ${NJ(host, '가', '이')} 광장에 등불을 걸며 파티 준비를 한다.`, [host], 'party');
-    if (host.talk == null && host.act && host.act.type !== 'party') endAct(w, host);
+    log(
+      w,
+      couple
+        ? `💐 광장에 꽃을 걸며 ${NJ(couple[0] ?? host, '와', '과')} ${NV(couple[1] ?? host)}의 결혼식 준비를 한다.`
+        : `🏮 ${NJ(host, '가', '이')} 광장에 등불을 걸며 파티 준비를 한다.`,
+      couple ?? [host],
+      'party',
+    );
+    for (const v of couple ?? [host])
+      if (v.talk == null && v.act && v.act.type !== 'party') endAct(w, v);
   }
   if (!P.startLogged && w.t >= P.start) {
     P.startLogged = true;
     log(
       w,
-      `🎉 파티가 시작됐다! 소식을 들은 사람은 ${(pr?.knowers.size ?? 1) - 1}명.`,
-      [host],
+      couple
+        ? `🎉 ${NJ(couple[0] ?? host, '와', '과')} ${NV(couple[1] ?? host)}의 결혼식이 시작됐다! 소식을 들은 사람은 ${(pr?.knowers.size ?? 2) - 2}명.`
+        : `🎉 파티가 시작됐다! 소식을 들은 사람은 ${(pr?.knowers.size ?? 1) - 1}명.`,
+      couple ?? [host],
       'party',
     );
     for (const v of w.vs) {
       if (
         v !== host &&
+        !(couple && couple.includes(v)) &&
         pr &&
         knows(v, pr) &&
         v.talk == null &&
@@ -127,9 +146,20 @@ export function partyTick(w: World): void {
         endAct(w, v);
     }
   }
+  if (w.t >= P.end && couple) {
+    const [a, b] = couple;
+    if (a && b) marry(w, a, b, [...P.att]);
+    if (pr) pr.active = false;
+    w.party = null;
+    return;
+  }
   if (w.t >= P.end) {
     const invited = (pr?.knowers.size ?? 1) - 1;
     const came = [...P.att].filter((id) => id !== P.host).length;
+    w.week.parties++;
+    if (!w.week.bestParty || came > w.week.bestParty.came)
+      w.week.bestParty = { host: host.id, came };
+    if (came > 3) remember(w, host, 'party', null, `우리 파티에 ${came}명이 온 날`);
     const verdict =
       came >= invited * 0.6 && came > 3 ? ' 대성공!' : came <= 2 ? ' 조금 쓸쓸한 밤이었다.' : '';
     log(
@@ -146,8 +176,10 @@ export function partyTick(w: World): void {
     for (const id of P.att) {
       const v = vil(w, id);
       if (v === host) continue;
-      diary(w, v, `${host.name}네 파티에 다녀왔다 🎉`);
+      diary(w, v, say(w, v, 'partyGuest', { host: host.name }));
       addAff(w, v, host, 6);
+      if (!v.memories.some((m) => m.kind === 'party'))
+        remember(w, v, 'party', host.id, `${host.name}네 파티에 처음 간 날`);
     }
     if (pr) pr.active = false;
     w.lastPartyCame = came;
