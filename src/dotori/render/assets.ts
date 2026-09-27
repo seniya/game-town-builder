@@ -196,6 +196,7 @@ export function instance(
   items: readonly InstanceItem[],
   baseFit: number,
   parent: THREE.Object3D,
+  mapMat?: (m: THREE.Material) => THREE.Material,
 ): void {
   if (!items.length) return;
   const src = model(name).scene;
@@ -211,7 +212,12 @@ export function instance(
   src.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
-    const im = new THREE.InstancedMesh(mesh.geometry, mesh.material, items.length);
+    const mat = Array.isArray(mesh.material)
+      ? mesh.material.map((x) => (mapMat ? mapMat(x) : x))
+      : mapMat
+        ? mapMat(mesh.material)
+        : mesh.material;
+    const im = new THREE.InstancedMesh(mesh.geometry, mat, items.length);
     im.castShadow = true;
     im.receiveShadow = true;
     items.forEach((it, i) => {

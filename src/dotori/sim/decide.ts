@@ -1,6 +1,7 @@
 // 행동 고르기: 욕구·성격·시간으로 점수를 매겨(options) 가장 높은 행동을 만든다(buildAct) (SPEC 3.3, 시험판 규칙).
 import { DESTINATION, LUMBER, MEALS, PRODUCE } from '../data/balance';
 import { BIRTHDAY } from '../data/story';
+import { FESTIVAL } from '../data/seasons';
 import { JOBS } from '../data/people';
 import { startAct } from './act';
 import { carpenterAct, hasCarpentryWork } from './build';
@@ -133,6 +134,7 @@ function options(w: World, v: Villager, h: number): [Choice, number][] {
       f *= 0.6 + 0.4 * Math.min(1.5, Math.max(0, (aff(w, v, vil(w, P.host)) + 50) / 100));
       if (v.energy < 25) f *= 0.5;
       if (rain) f *= 0.5;
+      if (P.festival) f *= FESTIVAL.attendFactor;
       o.push(['party', 2.6 * f]);
     }
   }

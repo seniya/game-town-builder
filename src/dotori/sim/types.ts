@@ -231,6 +231,8 @@ export interface WeekLog {
   birthdays: number[];
   breadOutDays: number;
   bigFish: number[];
+  /** 이번 주 축제와 온 사람 수(SPEC 12.5). */
+  festivals: { id: string; came: number }[];
   tally0: Tally;
 }
 
@@ -285,6 +287,8 @@ export interface Party {
   startLogged: boolean;
   /** 결혼식이면 두 사람(SPEC 11.2). */
   wedding?: [number, number];
+  /** 계절 축제면 축제 id(SPEC 12.5). */
+  festival?: string;
 }
 
 export type FeedKind =
@@ -380,6 +384,8 @@ export interface World {
   flags: Set<string>;
   weather: { rain: boolean; until: number };
   party: Party | null;
+  /** 연 축제("해-이름", 최근 16 개, SPEC 12.5). */
+  festivalsHeld: string[];
   /** 지난 파티에 온 사람 수(시험·통계용). */
   lastPartyCame: number | null;
   daily: Record<string, boolean>;

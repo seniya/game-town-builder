@@ -6,6 +6,7 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { BUILDABLES, type BuildKind } from '../data/buildables';
 import type { Side } from '../data/villageMap';
 import { hash01 } from '../sim/rng';
+import { isSnow } from '../sim/season';
 import { hourOf } from '../sim/text';
 import type { FxKind, Villager, World } from '../sim/types';
 import { doorOf, sideDir } from '../sim/world';
@@ -348,7 +349,7 @@ export class Renderer3D {
     sun.target.position.set(cx, 0, cz);
     this.hemi.intensity = 0.8 + day * 0.5;
     this.hemi.color.set(day > 0.1 ? '#dff1ff' : '#8090c8');
-    this.hemi.groundColor.set(day > 0.1 ? '#6f8f4f' : '#2a2f4a');
+    this.hemi.groundColor.set(day > 0.1 ? this.village.look.hemiGround : '#2a2f4a');
     const night = Math.min(1, Math.max(0, 1 - day * 2.5));
     for (const L of this.village.lampLights) L.intensity = night * 6;
     for (const gl of this.village.glows) {
@@ -362,6 +363,52 @@ export class Renderer3D {
     const P = w.party;
     if (this.village.partyDeco)
       this.village.partyDeco.visible = !!(P && w.t >= P.start - 40 && w.t < P.end);
+  }
+
+  /** 눈송이: 천천히 내리며 좌우로 흔들린다(SPEC 12.4). */
+  private drawSnow(now: number): void {
+    const o = this.overlay.ctx;
+    const tm = now / 1000;
+    const n = this.view.reduceMotion ? 50 : 160;
+    o.fillStyle = 'rgba(255,255,255,0.85)';
+    o.beginPath();
+    for (let i = 0; i < n; i++) {
+      const sp = 0.05 + hash01(i * 7) * 0.08;
+      const y = ((hash01(i * 3) + tm * sp) % 1) * this.ch;
+      const x =
+        (hash01(i) * this.cw + Math.sin(tm * (0.6 + hash01(i * 5)) + i) * 18 + this.cw) % this.cw;
+      const r = 1.2 + hash01(i * 11) * 2.2;
+      o.moveTo(x + r, y);
+      o.arc(x, y, r, 0, 7);
+    }
+    o.fill();
+  }
+
+  /** 봄 꽃잎·가을 낙엽이 드문드문 날린다(SPEC 12.4). */
+  private drawDrift(now: number): void {
+    const kind = this.village.look.drift;
+    if (!kind) return;
+    const o = this.overlay.ctx;
+    const tm = now / 1000;
+    const n = this.view.reduceMotion ? 6 : 22;
+    const cols =
+      kind === 'petal' ? ['#f9c0d6', '#fde2ec', '#f4a6c4'] : ['#e8893a', '#d4523a', '#e9c04a'];
+    for (let i = 0; i < n; i++) {
+      const sp = 0.035 + hash01(i * 13) * 0.04;
+      const p = (hash01(i * 3) + tm * sp) % 1;
+      const y = p * this.ch;
+      const x = (hash01(i) * this.cw + p * this.cw * 0.35 + Math.sin(tm + i) * 20) % this.cw;
+      o.save();
+      o.translate(x, y);
+      o.rotate(tm * (1 + hash01(i * 9)) + i);
+      o.globalAlpha = Math.sin(p * Math.PI) * 0.9;
+      o.fillStyle = cols[i % cols.length] ?? '#fff';
+      o.beginPath();
+      o.ellipse(0, 0, kind === 'petal' ? 3.2 : 4.2, kind === 'petal' ? 2 : 2.4, 0, 0, 7);
+      o.fill();
+      o.restore();
+    }
+    o.globalAlpha = 1;
   }
 
   /** 새로 생긴 주민의 캐릭터를 만든다(이사). */
@@ -449,8 +496,9 @@ export class Renderer3D {
     const o = ov.ctx;
     o.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     o.clearRect(0, 0, this.cw, this.ch);
+    const snow = isSnow(w);
     if (w.weather.rain) {
-      o.fillStyle = 'rgba(60,70,90,0.16)';
+      o.fillStyle = snow ? 'rgba(215,225,240,0.12)' : 'rgba(60,70,90,0.16)';
       o.fillRect(0, 0, this.cw, this.ch);
     }
     ov.drawParts(dtA);
@@ -478,7 +526,9 @@ export class Renderer3D {
       }
       o.globalAlpha = 1;
     }
-    if (w.weather.rain) {
+    if (snow) this.drawSnow(now);
+    else if (!w.weather.rain && h >= 7 && h < 18) this.drawDrift(now);
+    if (w.weather.rain && !snow) {
       o.strokeStyle = 'rgba(210,225,255,0.45)';
       o.lineWidth = 1;
       o.beginPath();

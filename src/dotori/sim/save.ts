@@ -47,6 +47,8 @@ export interface SaveData {
   flags: string[];
   weather: { rain: boolean; until: number };
   party: SavedParty | null;
+  /** V5: 연 축제(SPEC 12.5). */
+  festivalsHeld?: string[];
   lastPartyCame: number | null;
   daily: Record<string, boolean>;
   lumber: number;
@@ -86,6 +88,7 @@ export function toSave(w: World): SaveData {
     flags: [...w.flags],
     weather: w.weather,
     party: w.party ? { ...w.party, att: [...w.party.att] } : null,
+    festivalsHeld: w.festivalsHeld,
     lastPartyCame: w.lastPartyCame,
     daily: w.daily,
     lumber: w.lumber,
@@ -135,6 +138,7 @@ export function fromSave(raw: unknown): World | null {
   w.flags = new Set(d.flags ?? []);
   w.weather = d.weather ?? { rain: false, until: 0 };
   w.party = d.party ? { ...d.party, att: new Set(d.party.att) } : null;
+  w.festivalsHeld = d.festivalsHeld ?? [];
   w.lastPartyCame = d.lastPartyCame ?? null;
   w.daily = d.daily ?? {};
   w.lumber = d.lumber ?? 0;
@@ -143,6 +147,7 @@ export function fromSave(raw: unknown): World | null {
   w.treesPlanted = d.treesPlanted ?? 0;
   w.tally = { bread: 0, wheat: 0, fish: 0, breadEaten: 0, suppers: 0, ...d.tally };
   w.week = d.week ?? emptyWeek(w.t, w.tally);
+  w.week.festivals ??= [];
   w.papers = d.papers ?? [];
   for (const v of w.vs) {
     // V3 이전 저장: 기억·생일·부부가 없다.

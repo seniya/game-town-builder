@@ -1,6 +1,7 @@
 // 이야기가 쌓이는 마을 (SPEC 11, ADR 052): 기억 남기기·꺼내기, 기념일, 생일, 주간 도토리 신문.
 import { BUILDABLES, type BuildKind } from '../data/buildables';
 import { BIRTHDAY, MEMORY, PAPER } from '../data/story';
+import { FESTIVALS } from '../data/seasons';
 import { emptyWeek } from './create';
 import { say } from './lines';
 import { J, NJ, NV, dayOf } from './text';
@@ -148,6 +149,11 @@ export function makePaper(w: World): Paper {
   };
   const pair = (p: readonly number[]): string => p.map((id) => NV(vil(w, id))).join('♥');
   for (const [a, b] of k.weddings) add(`💍 ${names(w, [a])}·${names(w, [b])} 결혼`, [a, b]);
+  const fests = (k.festivals ?? []).flatMap((x) => {
+    const f = FESTIVALS.find((d) => d.id === x.id);
+    return f ? [{ f, came: x.came }] : [];
+  });
+  for (const { f, came } of fests) add(`${f.e} ${f.name}: ${came}명이 모였다`);
   for (const [a, b] of k.couples) add(`💑 새 커플 ${names(w, [a])}♥${names(w, [b])}`, [a, b]);
   if (k.arrivals.length)
     add(`🧳 새 이웃 ${k.arrivals.length}명: ${names(w, k.arrivals)}`, k.arrivals);
@@ -177,17 +183,19 @@ export function makePaper(w: World): Paper {
     add(`🗣️ 이번 주 소문: "${top.short}" (${top.knowers.size}명이 안다)`);
   const headline = k.weddings[0]
     ? `💍 ${pair(k.weddings[0])}, 광장에서 백년가약!`
-    : k.couples[0]
-      ? `💑 ${pair(k.couples[0])}, 사귀기 시작하다`
-      : k.arrivals.length >= PAPER.arrivalsHeadline
-        ? `🧳 이번 주 새 이웃 ${k.arrivals.length}명, 마을이 북적인다`
-        : k.bestParty && k.bestParty.came >= PAPER.bigPartyFrom
-          ? `🎉 ${names(w, [k.bestParty.host])}네 파티에 ${k.bestParty.came}명!`
-          : k.breadOutDays >= PAPER.breadOutDays
-            ? `🥖 빵이 동난 날이 ${k.breadOutDays}일, 빵집 앞 한숨`
-            : built
-              ? `🔨 새로 지은 것들: ${built}`
-              : '🌰 조용하고 평화로운 한 주';
+    : fests[0]
+      ? `${fests[0].f.e} ${fests[0].f.name}에 ${fests[0].came}명, 온 마을이 광장에`
+      : k.couples[0]
+        ? `💑 ${pair(k.couples[0])}, 사귀기 시작하다`
+        : k.arrivals.length >= PAPER.arrivalsHeadline
+          ? `🧳 이번 주 새 이웃 ${k.arrivals.length}명, 마을이 북적인다`
+          : k.bestParty && k.bestParty.came >= PAPER.bigPartyFrom
+            ? `🎉 ${names(w, [k.bestParty.host])}네 파티에 ${k.bestParty.came}명!`
+            : k.breadOutDays >= PAPER.breadOutDays
+              ? `🥖 빵이 동난 날이 ${k.breadOutDays}일, 빵집 앞 한숨`
+              : built
+                ? `🔨 새로 지은 것들: ${built}`
+                : '🌰 조용하고 평화로운 한 주';
   return {
     no: w.papers.length ? (w.papers[0]?.no ?? 0) + 1 : 1,
     t: w.t,

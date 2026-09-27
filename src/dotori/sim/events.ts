@@ -6,6 +6,7 @@ import { mk } from './decide';
 import { rumor, rumorById, knows } from './social';
 import { marry, morningProposals, nestTick } from './family';
 import { morningBirthdays, morningMemories, remember } from './story';
+import { endFestival, festivalById, isSnow, morningSeason } from './season';
 import { say } from './lines';
 import { J, NJ, NV, dayOf, hourOf } from './text';
 import type { Villager, World } from './types';
@@ -53,6 +54,7 @@ export function morning(w: World): void {
     v.welcome = null;
   }
   log(w, `☀️ ${dayOf(w.t)}일째 아침이 밝았다.`, [], 'day');
+  morningSeason(w);
   for (const r of w.rumors) if (r.kind !== 'party') r.juicy *= 0.8;
   w.rumors = w.rumors.filter((r) =>
     r.kind === 'party' ? r.active || w.t - r.born < 1440 : r.juicy > 0.15,
@@ -82,12 +84,20 @@ export function weatherTick(w: World): void {
   if (w.t % 60 !== 0) return;
   const wt = w.weather;
   if (wt.rain && w.t >= wt.until) {
+    const snow = isSnow(w);
     wt.rain = false;
-    log(w, '🌤️ 비가 그쳤다.', [], 'weather');
+    log(w, snow ? '🌤️ 눈이 그쳤다. 온 마을이 하얗다.' : '🌤️ 비가 그쳤다.', [], 'weather');
   } else if (!wt.rain && w.rng.next() < WEATHER.rainChancePerHour) {
     wt.rain = true;
     wt.until = w.t + w.rng.int(WEATHER.rainMin, WEATHER.rainMax);
-    log(w, '🌧️ 비가 내리기 시작했다. 다들 집으로 뛰어간다.', [], 'weather');
+    log(
+      w,
+      isSnow(w)
+        ? '❄️ 눈이 내리기 시작했다. 다들 옷깃을 여미고 집으로 간다.'
+        : '🌧️ 비가 내리기 시작했다. 다들 집으로 뛰어간다.',
+      [],
+      'weather',
+    );
     for (const v of w.vs) {
       if (
         v.inside == null &&
@@ -108,6 +118,38 @@ export function partyTick(w: World): void {
   const host = vil(w, P.host);
   const pr = rumorById(w, P.rumor);
   const couple = P.wedding ? P.wedding.map((id) => vil(w, id)) : null;
+  const fest = festivalById(P.festival);
+  if (fest && !P.prepLogged && w.t >= P.start - 40) {
+    P.prepLogged = true;
+    log(
+      w,
+      `${fest.e} ${NJ(host, '가', '이')} ${fest.prep}. 곧 ${fest.name}가 시작된다.`,
+      [host],
+      'party',
+    );
+    if (host.talk == null && host.act && host.act.type !== 'party') endAct(w, host);
+  }
+  if (fest && !P.startLogged && w.t >= P.start) {
+    P.startLogged = true;
+    log(w, `${fest.e} ${fest.name}가 시작됐다! 온 마을이 광장으로 모인다.`, [host], 'party');
+    for (const v of w.vs) {
+      if (
+        v !== host &&
+        v.talk == null &&
+        v.act &&
+        v.act.type !== 'sleep' &&
+        v.act.type !== 'party' &&
+        w.rng.next() < 0.75
+      )
+        endAct(w, v);
+    }
+  }
+  if (fest && w.t >= P.end) {
+    endFestival(w, fest, P.host, [...P.att]);
+    if (pr) pr.active = false;
+    w.party = null;
+    return;
+  }
   if (!P.prepLogged && w.t >= P.start - 40) {
     P.prepLogged = true;
     log(

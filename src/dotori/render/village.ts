@@ -5,10 +5,23 @@ import { BUILDABLES } from '../data/buildables';
 import { FARM, FOUNTAIN, TERRACE } from '../data/villageMap';
 import { hash01 } from '../sim/rng';
 import type { Blueprint, Building, World } from '../sim/types';
+import { seasonOf } from '../sim/season';
 import { bakeryOpen } from '../sim/world';
 import { HOUSE_MODELS, instance, place, type InstanceItem, type ModelName } from './assets';
 import { groundTexture, paintGround, waterGeometry } from './ground';
-import { matBasic, matClipped, matGlow, matGround, matStd, matWater } from './materials';
+import {
+  EVERGREEN_UNIFORMS,
+  FOLIAGE_UNIFORMS,
+  matBasic,
+  matClipped,
+  matEvergreen,
+  matFoliage,
+  matGlow,
+  matGround,
+  matStd,
+  matWater,
+} from './materials';
+import { SEASON_LOOK, type SeasonLook } from './seasonLook';
 import { FLOWER_COLORS, mesh } from './props';
 
 /** 밤에 켜지는 빛 번짐. test(h) 가 참일 때 켜진다. */
@@ -84,6 +97,10 @@ export class VillageView {
   private stockKey = '';
   private groundCanvas: HTMLCanvasElement | null = null;
   private groundTex: THREE.CanvasTexture | null = null;
+  private skirt: THREE.Mesh | null = null;
+  /** 지금 그린 계절과 그 겉모습(SPEC 12.4). */
+  private seasonId = '';
+  look: SeasonLook = SEASON_LOOK.summer;
   version = -1;
   private readonly glowTex: THREE.Texture;
   private readonly scene: THREE.Scene;
@@ -122,7 +139,10 @@ export class VillageView {
     this.roofH.clear();
     const G = this.group;
     // 지면
-    this.groundCanvas = paintGround(w, this.groundCanvas ?? undefined);
+    this.seasonId = seasonOf(w.t).id;
+    this.look = SEASON_LOOK[seasonOf(w.t).id];
+    this.applyFoliage();
+    this.groundCanvas = paintGround(w, this.groundCanvas ?? undefined, this.look.ground);
     this.groundTex?.dispose();
     this.groundTex = groundTexture(this.groundCanvas);
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(w.W, w.H), matGround(this.groundTex));
@@ -133,8 +153,9 @@ export class VillageView {
     G.add(ground);
     const skirt = new THREE.Mesh(
       new THREE.PlaneGeometry(w.W + 120, w.H + 120),
-      matStd('#7fb466', 1),
+      matStd(this.look.skirt, 1),
     );
+    this.skirt = skirt;
     skirt.rotation.x = -Math.PI / 2;
     skirt.position.set(w.W / 2, -0.02, w.H / 2);
     skirt.receiveShadow = true;
@@ -311,8 +332,8 @@ export class VillageView {
       };
       (hash01(f.x * 13 + f.y * 7) < 0.5 ? treesA : treesB).push(it);
     }
-    instance('tree_single_A', treesA, 1.25, G);
-    instance('tree_single_B', treesB, 1.25, G);
+    instance('tree_single_A', treesA, 1.25, G, matEvergreen);
+    instance('tree_single_B', treesB, 1.25, G, matFoliage);
     const rocks = w.L.grass
       .filter((t) => hash01(t.x * 29 + t.y * 3) < 0.012)
       .map((t) => ({
@@ -602,6 +623,7 @@ export class VillageView {
 
   /** 프레임마다: 공사 진행(차오르는 모형·비계), 공사장·야적장 목재 더미, 작물, 재고, 풍차. */
   update(w: World, dtA = 0): void {
+    this.updateSeason(w);
     this.updateCrops(w);
     this.updateStock(w);
     const mill = w.buildings.find((b) => b.kind === 'mill');
@@ -645,6 +667,38 @@ export class VillageView {
         }
       }
     }
+  }
+
+  /** 계절이 바뀌면 땅을 다시 칠하고 나뭇잎 색·둘레 땅 색을 바꾼다(SPEC 12.4). */
+  private updateSeason(w: World): void {
+    const s = seasonOf(w.t).id;
+    if (s === this.seasonId) return;
+    this.seasonId = s;
+    this.look = SEASON_LOOK[s];
+    this.applyFoliage();
+    if (this.groundCanvas && this.groundTex) {
+      paintGround(w, this.groundCanvas, this.look.ground);
+      this.groundTex.needsUpdate = true;
+    }
+    if (this.skirt) this.skirt.material = matStd(this.look.skirt, 1);
+  }
+
+  /** 나뭇잎 셰이더 값을 지금 계절로 맞춘다. */
+  private applyFoliage(): void {
+    const f = this.look.foliage;
+    FOLIAGE_UNIFORMS.uTint0.value.set(f.tints[0]);
+    FOLIAGE_UNIFORMS.uTint1.value.set(f.tints[1]);
+    FOLIAGE_UNIFORMS.uTint2.value.set(f.tints[2]);
+    FOLIAGE_UNIFORMS.uSplit.value.set(f.split[0], f.split[1]);
+    FOLIAGE_UNIFORMS.uAmt.value = f.amt;
+    const e = this.look.evergreen;
+    for (const u of [
+      EVERGREEN_UNIFORMS.uTint0,
+      EVERGREEN_UNIFORMS.uTint1,
+      EVERGREEN_UNIFORMS.uTint2,
+    ])
+      u.value.set(e.tint);
+    EVERGREEN_UNIFORMS.uAmt.value = e.amt;
   }
 
   /** 청사진 id 의 공사 중심과 진행(오버레이 진행 막대용). */

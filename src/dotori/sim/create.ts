@@ -48,6 +48,7 @@ export function emptyWorld(seed: number, W = MAP_W, H = MAP_H): World {
     flags: new Set(),
     weather: { rain: false, until: 0 },
     party: null,
+    festivalsHeld: [],
     lastPartyCame: null,
     daily: {},
     lumber: 0,
@@ -210,6 +211,7 @@ export function emptyWeek(from: number, tally0: Tally): WeekLog {
     birthdays: [],
     breadOutDays: 0,
     bigFish: [],
+    festivals: [],
     tally0: { ...tally0 },
   };
 }

@@ -94,3 +94,86 @@ export function matClipped(
   };
   return Array.isArray(src) ? src.map(one) : one(src);
 }
+
+/** 나뭇잎 계절 색 셰이더가 함께 읽는 값(SPEC 12.4). 색 셋 중 하나를 나무마다 고르고, 초록 부분만 amt 만큼 섞는다. */
+export const FOLIAGE_UNIFORMS = {
+  uTint0: { value: new THREE.Color('#5fae4a') },
+  uTint1: { value: new THREE.Color('#5fae4a') },
+  uTint2: { value: new THREE.Color('#5fae4a') },
+  uSplit: { value: new THREE.Vector2(1, 1) },
+  uAmt: { value: 0 },
+};
+
+/** 상록수(침엽수) 몫. 봄 꽃·가을 단풍 없이 초록 짙기와 겨울 눈만 바뀐다. */
+export const EVERGREEN_UNIFORMS = {
+  uTint0: { value: new THREE.Color('#4f8f4a') },
+  uTint1: { value: new THREE.Color('#4f8f4a') },
+  uTint2: { value: new THREE.Color('#4f8f4a') },
+  uSplit: { value: new THREE.Vector2(1, 1) },
+  uAmt: { value: 0 },
+};
+
+const foliage = new Map<THREE.Material, THREE.Material>();
+const evergreen = new Map<THREE.Material, THREE.Material>();
+
+/** 활엽수 모형 재질: 복제해 계절 색 셰이더를 붙인다(원본은 다른 모형과 공유하므로 바꾸지 않는다). */
+export function matFoliage(src: THREE.Material): THREE.Material {
+  return seasonal(src, foliage, FOLIAGE_UNIFORMS, 'dotori-foliage');
+}
+
+/** 상록수 모형 재질. */
+export function matEvergreen(src: THREE.Material): THREE.Material {
+  return seasonal(src, evergreen, EVERGREEN_UNIFORMS, 'dotori-evergreen');
+}
+
+/** 계절 색 셰이더를 붙인 복제 재질(원본별 한 번만 만든다). */
+function seasonal(
+  src: THREE.Material,
+  cache: Map<THREE.Material, THREE.Material>,
+  uniforms: typeof FOLIAGE_UNIFORMS,
+  key: string,
+): THREE.Material {
+  let m = cache.get(src);
+  if (m) return m;
+  m = src.clone();
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, uniforms);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vSeasonVar;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+#ifdef USE_INSTANCING
+vSeasonVar = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
+#else
+vSeasonVar = 0.0;
+#endif`,
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+varying float vSeasonVar;
+uniform vec3 uTint0;
+uniform vec3 uTint1;
+uniform vec3 uTint2;
+uniform vec2 uSplit;
+uniform float uAmt;`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+{
+  float gr = diffuseColor.g - max(diffuseColor.r, diffuseColor.b);
+  float leaf = smoothstep(0.015, 0.1, gr);
+  vec3 tint = vSeasonVar < uSplit.x ? uTint0 : (vSeasonVar < uSplit.y ? uTint1 : uTint2);
+  float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+  vec3 seasonal = tint * (0.55 + lum * 1.2);
+  diffuseColor.rgb = mix(diffuseColor.rgb, seasonal, leaf * uAmt);
+}`,
+      );
+  };
+  m.customProgramCacheKey = () => key;
+  cache.set(src, m);
+  return m;
+}

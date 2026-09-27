@@ -5,11 +5,16 @@ import { getT } from '../sim/map';
 import { hash01 } from '../sim/rng';
 import type { World } from '../sim/types';
 import { TILE } from '../sim/types';
+import { SEASON_LOOK, type GroundLook } from './seasonLook';
 
 const TS = 32;
 
-/** 지면 텍스처를 칠한다. 지형이 바뀌면 다시 부른다. */
-export function paintGround(w: World, canvas?: HTMLCanvasElement): HTMLCanvasElement {
+/** 지면 텍스처를 칠한다. 지형이나 계절이 바뀌면 다시 부른다(look 은 계절 색, SPEC 12.4). */
+export function paintGround(
+  w: World,
+  canvas?: HTMLCanvasElement,
+  look: GroundLook = SEASON_LOOK.summer.ground,
+): HTMLCanvasElement {
   const c = canvas ?? document.createElement('canvas');
   c.width = w.W * TS;
   c.height = w.H * TS;
@@ -17,21 +22,20 @@ export function paintGround(w: World, canvas?: HTMLCanvasElement): HTMLCanvasEle
   if (!g) return c;
   const W = w.W;
   const H = w.H;
-  g.fillStyle = '#93c979';
+  g.fillStyle = look.grass;
   g.fillRect(0, 0, c.width, c.height);
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
       const k = hash01(x * 131 + y * 7);
-      g.fillStyle =
-        k < 0.33 ? 'rgba(255,255,210,0.10)' : k < 0.66 ? 'rgba(40,90,30,0.07)' : 'rgba(0,0,0,0)';
+      g.fillStyle = k < 0.33 ? look.mottle[0] : k < 0.66 ? look.mottle[1] : 'rgba(0,0,0,0)';
       g.fillRect(x * TS, y * TS, TS, TS);
       const t = getT(w, x, y);
       if (t === TILE.FOREST) {
-        g.fillStyle = 'rgba(40,80,30,0.18)';
+        g.fillStyle = look.forest;
         g.fillRect(x * TS, y * TS, TS, TS);
       }
-      if (t === TILE.GRASS && hash01(x * 17 + y * 91) < 0.3) {
-        g.strokeStyle = 'rgba(60,120,50,0.35)';
+      if (look.tuft && t === TILE.GRASS && hash01(x * 17 + y * 91) < 0.3) {
+        g.strokeStyle = look.tuft;
         g.lineWidth = 2;
         const cx = x * TS + hash01(x + y * 3) * TS;
         const cy = y * TS + hash01(x * 5 + y) * TS;
@@ -54,6 +58,10 @@ export function paintGround(w: World, canvas?: HTMLCanvasElement): HTMLCanvasEle
       g.fillRect(x * TS, y * TS, TS, TS);
       g.fillStyle = '#946740';
       g.fillRect(x * TS, y * TS + TS * 0.55, TS, TS * 0.25);
+      if (look.farmCover) {
+        g.fillStyle = look.farmCover;
+        g.fillRect(x * TS, y * TS, TS, TS);
+      }
     }
   const circ = (x: number, y: number, r: number, col: string): void => {
     g.fillStyle = col;
@@ -72,7 +80,7 @@ export function paintGround(w: World, canvas?: HTMLCanvasElement): HTMLCanvasEle
     const t = getT(w, x, y);
     return t === TILE.PATH || t === TILE.DOOR;
   };
-  g.fillStyle = '#e6cf9c';
+  g.fillStyle = look.road;
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
       if (!isRoad(x, y)) continue;
@@ -95,7 +103,7 @@ export function paintGround(w: World, canvas?: HTMLCanvasElement): HTMLCanvasEle
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++)
       if (isRoad(x, y) && hash01(x * 7 + y * 29) < 0.5) {
-        g.fillStyle = 'rgba(150,120,70,0.25)';
+        g.fillStyle = look.roadDot;
         g.beginPath();
         g.arc(x * TS + hash01(x + y) * TS, y * TS + hash01(y * 3 + x) * TS, 2.2, 0, 7);
         g.fill();
@@ -126,17 +134,18 @@ export function paintGround(w: World, canvas?: HTMLCanvasElement): HTMLCanvasEle
     g.lineTo(x * TS + TS / 2, (TERRACE.y + 1) * TS - 4);
     g.stroke();
   }
-  // 들꽃
-  const cols = ['#f7a1c4', '#ffe08a', '#ffffff', '#c9b6ff'];
-  for (const p of w.L.grass)
-    if (hash01(p.x * 3 + p.y * 57) < 0.08)
-      for (let i = 0; i < 3; i++)
-        circ(
-          p.x * TS + hash01(p.x + i) * TS,
-          p.y * TS + hash01(p.y + i * 7) * TS,
-          3,
-          cols[(p.x + i) % 4] ?? '#fff',
-        );
+  // 들꽃(가을에는 낙엽)
+  const cols = look.flowers;
+  if (cols.length)
+    for (const p of w.L.grass)
+      if (hash01(p.x * 3 + p.y * 57) < look.flowerChance)
+        for (let i = 0; i < 3; i++)
+          circ(
+            p.x * TS + hash01(p.x + i) * TS,
+            p.y * TS + hash01(p.y + i * 7) * TS,
+            3,
+            cols[(p.x + i) % cols.length] ?? '#fff',
+          );
   // 꽃밭 흙
   for (const d of w.decor)
     if (d.kind === 'flowerbed') {

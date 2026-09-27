@@ -9,6 +9,7 @@ import { J, NJ, NV, dayOf, fmtClock, fmtT, hourOf, phaseName } from '../sim/text
 import { MEMORY } from '../data/story';
 import { couplesApart } from '../sim/family';
 import { dayOfYear, daysAgo } from '../sim/story';
+import { isSnow, seasonDay, seasonOf } from '../sim/season';
 import type { FeedEntry, FoodLevel, Villager, World } from '../sim/types';
 import { aff, vil } from '../sim/world';
 
@@ -269,8 +270,10 @@ export function updateRumors(w: World): void {
 /** 시계. */
 export function updateClock(w: World): void {
   const h = hourOf(w.t);
+  const s = seasonOf(w.t);
+  const sky = isSnow(w) ? '🌨️' : w.weather.rain ? '🌧️' : h >= 6 && h < 19 ? '☀️' : '🌙';
   $('clock').innerHTML =
-    `${dayOf(w.t)}일째 ${fmtClock(w.t)} <small>${phaseName(h)} ${w.weather.rain ? '🌧️' : h >= 6 && h < 19 ? '☀️' : '🌙'}</small>`;
+    `${dayOf(w.t)}일째 ${fmtClock(w.t)} <small>${s.e}${s.label} ${seasonDay(w.t)}일 · ${phaseName(h)} ${sky}</small>`;
 }
 
 /** 먹거리 여유 단계 이름 (SPEC 10.2). */
