@@ -5,6 +5,17 @@ import { JOBS } from '../data/people';
 import { convById } from '../sim/social';
 import type { Villager, World } from '../sim/types';
 import { LOD, PRODUCE } from '../data/balance';
+import {
+  LOOK,
+  STRIDE,
+  lookYaw,
+  nodPitch,
+  strikeBetween,
+  strikePhase,
+  strikePose,
+  strideTs,
+  type StrikeKind,
+} from '../data/motion';
 import { CHAR_NAMES, model, place, sizeOf, type ModelName } from './assets';
 import { matLine, shareShadowDepth } from './materials';
 import type { Overlay } from './overlay';
@@ -56,6 +67,23 @@ export interface CharView {
   lodTick: number;
   /** LOD: 지금 그림자를 드리우는가. */
   shadow: boolean;
+  /** 몸짓 층(SPEC 13)이 덧입히는 뼈와 그 쉬는 자세(클립이 안 움직이는 뼈를 되돌린다). */
+  rig: Rig;
+  /** 화면 속도(타일/초, 고르게)와 지난 프레임 위치. */
+  spd: number;
+  lastX: number;
+  lastZ: number;
+  /** 지난 프레임의 동작 시간(치는 순간 찾기). */
+  lastT: number;
+}
+
+/** 몸짓 층의 뼈. 없는 뼈는 null(모형이 달라도 깨지지 않게). */
+interface Rig {
+  head: THREE.Object3D | null;
+  torso: THREE.Object3D | null;
+  armR: THREE.Object3D | null;
+  armL: THREE.Object3D | null;
+  rest: Map<THREE.Object3D, THREE.Quaternion>;
 }
 
 /** 주민 한 명의 3D 캐릭터를 만든다. */
@@ -72,7 +100,16 @@ export function makeChar(v: Villager, parent: THREE.Object3D): CharView {
   for (const clip of src.animations) actions.set(clip.name, mixer.clipAction(clip));
   const head = mdl.getObjectByName('head');
   const armR = mdl.getObjectByName('arm-right');
+  const armL = mdl.getObjectByName('arm-left');
   const torso = mdl.getObjectByName('torso');
+  const rig: Rig = {
+    head: head ?? null,
+    torso: torso ?? null,
+    armR: armR ?? null,
+    armL: armL ?? null,
+    rest: new Map(),
+  };
+  for (const b of [head, torso, armR, armL]) if (b) rig.rest.set(b, b.quaternion.clone());
   const hat = makeHat(v.job);
   hat.position.set(0, 0.5, 0);
   (head ?? root).add(hat);
@@ -122,6 +159,11 @@ export function makeChar(v: Villager, parent: THREE.Object3D): CharView {
     animHold: 0,
     lodTick: v.id,
     shadow: true,
+    rig,
+    spd: 0,
+    lastX: v.x,
+    lastZ: v.y,
+    lastT: 0,
   };
 }
 
@@ -183,6 +225,41 @@ export interface AnimCtx {
   overlay: Overlay;
   /** 먼 주민(LOD): 입자를 내지 않고 동작을 띄엄띄엄 갱신한다. */
   lite: boolean;
+  /** 실제 프레임 시간(초)과 동작 시간 배율(dtA ÷ dt, 멈춤이면 0). */
+  dt: number;
+  rate: number;
+}
+
+/** 이번 프레임에 덧입힐 각도(SPEC 13.1). */
+interface Layer {
+  armR: number;
+  armL: number;
+  torso: number;
+  yaw: number;
+  pitch: number;
+}
+
+const AX = new THREE.Vector3(1, 0, 0);
+const AY = new THREE.Vector3(0, 1, 0);
+const tmpQ = new THREE.Quaternion();
+
+/** 믹서 전에: 몸짓 층 뼈를 쉬는 자세로 되돌린다(클립이 움직이지 않는 뼈에 각도가 쌓이지 않게). */
+function resetRig(r: Rig): void {
+  for (const [b, q] of r.rest) b.quaternion.copy(q);
+}
+
+/** 믹서 뒤에: 부모 축 기준으로 각도를 덧입힌다. */
+function applyLayer(r: Rig, L: Layer): void {
+  const turn = (b: THREE.Object3D | null, axis: THREE.Vector3, a: number): void => {
+    if (b && a) b.quaternion.premultiply(tmpQ.setFromAxisAngle(axis, a));
+  };
+  turn(r.armR, AX, L.armR);
+  turn(r.armL, AX, L.armL);
+  turn(r.torso, AX, L.torso);
+  const yaw = Math.max(-LOOK.headYawLimit, Math.min(LOOK.headYawLimit, L.yaw));
+  const pitch = Math.max(-LOOK.headPitchLimit, Math.min(LOOK.headPitchLimit, L.pitch));
+  turn(r.head, AY, yaw);
+  turn(r.head, AX, pitch);
 }
 
 /** 시뮬레이션 상태를 동작·도구·방향·연출로 옮긴다. */
@@ -192,6 +269,17 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
   const a = v.act;
   const T = animT + v.id * 0.73;
   const moving = v.x !== v.px || v.y !== v.py;
+  // 화면 속도(SPEC 13.2): 뿌리 위치가 실제 1 초에 움직인 타일, 0.25 초로 고르게.
+  if (ctx.dt > 0) {
+    const px = c.root.position.x;
+    const pz = c.root.position.z;
+    const inst = Math.hypot(px - c.lastX, pz - c.lastZ) / ctx.dt;
+    c.lastX = px;
+    c.lastZ = pz;
+    const k = Math.min(1, ctx.dt / STRIDE.smooth);
+    c.spd += (Math.min(inst, 40) - c.spd) * k;
+  }
+  let strike: StrikeKind | null = null;
   let clip = 'idle';
   let ts = 1;
   let once = false;
@@ -228,9 +316,8 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
     }
   } else if (moving) {
     const run = a && (a.type === 'flee' || a.target != null);
-    const heavy = v.pack != null && (v.pack.kind === 'bag' || v.pack.n >= 6);
     clip = run ? 'sprint' : 'walk';
-    ts = run ? 1.1 : heavy ? 1.1 : 1.4;
+    ts = strideTs(!!run, c.spd, ctx.rate || 1);
   } else if (a && a.phase === 'do') {
     if (a.face) face = a.face;
     switch (a.type) {
@@ -242,18 +329,18 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
             clip = 'pick-up';
             ts = a.where === 'harvest' ? 0.9 : 0.7;
           } else {
-            clip = 'attack-melee-right';
-            ts = 0.6;
+            clip = 'idle';
             tool = 'hoe';
+            strike = 'hoe';
           }
         } else if (pl === 'forest') {
-          clip = 'attack-melee-right';
-          ts = 0.8;
+          clip = 'idle';
           tool = 'axe';
+          strike = 'axe';
         } else if (pl === 'workshop') {
-          clip = 'interact-right';
-          ts = 1.6;
+          clip = 'idle';
           tool = 'hammer';
+          strike = 'hammer';
         } else if (pl === 'shore') {
           clip = 'holding-right';
           tool = 'rod';
@@ -262,9 +349,9 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
         break;
       }
       case 'build':
-        clip = (T * 0.7) % 6 < 0.8 ? 'crouch' : 'interact-right';
-        ts = 1.7;
+        clip = (T * 0.7) % 6 < 0.8 ? 'crouch' : 'idle';
         tool = 'hammer';
+        strike = 'hammer';
         break;
       case 'fun':
         if (a.where === 'shore') {
@@ -397,10 +484,18 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
               : pl === 'build'
                 ? 0.55
                 : 0;
-      if (per) {
+      // 치는 일은 치는 순간에(SPEC 13.3), 줍는 일(거두기·심기)은 전처럼 일정 간격으로 흙을 튀긴다.
+      let fire = false;
+      if (strike) fire = strikeBetween(strike, v.id, c.lastT, animT);
+      else if (per) {
         c.wt += dtA;
         if (c.wt > per) {
           c.wt -= per;
+          fire = true;
+        }
+      }
+      if (fire) {
+        {
           const fx = v.x + Math.sin(c.yaw) * 0.45;
           const fz = v.y + Math.cos(c.yaw) * 0.45;
           if (pl === 'build') {
@@ -420,11 +515,52 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
     if (a && a.phase === 'do' && a.type === 'hunt' && R() < dtA * 1.2)
       overlay.burst('dirt', v.x + Math.sin(c.yaw) * 0.35, 0.1, v.y + Math.cos(c.yaw) * 0.35, 3);
   }
+  c.lastT = animT;
   c.animHold += dtA;
   if (!lite || ++c.lodTick % LOD.farEvery === 0) {
+    resetRig(c.rig);
     c.mixer.update(c.animHold);
     c.animHold = 0;
+    // 몸짓 층(SPEC 13): 가까운 주민만. 먼 주민은 클립 자세 그대로다.
+    if (!lite) applyLayer(c.rig, layerFor(w, c, clip, strike, conv, moving, cart, animT));
   }
+}
+
+/** 이번 프레임에 덧입힐 각도를 정한다(SPEC 13.2~13.4). */
+function layerFor(
+  w: World,
+  c: CharView,
+  clip: string,
+  strike: StrikeKind | null,
+  conv: ReturnType<typeof convById>,
+  moving: boolean,
+  cart: boolean,
+  t: number,
+): Layer {
+  const v = c.v;
+  const L: Layer = { armR: 0, armL: 0, torso: 0, yaw: 0, pitch: 0 };
+  if (strike) {
+    const p = strikePose(strike, strikePhase(strike, v.id, t));
+    L.armR = p.arm;
+    L.armL = p.left;
+    L.torso = p.torso;
+    return L;
+  }
+  if (moving) {
+    const p = v.pack;
+    if (cart) L.armR = L.armL = STRIDE.cartArms;
+    else if (p && (p.kind === 'bag' || p.n >= 6)) L.torso = STRIDE.heavyLean;
+    return L;
+  }
+  // 서 있거나 앉아 있으면 숨 쉰다
+  if (clip === 'idle' || clip === 'sit' || clip === 'holding-right')
+    L.torso = LOOK.breath * Math.sin((t / LOOK.breathPeriod) * Math.PI * 2 + v.id);
+  if (conv) {
+    if (conv.speaker === v.id) L.pitch = LOOK.talkBob * Math.sin(t * LOOK.talkHz * Math.PI * 2);
+    else if (!conv.argue) L.pitch = nodPitch(v.id, t);
+  } else if (clip === 'idle' || clip === 'sit') L.yaw = lookYaw(v.id, t);
+  void w;
+  return L;
 }
 
 /** 화면 밖 주민: 그리지 않고, 동작 시간만 모아 둔다(돌아오면 한 번에 넘긴다). */

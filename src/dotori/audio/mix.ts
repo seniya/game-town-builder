@@ -1,4 +1,5 @@
 // 환경음 크기 계산 (SPEC 12.3). World 와 카메라(듣는 자리)만 읽는 순수 함수라 node 에서 시험한다.
+import { strikeTimes, type StrikeKind } from '../data/motion';
 import { JOBS } from '../data/people';
 import { PLAZA } from '../data/villageMap';
 import { SEASON_SOUND, SOUND } from '../data/sound';
@@ -115,4 +116,28 @@ export function mixAt(w: World, l: Listener): AmbienceMix {
     festive,
     points: [...top(hammers, SOUND.hammerMax), ...top(axes, SOUND.axeMax)],
   };
+}
+
+/**
+ * 망치·도끼 소리 예약(SPEC 13.3): 그리기와 같은 박자 함수로 치는 순간을 찾는다.
+ * animNow 는 지금 동작 시간, rate 는 동작 시간 배율(실제 1 초에 흐르는 동작 초), ahead 는 미리 예약할 실제 초.
+ * lastN 은 이미 예약한 마지막 치는 번호(없으면 null). 돌려주는 at 은 지금부터 몇 초 뒤인지다.
+ */
+export function strikeSchedule(
+  kind: StrikeKind,
+  id: number,
+  animNow: number,
+  rate: number,
+  ahead: number,
+  lastN: number | null,
+): { at: number[]; lastN: number | null } {
+  if (rate <= 0) return { at: [], lastN };
+  const at: number[] = [];
+  let last = lastN;
+  for (const s of strikeTimes(kind, id, animNow, animNow + ahead * rate)) {
+    if (last != null && s.n <= last) continue;
+    at.push((s.t - animNow) / rate);
+    last = s.n;
+  }
+  return { at, lastN: last };
 }

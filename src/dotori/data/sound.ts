@@ -23,11 +23,9 @@ export const SOUND = {
   rain: 0.8,
   /** 주점 웅성임이 가장 커지는 안의 사람 수. */
   tavernFull: 6,
-  /** 점 소리: 가까운 몇 명까지, 치는 간격(초). */
+  /** 점 소리: 가까운 몇 명까지. 치는 박자는 data/motion.ts 의 RHYTHM(SPEC 13.3). */
   hammerMax: 4,
-  hammerEvery: 0.55,
   axeMax: 3,
-  axeEvery: 0.8,
   /** 완공 종의 최소 크기. */
   doneMin: 0.3,
   /** 새소리 시각 [시작, 끝) 과 풀벌레 시각(끝이 시작보다 작으면 자정을 넘는다). */

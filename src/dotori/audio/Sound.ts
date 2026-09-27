@@ -6,7 +6,7 @@ import { seasonOf } from '../sim/season';
 import { hourOf } from '../sim/text';
 import type { World } from '../sim/types';
 import { composeSong, moodAt, type Song } from './compose';
-import { mixAt, type Listener } from './mix';
+import { mixAt, strikeSchedule, type Listener } from './mix';
 import {
   chirp,
   chop,
@@ -199,7 +199,7 @@ export class SoundSystem {
   }
 
   /** 프레임마다: 배경음악 예약, 환경음 크기, 점 소리. speed 0 이면 망치·도끼는 멈춘다. */
-  update(w: World, l: Listener, speed: number): void {
+  update(w: World, l: Listener, speed: number, clock: { t: number; rate: number }): void {
     const ctx = this.ctx;
     if (!ctx || !this.on || ctx.state !== 'running' || !this.noise) return;
     const now = ctx.currentTime;
@@ -232,23 +232,26 @@ export class SoundSystem {
       this.nextCricket = now + (0.35 + Math.random() * 0.5) / Math.max(0.3, mix.crickets);
       cricket(ctx, now + 0.05, 0.025 * mix.crickets, panned(ctx, Math.random() * 1.6 - 0.8, amb));
     }
-    // 망치·도끼: 사람마다 박자를 어긋나게.
+    // 망치·도끼: 그리기와 같은 박자 함수로, 치는 순간에 맞춰 예약한다(SPEC 13.3).
     if (speed > 0) {
       const seen = new Set<number>();
       for (const p of mix.points) {
         seen.add(p.id);
-        const every =
-          (p.kind === 'hammer' ? SOUND.hammerEvery : SOUND.axeEvery) *
-          (0.9 + ((p.id * 37) % 20) / 100);
-        let t = this.hits.get(p.id) ?? now + Math.random() * every;
-        if (t < now) t = now + 0.02;
-        while (t < now + AHEAD) {
+        const plan = strikeSchedule(
+          p.kind,
+          p.id,
+          clock.t,
+          clock.rate,
+          AHEAD,
+          this.hits.get(p.id) ?? null,
+        );
+        for (const dt of plan.at) {
           const out = panned(ctx, p.pan, amb);
+          const t = now + Math.max(0.01, dt);
           if (p.kind === 'hammer') knock(ctx, this.noise, t, 0.22 * p.gain, out);
           else chop(ctx, this.noise, t, 0.28 * p.gain, out);
-          t += every;
         }
-        this.hits.set(p.id, t);
+        if (plan.lastN != null) this.hits.set(p.id, plan.lastN);
       }
       for (const id of [...this.hits.keys()]) if (!seen.has(id)) this.hits.delete(id);
     }

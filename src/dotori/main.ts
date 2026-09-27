@@ -11,12 +11,15 @@ import { Renderer3D, type ViewState } from './render/Renderer3D';
 import { checkPlace } from './sim/build';
 import { place, plantGhost, plantLove, plantParty, remove } from './sim/commands';
 import { newWorld } from './sim/create';
+import { mk } from './sim/decide';
+import { getT, recomputeLocations, setT } from './sim/map';
+import { startConv } from './sim/social';
 import { pathStats } from './sim/path';
 import { deserialize, serialize } from './sim/save';
 import { computeStats } from './sim/stats';
 import { run, step } from './sim/step';
 import { NJ } from './sim/text';
-import type { World } from './sim/types';
+import { TILE, type World } from './sim/types';
 import { log } from './sim/world';
 import {
   appendFeed,
@@ -62,6 +65,8 @@ function readSave(): string | null {
 
 /** 저장한다. 실패해도 게임은 계속된다(SPEC 6). */
 function writeSave(): void {
+  // 동작 보기판은 그림 확인용이라 저장하지 않는다(진짜 마을 저장을 덮지 않게)
+  if (lab) return;
   try {
     window.localStorage.setItem(SAVE_KEY, serialize(world));
   } catch {
@@ -96,18 +101,144 @@ function grownScene(w: World): void {
   run(w, 1440 * 2 + 660);
 }
 
+/** 동작 보기판(SPEC 13, `?scene=motion`)에서 걸어 다니는 사람: 좌우로 오간다. */
+interface LabWalker {
+  v: World['vs'][number];
+  x0: number;
+  x1: number;
+  spd: number;
+  dir: number;
+}
+
+/** 동작 보기판 상태. 시뮬레이션은 멈추고 동작만 흐른다. */
+let lab: { walkers: LabWalker[]; talk: [number, number] | null; t: number } | null = null;
+
+/**
+ * 관찰용 장면 'motion'(SPEC 13): 남쪽 큰길(42 번 줄)에 주민을 한 줄로 세워 몸짓을 나란히 보인다.
+ * 시뮬레이션 규칙은 쓰지 않고 행동만 정해 둔다(그림 확인용). 이름표가 동작 이름이다.
+ */
+function motionScene(w: World): void {
+  w.t = 10 * 60;
+  for (const v of w.vs) v.inside = v.home;
+  const row = 42;
+  const slots: {
+    name: string;
+    job: World['vs'][number]['job'];
+    act?: Parameters<typeof mk>[1];
+    where?: 'harvest' | null;
+    walk?: number;
+    pack?: 'lumber' | 'wheat' | 'bag';
+  }[] = [
+    { name: '망치질', job: '목수', act: 'build' },
+    { name: '공방 망치', job: '목수', act: 'work' },
+    { name: '도끼질', job: '나무꾼', act: 'work' },
+    { name: '괭이질', job: '농부', act: 'work' },
+    { name: '거두기', job: '농부', act: 'work', where: 'harvest' },
+    { name: '둘러보기', job: '한량', act: 'idle' },
+    { name: '말하기', job: '한량' },
+    { name: '듣기', job: '한량' },
+    { name: '걷기', job: '한량', walk: 2 },
+    { name: '짐 지고', job: '목수', walk: 1.6, pack: 'lumber' },
+    { name: '수레', job: '농부', walk: 1.6, pack: 'wheat' },
+    { name: '달리기', job: '한량', walk: 3.6 },
+  ];
+  lab = { walkers: [], talk: null, t: 0 };
+  // 줄 둘레의 나무를 치워 가리지 않게 한다
+  for (let y = row - 2; y <= row + 5; y++)
+    for (let x = 27; x < 64; x++) if (getT(w, x, y) === TILE.FOREST) setT(w, x, y, TILE.GRASS);
+  recomputeLocations(w);
+  w.staticVersion++;
+  slots.forEach((sl, i) => {
+    const v = w.vs[i];
+    if (!v) return;
+    // 대화하는 두 사람(6·7 번)은 마주 보게 가까이 선다
+    const x = 30 + i * 2.6 + (i === 7 ? -1.4 : 0);
+    v.name = sl.name;
+    v.job = sl.job;
+    v.inside = null;
+    v.talk = null;
+    v.x = v.px = x;
+    v.y = v.py = row + 0.5;
+    v.dir = { x: 0, y: 1 };
+    v.pack = sl.pack ? { kind: sl.pack, n: 6, site: null } : null;
+    if (sl.walk) {
+      v.act = mk(w, sl.walk > 3 ? 'flee' : 'wander', { phase: 'go' });
+      lab?.walkers.push({ v, x0: x - 0.9, x1: x + 0.9, spd: sl.walk, dir: 1 });
+    } else if (sl.act) {
+      v.act = mk(w, sl.act, { phase: 'do', until: Number.MAX_SAFE_INTEGER, face: { x: 0, y: 1 } });
+      if (sl.where) v.act.where = sl.where;
+    } else v.act = null;
+  });
+  const a = w.vs[6];
+  const b = w.vs[7];
+  if (a && b) {
+    a.dir = { x: 1, y: 0 };
+    b.dir = { x: -1, y: 0 };
+    startConv(w, a, b, 'chat');
+    const c = w.convs.find((c) => c.a === a.id);
+    if (c) {
+      c.argue = false;
+      c.until = Number.MAX_SAFE_INTEGER;
+    }
+    lab.talk = [a.id, b.id];
+  }
+}
+
+/** 동작 보기판 한 프레임: 걷는 사람을 옮기고, 대화의 말하는 쪽을 2 초마다 바꾼다. */
+function labFrame(w: World, dt: number): void {
+  if (!lab) return;
+  lab.t += dt;
+  for (const k of lab.walkers) {
+    const v = k.v;
+    let x = v.x + k.dir * k.spd * dt;
+    if (x > k.x1 || x < k.x0) {
+      k.dir = -k.dir;
+      x = Math.min(k.x1, Math.max(k.x0, x));
+    }
+    // 보간 비율이 0 이라 화면 위치는 px 다. x 를 방향 쪽으로 조금 앞에 두어 '걷는 중' 으로 보이게 한다.
+    v.px = x;
+    v.x = x + k.dir * 0.01;
+    v.py = v.y;
+  }
+  if (lab.talk) {
+    const c = w.convs.find((c) => c.a === lab?.talk?.[0]);
+    if (c) c.speaker = Math.floor(lab.t / 2) % 2 === 0 ? lab.talk[0] : lab.talk[1];
+  }
+}
+
+/** 동작 보기판을 켜고 끈다(M 키, 아티팩트처럼 주소 옵션을 못 쓰는 곳에서도 볼 수 있게). */
+function toggleMotionLab(): void {
+  if (lab) {
+    const saved = readSave();
+    const back = saved ? deserialize(saved) : null;
+    lab = null;
+    attach(back ?? freshWorld(Number(params.get('seed')) || 20260926));
+    say('🏡 마을로 돌아왔어요');
+    return;
+  }
+  writeSave();
+  const w = newWorld(20260926);
+  motionScene(w);
+  attach(w);
+  r3.closeUp(44, 43, 17);
+  say('🎬 동작 보기판이에요. 다시 M 을 누르면 마을로 돌아가요');
+}
+
 /** 새 마을을 만든다. */
 function freshWorld(seed: number, pick?: MapId): World {
+  lab = null;
   const n = Number(params.get('residents')) || undefined;
   // 지도(SPEC 2): 고른 것, 아니면 `?map=large` 이거나 지금 큰 지도에서 "새 마을" 을 누르면 큰 지도로 다시 시작한다.
   const cur = world as World | undefined;
   const map: MapId =
     pick ??
-    (params.get('map') === 'large' || (cur && cur.W === LAYOUTS.large.W && cur.H === LAYOUTS.large.H)
+    (params.get('map') === 'large' ||
+    (cur && cur.W === LAYOUTS.large.W && cur.H === LAYOUTS.large.H)
       ? 'large'
       : 'village');
   const w = newWorld(seed, n ? { residents: n, map } : { map });
   if (params.get('scene') === 'grown') grownScene(w);
+  if (params.get('scene') === 'motion') motionScene(w);
   return w;
 }
 
@@ -362,6 +493,11 @@ function bindControls(): void {
   });
   $('resetLarge').addEventListener('click', () => restart('large'));
   window.addEventListener('keydown', (e) => {
+    // M: 동작 보기판(SPEC 13.5)을 켜고 끈다. 끄면 저장된 마을로 돌아온다(보기판은 저장하지 않는다).
+    if (e.code === 'KeyM' && !(e.target instanceof HTMLInputElement)) {
+      toggleMotionLab();
+      return;
+    }
     if (e.code === 'Space' && !(e.target instanceof HTMLButtonElement)) {
       e.preventDefault();
       if (speed) {
@@ -438,7 +574,7 @@ function loop(): void {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     const s0 = performance.now();
-    if (speed > 0) {
+    if (speed > 0 && !lab) {
       acc += dt * speed * TIME.minPerSec;
       let n = 0;
       while (acc >= 1 && n < TIME.maxTicksPerFrame) {
@@ -488,11 +624,16 @@ function loop(): void {
       } else showPaper(world, ev.no);
     }
     world.out.length = 0;
-    const dtA = speed > 0 ? dt * (speed >= 8 ? 1.6 : speed >= 3 ? 1.25 : 1) : 0;
+    let dtA = speed > 0 ? dt * (speed >= 8 ? 1.6 : speed >= 3 ? 1.25 : 1) : 0;
+    // 동작 보기판: 시뮬레이션은 멈추고 동작만 1× 로 흐른다
+    if (lab) {
+      labFrame(world, dt);
+      dtA = dt;
+    }
     const d0 = performance.now();
     r3.frame(world, dt, dtA, Math.min(1, acc), now);
     drawMs += performance.now() - d0;
-    sound.update(world, r3.listener(), speed);
+    sound.update(world, r3.listener(), speed, r3.animClock());
     if (now - lastUI > 250) {
       lastUI = now;
       updateClock(world);

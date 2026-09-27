@@ -80,6 +80,7 @@ export class Renderer3D {
   /** 주민 LOD 켜기(비교 측정용으로 끌 수 있다, `?lod=0`). */
   lodOn = true;
   private shadowHalf = 0;
+  private animRate = 0;
   private charGroup = new THREE.Group();
   private selRing!: THREE.Mesh;
   private ghost!: THREE.Group;
@@ -460,6 +461,11 @@ export class Renderer3D {
     cam.updateProjectionMatrix();
   }
 
+  /** 동작 시간(초)과 배율: 소리가 망치·도끼를 치는 순간에 맞춰 예약한다(SPEC 13.3). */
+  animClock(): { t: number; rate: number } {
+    return { t: this.animT, rate: this.animRate };
+  }
+
   /** 지난 프레임 그리기 호출 수(그림자 패스 포함, 계측 표시용). */
   drawCalls(): number {
     return this.renderer.info.render.calls;
@@ -474,13 +480,21 @@ export class Renderer3D {
   /** 한 프레임: 정적 장면 확인 → 주민 → 하늘 → 3D → 겹쳐 그리기. alpha 는 틱 사이 보간(0~1). */
   frame(w: World, dt: number, dtA: number, alpha: number, now: number): void {
     this.animT += dtA;
+    this.animRate = dt > 0 ? dtA / dt : 0;
     if (this.village.version !== w.staticVersion) {
       this.village.rebuild(w);
       shareShadowDepth(this.village.group);
     }
     this.syncChars(w);
     const h = hourOf(w.t) + alpha / 60;
-    const ctx = { animT: this.animT, dtA, overlay: this.overlay, lite: false };
+    const ctx = {
+      animT: this.animT,
+      dtA,
+      overlay: this.overlay,
+      lite: false,
+      dt,
+      rate: dt > 0 ? dtA / dt : 0,
+    };
     // 주민 LOD(SPEC 7): 지난 프레임 카메라로 화면 안을 가른다. 화면 밖은 그리지 않고 동작을 멈추며,
     // 먼 주민은 그림자·입자를 끄고 동작을 띄엄띄엄 갱신한다. 시뮬레이션에는 영향이 없다.
     const cam = this.camera;
@@ -560,7 +574,6 @@ export class Renderer3D {
     }
     this.renderer.render(this.scene, this.camera);
     this.drawOverlay(w, dtA, h, now, sel);
-    void dt;
   }
 
   /** 주민의 보간 위치(집 안이면 문 앞). */
