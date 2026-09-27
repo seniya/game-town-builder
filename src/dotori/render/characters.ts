@@ -5,9 +5,13 @@ import { JOBS } from '../data/people';
 import { convById } from '../sim/social';
 import type { Villager, World } from '../sim/types';
 import { LOD, PRODUCE } from '../data/balance';
+import { EXPRESS, faceTarget, type FaceVals, type Mood } from '../data/face';
+import { happinessOf } from '../sim/stats';
 import {
   LOOK,
+  REST,
   STRIDE,
+  smooth,
   lookYaw,
   nodPitch,
   strikeBetween,
@@ -16,7 +20,8 @@ import {
   strideTs,
   type StrikeKind,
 } from '../data/motion';
-import { CHAR_NAMES, model, place, sizeOf, type ModelName } from './assets';
+import { CHAR_NAMES, model, place, type ModelName } from './assets';
+import { faceMeshOf, prepareFace, setFace } from './face';
 import { matLine, shareShadowDepth } from './materials';
 import type { Overlay } from './overlay';
 import {
@@ -75,6 +80,13 @@ export interface CharView {
   lastZ: number;
   /** 지난 프레임의 동작 시간(치는 순간 찾기). */
   lastT: number;
+  /** 표정 모프를 가진 머리 메시(없으면 표정 없음)와 지금 표정 값(SPEC 14.2). */
+  face: THREE.Mesh | null;
+  fv: FaceVals;
+  /** 낮잠 눕기 정도(0 서 있음 ~ 1 누움)와 누웠을 때 올릴 높이·당길 거리(타일, SPEC 14.4). */
+  lie: number;
+  lieLift: number;
+  lieShift: number;
 }
 
 /** 몸짓 층의 뼈. 없는 뼈는 null(모형이 달라도 깨지지 않게). */
@@ -89,8 +101,10 @@ interface Rig {
 /** 주민 한 명의 3D 캐릭터를 만든다. */
 export function makeChar(v: Villager, parent: THREE.Object3D): CharView {
   const src = model(`c:${CHAR_NAMES[v.look.model % CHAR_NAMES.length] ?? 'female-a'}` as ModelName);
+  prepareFace(src.scene);
   const mdl = SkeletonUtils.clone(src.scene);
-  const k = CHAR_H / sizeOf(src.scene).y;
+  const box = new THREE.Box3().setFromObject(src.scene);
+  const k = CHAR_H / (box.max.y - box.min.y);
   const root = new THREE.Group();
   mdl.scale.setScalar(k);
   root.add(mdl);
@@ -164,6 +178,12 @@ export function makeChar(v: Villager, parent: THREE.Object3D): CharView {
     lastX: v.x,
     lastZ: v.y,
     lastT: 0,
+    face: faceMeshOf(mdl),
+    fv: { blink: 0, happy: 0, open: 0, frown: 0 },
+    lie: 0,
+    // 누우면 모형의 z 가 높이가 된다: 가장 뒤(머리 뒤)가 땅에 닿게 올리고, 몸 가운데가 제자리에 오게 당긴다.
+    lieLift: -box.min.z * k,
+    lieShift: CHAR_H * 0.45,
   };
 }
 
@@ -234,6 +254,9 @@ export interface AnimCtx {
 interface Layer {
   armR: number;
   armL: number;
+  /** 팔을 몸 쪽으로 모으는 각도(앞축, SPEC 14.3). */
+  armInR: number;
+  armInL: number;
   torso: number;
   yaw: number;
   pitch: number;
@@ -241,6 +264,9 @@ interface Layer {
 
 const AX = new THREE.Vector3(1, 0, 0);
 const AY = new THREE.Vector3(0, 1, 0);
+const AZ = new THREE.Vector3(0, 0, 1);
+/** 오른팔을 몸 쪽으로 모으는 앞축 회전의 부호(왼팔은 반대). */
+const IN_SIGN = 1;
 const tmpQ = new THREE.Quaternion();
 
 /** 믹서 전에: 몸짓 층 뼈를 쉬는 자세로 되돌린다(클립이 움직이지 않는 뼈에 각도가 쌓이지 않게). */
@@ -253,6 +279,8 @@ function applyLayer(r: Rig, L: Layer): void {
   const turn = (b: THREE.Object3D | null, axis: THREE.Vector3, a: number): void => {
     if (b && a) b.quaternion.premultiply(tmpQ.setFromAxisAngle(axis, a));
   };
+  turn(r.armR, AZ, IN_SIGN * L.armInR);
+  turn(r.armL, AZ, -IN_SIGN * L.armInL);
   turn(r.armR, AX, L.armR);
   turn(r.armL, AX, L.armL);
   turn(r.torso, AX, L.torso);
@@ -383,8 +411,8 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
         break;
       }
       case 'nap':
-        clip = 'die';
-        once = true;
+        // 낮잠은 서 있는 동작 위에서 모형을 눕힌다(SPEC 14.4, `die` 클립을 쓰지 않는다).
+        clip = 'idle';
         break;
       case 'hunt':
         clip = 'pick-up';
@@ -467,8 +495,17 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
       R() < dtA * 1.3
     )
       overlay.burst('note', v.x, hy, v.y, 1);
-    if (a && a.phase === 'do' && a.type === 'nap' && R() < dtA * 0.9)
-      overlay.burst('z', v.x, 0.5, v.y, 1);
+    if (a && a.phase === 'do' && a.type === 'nap' && R() < dtA * 0.9) {
+      // 누운 얼굴 위에서 오른다(머리는 몸 가운데에서 뒤쪽으로 반 키쯤)
+      const hd = (CHAR_H * 0.75 - c.lieShift) * c.lie;
+      overlay.burst(
+        'z',
+        v.x - Math.sin(c.yaw) * hd,
+        0.5 - 0.2 * c.lie,
+        v.y - Math.cos(c.yaw) * hd,
+        1,
+      );
+    }
     if (moving && a && (a.type === 'flee' || a.target != null) && R() < dtA * 7)
       overlay.burst('dust', v.x, 0.05, v.y, 1);
     if (a && a.type === 'flee' && R() < dtA * 3) overlay.burst('sweat', v.x, hy, v.y, 1);
@@ -516,14 +553,52 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
       overlay.burst('dirt', v.x + Math.sin(c.yaw) * 0.35, 0.1, v.y + Math.cos(c.yaw) * 0.35, 3);
   }
   c.lastT = animT;
+  // 낮잠 눕기(SPEC 14.4): 모형 전체를 옆축으로 눕힌다. 먼 주민도 한다(변환 하나라 싸다).
+  const napping = !!a && a.phase === 'do' && a.type === 'nap' && !moving;
+  if (dtA > 0) c.lie = Math.min(1, Math.max(0, c.lie + (napping ? 1 : -1) * (dtA / REST.lieTime)));
+  const e = smooth(c.lie);
+  c.model.rotation.x = (-Math.PI / 2) * e;
+  c.model.position.set(0, c.lieLift * e, c.lieShift * e);
   c.animHold += dtA;
   if (!lite || ++c.lodTick % LOD.farEvery === 0) {
     resetRig(c.rig);
     c.mixer.update(c.animHold);
     c.animHold = 0;
-    // 몸짓 층(SPEC 13): 가까운 주민만. 먼 주민은 클립 자세 그대로다.
+    // 몸짓 층(SPEC 13·14): 가까운 주민은 모두, 먼 주민은 일 박자의 팔·몸통만(SPEC 14.5).
     if (!lite) applyLayer(c.rig, layerFor(w, c, clip, strike, conv, moving, cart, animT));
+    else if (strike) applyLayer(c.rig, strikeLayer(strike, v.id, animT));
   }
+  // 표정(SPEC 14.2): 가까운 주민만.
+  if (c.face && !lite && dtA > 0) {
+    const f = faceTarget(moodOf(v, conv, w.t), !!conv && conv.speaker === v.id, v.id, animT);
+    const k = Math.min(1, dtA / EXPRESS.follow);
+    c.fv.blink = f.blink;
+    c.fv.happy += (f.happy - c.fv.happy) * k;
+    c.fv.open += (f.open - c.fv.open) * k;
+    c.fv.frown += (f.frown - c.fv.frown) * k;
+    setFace(c.face, c.fv);
+  }
+}
+
+/** 표정의 바탕 상태를 시뮬레이션 상태에서 고른다(SPEC 14.2 표, 위에서부터 먼저 맞는 것). */
+function moodOf(v: Villager, conv: ReturnType<typeof convById>, t: number): Mood {
+  const a = v.act;
+  if (a && a.phase === 'do' && a.type === 'nap') return 'sleep';
+  const lastLine = !!conv && Math.floor((t - conv.start) / 3) >= conv.lines.length - 1;
+  if (a && a.phase === 'do' && (a.type === 'party' || a.type === 'raindance')) return 'joy';
+  if (conv && !conv.argue) {
+    if (conv.kind === 'date' || conv.kind === 'welcome' || conv.kind === 'birthday') return 'joy';
+    if (conv.kind === 'confess' && lastLine) return conv.success ? 'joy' : 'frown';
+  }
+  if ((conv && conv.argue) || (a && a.type === 'flee')) return 'frown';
+  if (happinessOf(v) < EXPRESS.sulkBelow) return 'sulk';
+  return 'calm';
+}
+
+/** 일 박자의 팔·몸통만 입힌 층(먼 주민, SPEC 14.5). */
+function strikeLayer(kind: StrikeKind, id: number, t: number): Layer {
+  const p = strikePose(kind, strikePhase(kind, id, t));
+  return { armR: p.arm, armL: p.left, armInR: 0, armInL: 0, torso: p.torso, yaw: 0, pitch: 0 };
 }
 
 /** 이번 프레임에 덧입힐 각도를 정한다(SPEC 13.2~13.4). */
@@ -538,27 +613,36 @@ function layerFor(
   t: number,
 ): Layer {
   const v = c.v;
-  const L: Layer = { armR: 0, armL: 0, torso: 0, yaw: 0, pitch: 0 };
-  if (strike) {
-    const p = strikePose(strike, strikePhase(strike, v.id, t));
-    L.armR = p.arm;
-    L.armL = p.left;
-    L.torso = p.torso;
-    return L;
-  }
+  if (strike) return strikeLayer(strike, v.id, t);
+  const L: Layer = { armR: 0, armL: 0, armInR: 0, armInL: 0, torso: 0, yaw: 0, pitch: 0 };
   if (moving) {
     const p = v.pack;
     if (cart) L.armR = L.armL = STRIDE.cartArms;
     else if (p && (p.kind === 'bag' || p.n >= 6)) L.torso = STRIDE.heavyLean;
     return L;
   }
+  // 낮잠: 두 팔을 배 위로, 배로 느리게 숨 쉰다(SPEC 14.4). 고개는 돌리지 않는다.
+  if (c.lie > 0) {
+    const e = smooth(c.lie);
+    L.armR = L.armL = REST.lieArms * e;
+    L.armInR = L.armInL = REST.lieArmsIn * e;
+    L.torso = REST.lieBreath * Math.sin((t / REST.lieBreathPeriod) * Math.PI * 2 + v.id) * e;
+    return L;
+  }
   // 서 있거나 앉아 있으면 숨 쉰다
   if (clip === 'idle' || clip === 'sit' || clip === 'holding-right')
     L.torso = LOOK.breath * Math.sin((t / LOOK.breathPeriod) * Math.PI * 2 + v.id);
+  const reading = clip === 'sit' && c.toolKind === 'book';
+  // 앉기(SPEC 14.3): 두 팔을 모아 손을 무릎에, 책은 앞에 들고 고개를 숙인다.
+  if (clip === 'sit') {
+    L.armInR = L.armInL = REST.sitArmsIn;
+    L.armR = L.armL = reading ? REST.bookArms : REST.sitArmsFwd;
+    if (reading) L.pitch = REST.bookHead;
+  }
   if (conv) {
     if (conv.speaker === v.id) L.pitch = LOOK.talkBob * Math.sin(t * LOOK.talkHz * Math.PI * 2);
     else if (!conv.argue) L.pitch = nodPitch(v.id, t);
-  } else if (clip === 'idle' || clip === 'sit') L.yaw = lookYaw(v.id, t);
+  } else if ((clip === 'idle' || clip === 'sit') && !reading) L.yaw = lookYaw(v.id, t);
   void w;
   return L;
 }

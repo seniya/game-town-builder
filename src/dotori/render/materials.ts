@@ -126,6 +126,21 @@ export function matEvergreen(src: THREE.Material): THREE.Material {
   return seasonal(src, evergreen, EVERGREEN_UNIFORMS, 'dotori-evergreen');
 }
 
+const faceMats = new Map<THREE.Material, THREE.Material>();
+
+/**
+ * 표정 모프를 가진 머리 메시의 재질(SPEC 14.1): 원본 재질을 한 번 복제한다.
+ * 몸과 머리가 한 재질을 나눠 쓰면 모프 수가 다른 두 메시를 번갈아 그릴 때마다 three 가 셰이더를 다시 고른다(ADR 056).
+ */
+export function matFace(src: THREE.Material): THREE.Material {
+  let m = faceMats.get(src);
+  if (!m) {
+    m = src.clone();
+    faceMats.set(src, m);
+  }
+  return m;
+}
+
 /** 계절 색 셰이더를 붙인 복제 재질(원본별 한 번만 만든다). */
 function seasonal(
   src: THREE.Material,
@@ -180,12 +195,13 @@ uniform float uAmt;`,
 
 const depth = new Map<string, THREE.MeshDepthMaterial>();
 
-/** 그림자 패스에서 셰이더가 바뀌는 조건(스킨·인스턴스·색·텍스처·알파 자르기·면)을 한 줄로 만든다. */
+/** 그림자 패스에서 셰이더가 바뀌는 조건(스킨·모프·인스턴스·색·텍스처·알파 자르기·면)을 한 줄로 만든다. */
 function depthKey(o: THREE.Mesh, mat: THREE.Material): string {
   const inst = o as THREE.InstancedMesh;
   const map = (mat as THREE.MeshStandardMaterial).map;
   return [
     (o as THREE.SkinnedMesh).isSkinnedMesh ? 's' : '',
+    o.morphTargetInfluences ? `f${o.morphTargetInfluences.length}` : '',
     inst.isInstancedMesh ? 'i' : '',
     inst.isInstancedMesh && inst.instanceColor ? 'c' : '',
     map ? 'm' : '',

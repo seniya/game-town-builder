@@ -111,7 +111,7 @@ interface LabWalker {
 }
 
 /** 동작 보기판 상태. 시뮬레이션은 멈추고 동작만 흐른다. */
-let lab: { walkers: LabWalker[]; talk: [number, number] | null; t: number } | null = null;
+let lab: { walkers: LabWalker[]; talks: [number, number][]; t: number } | null = null;
 
 /**
  * 관찰용 장면 'motion'(SPEC 13): 남쪽 큰길(42 번 줄)에 주민을 한 줄로 세워 몸짓을 나란히 보인다.
@@ -128,6 +128,8 @@ function motionScene(w: World): void {
     where?: 'harvest' | null;
     walk?: number;
     pack?: 'lumber' | 'wheat' | 'bag';
+    /** 표정과 쉬는 자세(SPEC 14.6): 벤치에 앉기·책 읽기·기분 나쁨·다툼(두 사람 중 앞사람). */
+    rest?: 'bench' | 'book' | 'sulk' | 'argue';
   }[] = [
     { name: '망치질', job: '목수', act: 'build' },
     { name: '공방 망치', job: '목수', act: 'work' },
@@ -141,18 +143,25 @@ function motionScene(w: World): void {
     { name: '짐 지고', job: '목수', walk: 1.6, pack: 'lumber' },
     { name: '수레', job: '농부', walk: 1.6, pack: 'wheat' },
     { name: '달리기', job: '한량', walk: 3.6 },
+    { name: '책 읽기', job: '한량', act: 'fun', rest: 'book' },
+    { name: '벤치 앉기', job: '한량', act: 'fun', rest: 'bench' },
+    { name: '낮잠', job: '한량', act: 'nap' },
+    { name: '웃음(파티)', job: '한량', act: 'party' },
+    { name: '다툼', job: '한량', rest: 'argue' },
+    { name: '다툼', job: '한량' },
+    { name: '기분 나쁨', job: '한량', act: 'idle', rest: 'sulk' },
   ];
-  lab = { walkers: [], talk: null, t: 0 };
+  lab = { walkers: [], talks: [], t: 0 };
   // 줄 둘레의 나무를 치워 가리지 않게 한다
   for (let y = row - 2; y <= row + 5; y++)
-    for (let x = 27; x < 64; x++) if (getT(w, x, y) === TILE.FOREST) setT(w, x, y, TILE.GRASS);
+    for (let x = 27; x < w.W - 1; x++) if (getT(w, x, y) === TILE.FOREST) setT(w, x, y, TILE.GRASS);
   recomputeLocations(w);
   w.staticVersion++;
   slots.forEach((sl, i) => {
     const v = w.vs[i];
     if (!v) return;
-    // 대화하는 두 사람(6·7 번)은 마주 보게 가까이 선다
-    const x = 30 + i * 2.6 + (i === 7 ? -1.4 : 0);
+    // 대화하는 두 사람(6·7 번)과 다투는 두 사람은 마주 보게 가까이 선다
+    const x = 30 + i * 2.6 + (i === 7 || slots[i - 1]?.rest === 'argue' ? -1.4 : 0);
     v.name = sl.name;
     v.job = sl.job;
     v.inside = null;
@@ -168,19 +177,46 @@ function motionScene(w: World): void {
       v.act = mk(w, sl.act, { phase: 'do', until: Number.MAX_SAFE_INTEGER, face: { x: 0, y: 1 } });
       if (sl.where) v.act.where = sl.where;
     } else v.act = null;
+    if (sl.rest === 'bench' || sl.rest === 'book') {
+      // 보기판에만 놓는 벤치. 책은 외톨이가 든다(characters.ts), 벤치 앉기는 책을 들지 않는 사람으로.
+      const id = w.nextId++;
+      const bx = Math.floor(x);
+      w.decor.push({
+        id,
+        kind: 'bench',
+        x: bx,
+        y: row,
+        w: 1,
+        h: 1,
+        playerBuilt: false,
+        builtAt: 0,
+        firstUse: 0,
+      });
+      v.x = v.px = bx + 0.5;
+      if (v.act) {
+        v.act.where = 'bench';
+        v.act.decor = id;
+      }
+      v.trait = sl.rest === 'book' ? '외톨이' : '파티광';
+    }
+    if (sl.rest === 'sulk') v.hunger = v.energy = v.social = v.fun = 18;
   });
-  const a = w.vs[6];
-  const b = w.vs[7];
-  if (a && b) {
+  const pairs: [number, boolean][] = [[6, false]];
+  const ai = slots.findIndex((sl) => sl.rest === 'argue');
+  if (ai >= 0) pairs.push([ai, true]);
+  for (const [i, argue] of pairs) {
+    const a = w.vs[i];
+    const b = w.vs[i + 1];
+    if (!a || !b) continue;
     a.dir = { x: 1, y: 0 };
     b.dir = { x: -1, y: 0 };
     startConv(w, a, b, 'chat');
     const c = w.convs.find((c) => c.a === a.id);
     if (c) {
-      c.argue = false;
+      c.argue = argue;
       c.until = Number.MAX_SAFE_INTEGER;
     }
-    lab.talk = [a.id, b.id];
+    lab.talks.push([a.id, b.id]);
   }
 }
 
@@ -200,9 +236,9 @@ function labFrame(w: World, dt: number): void {
     v.x = x + k.dir * 0.01;
     v.py = v.y;
   }
-  if (lab.talk) {
-    const c = w.convs.find((c) => c.a === lab?.talk?.[0]);
-    if (c) c.speaker = Math.floor(lab.t / 2) % 2 === 0 ? lab.talk[0] : lab.talk[1];
+  for (const [a, b] of lab.talks) {
+    const c = w.convs.find((c) => c.a === a);
+    if (c) c.speaker = Math.floor(lab.t / 2) % 2 === 0 ? a : b;
   }
 }
 

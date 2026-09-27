@@ -91,8 +91,23 @@ export const LOOK = {
   headPitchLimit: 0.25,
 } as const;
 
+/** 앉기와 낮잠 눕기(SPEC 14.3·14.4). 팔 "모으기" 는 몸 쪽으로 드는 각도(앞축), 앞뒤는 13.1 과 같다. */
+export const REST = {
+  sitArmsIn: 0.9,
+  sitArmsFwd: -0.35,
+  bookArms: -0.9,
+  bookHead: 0.2,
+  /** 눕고 일어나는 시간(초). */
+  lieTime: 0.6,
+  /** 누운 팔: 몸을 따라 두고 살짝 들어 모은다(하늘로 들지 않게). */
+  lieArms: -0.1,
+  lieArmsIn: 0.3,
+  lieBreath: 0.04,
+  lieBreathPeriod: 4.2,
+} as const;
+
 /** 부드럽게 들고 놓기(0~1 → 0~1). */
-function smooth(x: number): number {
+export function smooth(x: number): number {
   const t = Math.min(1, Math.max(0, x));
   return t * t * (3 - 2 * t);
 }

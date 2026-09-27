@@ -4,7 +4,7 @@
 > 오너가 로드맵과 방향 결정을 에이전트에게 맡겼다. 지금 기준은 [docs/dotori/](dotori/) 의 네 정본이다:
 > [DESIGN](dotori/DESIGN.md)(의도) → [SPEC](dotori/SPEC.md)(수치) → [ARCHITECTURE](dotori/ARCHITECTURE.md)(구조) → [TASKS](dotori/TASKS.md)(로드맵·완료 조건).
 > 코드는 `src/dotori/`, 화면은 `/dotori.html`, 관찰판은 <https://claude.ai/artifact/SK3HbC93q1kHEuvtwAqXLD>.
-> V0(이식)·V1(가꾸는 마을, VG1 통과)·V2(분주한 마을, [ADR 050](adr/050-dotori-v2-visible-production-chain.md))를 마쳤다. VG2 는 약한 긍정으로 통과했다. **다음 계획은 [TASKS 5 장](dotori/TASKS.md)**(V2.5 → V3 → V5 → V4)이다.
+> V0(이식)·V1(가꾸는 마을, VG1 통과)·V2(분주한 마을, [ADR 050](adr/050-dotori-v2-visible-production-chain.md))를 마쳤다. VG2 는 약한 긍정으로 통과했다. **다음 계획은 [TASKS 5 장](dotori/TASKS.md)**(V2.5 → V3 → V5 → V4)이다. 이어서 V2.5·V3(VG3 통과)·V5·V4·V6(몸짓, HR-043 통과)·V7(표정과 쉬는 자세, [ADR 056](adr/056-dotori-v7-face-and-rest-poses.md))까지 마쳤다([기록](state/2026-09-27_2400-dotori-v7-face-rest.md)).
 > 아래 내용은 v1(1인칭 복셀 빌더) 기록이며 동결됐다.
 
 
