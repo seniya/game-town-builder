@@ -835,3 +835,40 @@ button:focus-visible {
   font-size: 12.5px;
   color: var(--muted);
 }
+
+/* 소리 단추와 작은 창 (SPEC 12.1) */
+.seg.sound {
+  position: relative;
+}
+.soundPop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: rgba(255, 253, 247, 0.97);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 16px rgba(20, 40, 30, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 190px;
+  font-size: 13px;
+  color: #243030;
+  z-index: 5;
+}
+.soundPop[hidden] {
+  display: none;
+}
+.soundRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.soundRow input[type='range'] {
+  flex: 1;
+  accent-color: #2f7d6d;
+}
+.soundPop small {
+  color: #6b7a78;
+  font-size: 11px;
+}

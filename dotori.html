@@ -33,6 +33,20 @@
             <button id="paperBtn" title="도토리 신문 최근 호" hidden>📰 신문</button>
             <button id="reset" title="저장을 지우고 새로 시작">새 마을</button>
           </div>
+          <div class="seg sound">
+            <button id="soundBtn" title="소리" aria-haspopup="true" aria-expanded="false">
+              🔊
+            </button>
+            <div class="soundPop" id="soundPop" hidden>
+              <label class="soundRow"
+                ><input type="checkbox" id="soundOn" checked /> 소리 켜기</label
+              >
+              <label class="soundRow"
+                >음량 <input type="range" id="soundVol" min="0" max="100" step="1"
+              /></label>
+              <small>음악과 마을 소리는 브라우저에서 만들어요</small>
+            </div>
+          </div>
         </div>
         <div class="hint" id="camHint">
           끌어서 이동 · 오른쪽 버튼(두 손가락)으로 회전 · 휠로 확대 · 주민을 누르면 그 사람의 하루가

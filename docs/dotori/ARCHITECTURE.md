@@ -13,11 +13,14 @@ dotori.html ─ src/dotori/main.ts
                  ├─ sim/      규칙. World 상태를 소유한다. three·DOM 을 모른다. node 에서 돈다
                  ├─ data/     수치·목록·지도. 로직이 없다
                  ├─ render/   three 로 World 를 읽어 그린다. World 를 바꾸지 않는다
-                 └─ ui/       DOM 패널·HUD·도구 막대. World 를 읽고, 바꿀 때는 sim 의 명령 함수만 부른다
+                 ├─ ui/       DOM 패널·HUD·도구 막대. World 를 읽고, 바꿀 때는 sim 의 명령 함수만 부른다
+                 └─ audio/    Web Audio 배경음악·환경음(ADR 053). World 와 카메라 숫자만 읽는다
 ```
 
 - v1 코드(`src/game`·`src/render`·`src/ui`·`src/workers`)와 서로 import 하지 않는다.
-- ESLint 가 `src/dotori/sim/**`·`src/dotori/data/**`·`src/dotori/ui/**` 에서 `three` import 를 막는다.
+- ESLint 가 `src/dotori/sim/**`·`src/dotori/data/**`·`src/dotori/ui/**`·`src/dotori/audio/**` 에서 `three` import 를 막는다.
+- audio: `compose.ts`(곡 짓기)·`mix.ts`(환경음 크기)는 순수 함수라 node 에서 시험한다. `synth.ts`(음색)·`Sound.ts`(스케줄러)만 Web Audio 를 쓴다.
+  듣는 자리는 `Renderer3D.listener()` 가 {x, z, dist, rx, rz} 숫자로 넘긴다.
 
 ## 2. 상태 소유권
 

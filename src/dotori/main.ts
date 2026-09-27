@@ -2,6 +2,8 @@
 // 1× 에서 실제 1 초에 게임 6 분(SPEC 1). 주소 ?fresh=1 새 마을, ?seed=N 시드, ?ff=분 미리 진행, ?scene=grown 가꾼 마을,
 // ?residents=N 처음 주민 수(큰 마을 시험), ?debug=1 계측 표시.
 import './ui/style.css';
+import { SoundSystem } from './audio/Sound';
+import { atten } from './audio/mix';
 import { TIME } from './data/balance';
 import { BUILDABLES, type BuildKind } from './data/buildables';
 import { Renderer3D, type ViewState } from './render/Renderer3D';
@@ -42,6 +44,7 @@ const view: ViewState = {
   reduceMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
 };
 let world: World;
+const sound = new SoundSystem();
 let speed = 1;
 let lastSpeed = 1;
 const r3 = new Renderer3D();
@@ -354,6 +357,46 @@ function bindControls(): void {
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') writeSave();
+    sound.setHidden(document.visibilityState === 'hidden');
+  });
+  bindSound();
+}
+
+/** 소리 단추와 작은 창. 첫 누르기·키 입력에서 소리를 연다(자동재생 정책, SPEC 12.1). */
+function bindSound(): void {
+  sound.load();
+  const btn = $('soundBtn');
+  const pop = $('soundPop');
+  const on = $('soundOn') as HTMLInputElement;
+  const vol = $('soundVol') as HTMLInputElement;
+  const paint = (): void => {
+    btn.textContent = sound.on ? (sound.volume > 0.5 ? '🔊' : '🔉') : '🔇';
+    on.checked = sound.on;
+    vol.value = String(Math.round(sound.volume * 100));
+  };
+  paint();
+  const unlock = (): void => sound.unlock();
+  window.addEventListener('pointerdown', unlock, { capture: true });
+  window.addEventListener('keydown', unlock, { capture: true });
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pop.hidden = !pop.hidden;
+    btn.setAttribute('aria-expanded', String(!pop.hidden));
+  });
+  pop.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', () => {
+    if (pop.hidden) return;
+    pop.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  });
+  on.addEventListener('change', () => {
+    sound.setOn(on.checked);
+    paint();
+  });
+  vol.addEventListener('input', () => {
+    sound.setVolume(Number(vol.value) / 100);
+    if (!sound.on && Number(vol.value) > 0) sound.setOn(true);
+    paint();
   });
 }
 
@@ -398,14 +441,20 @@ function loop(): void {
     for (const ev of world.out) {
       if (ev.type === 'log') {
         appendFeed(ev.entry);
-        if (isHighlight(ev.entry)) notices.push(ev.entry);
+        if (isHighlight(ev.entry)) {
+          notices.push(ev.entry);
+          sound.notice();
+        }
       } else if (ev.type === 'fx') r3.fx(world, ev.vid, ev.fx);
-      else if (ev.type === 'siteFx') r3.siteFx(ev.x, ev.y, ev.fx);
-      else showPaper(world, ev.no);
+      else if (ev.type === 'siteFx') {
+        r3.siteFx(ev.x, ev.y, ev.fx);
+        if (ev.fx === 'done') sound.done(atten(r3.listener(), ev.x, ev.y).gain);
+      } else showPaper(world, ev.no);
     }
     world.out.length = 0;
     const dtA = speed > 0 ? dt * (speed >= 8 ? 1.6 : speed >= 3 ? 1.25 : 1) : 0;
     r3.frame(world, dt, dtA, Math.min(1, acc), now);
+    sound.update(world, r3.listener(), speed);
     if (now - lastUI > 250) {
       lastUI = now;
       updateClock(world);
@@ -454,6 +503,7 @@ async function main(): Promise<void> {
     view,
     tools,
     r3,
+    sound,
     select,
     /** 가꾸기 명령(UI 와 같은 sim 명령). */
     place: (k: BuildKind, x: number, y: number) => place(world, k, x, y, 's'),

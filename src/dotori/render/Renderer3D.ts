@@ -177,6 +177,16 @@ export class Renderer3D {
     this.controls.update();
   }
 
+  /** 소리의 듣는 자리(SPEC 12.3): 카메라가 보는 점, 카메라 거리, 화면 오른쪽 방향(땅 위). */
+  listener(): { x: number; z: number; dist: number; rx: number; rz: number } {
+    const t = this.controls.target;
+    const c = this.camera.position;
+    const fx = t.x - c.x;
+    const fz = t.z - c.z;
+    const n = Math.hypot(fx, fz) || 1;
+    return { x: t.x, z: t.z, dist: c.distanceTo(t), rx: -fz / n, rz: fx / n };
+  }
+
   /** 카메라가 보는 점을 (x, z) 쪽으로 k 만큼 옮긴다. */
   focus(x: number, z: number, k = 1): void {
     const t = this.controls.target;
