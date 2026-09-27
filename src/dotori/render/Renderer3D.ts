@@ -11,8 +11,17 @@ import { hourOf } from '../sim/text';
 import type { FxKind, Villager, World } from '../sim/types';
 import { doorOf, sideDir } from '../sim/world';
 import { CHAR_NAMES, loadAll, model, sizeOf, type ModelName } from './assets';
-import { animate, CHAR_H, disposeChar, makeChar, type CharView } from './characters';
-import { matBasic, matGhost } from './materials';
+import { LOD } from '../data/balance';
+import {
+  animate,
+  CHAR_H,
+  disposeChar,
+  hold,
+  makeChar,
+  setShadow,
+  type CharView,
+} from './characters';
+import { matBasic, matGhost, shareShadowDepth } from './materials';
 import { Overlay } from './overlay';
 import { makeHat } from './props';
 import { makeGlowTex, siteLabel, VillageView } from './village';
@@ -26,6 +35,9 @@ export interface ViewState {
   ghost: { kind: BuildKind | 'remove'; x: number; y: number; side: Side; ok: boolean } | null;
   reduceMotion: boolean;
 }
+
+/** 그림자 카메라(SPEC 7): 보는 점을 snap 칸 단위로 따라가고, 반폭은 카메라 거리 × perDist(최소·최대). */
+const SHADOW = { snap: 2, perDist: 1.2, minHalf: 24, maxHalf: 64 } as const;
 
 const C = (h: string): THREE.Color => new THREE.Color(h);
 const SKY: [number, THREE.Color][] = [
@@ -59,6 +71,15 @@ export class Renderer3D {
   private hemi!: THREE.HemisphereLight;
   private village!: VillageView;
   private chars = new Map<number, CharView>();
+  private readonly frustum = new THREE.Frustum();
+  private readonly awakeIn = new Set<number>();
+  private readonly projView = new THREE.Matrix4();
+  private readonly sphere = new THREE.Sphere(new THREE.Vector3(), LOD.radius);
+  /** 이번 프레임 주민 LOD 갈래(계측 표시용): 온전히 그림·먼 주민·화면 밖. */
+  readonly lodStats = { full: 0, lite: 0, off: 0 };
+  /** 주민 LOD 켜기(비교 측정용으로 끌 수 있다, `?lod=0`). */
+  lodOn = true;
+  private shadowHalf = 0;
   private charGroup = new THREE.Group();
   private selRing!: THREE.Mesh;
   private ghost!: THREE.Group;
@@ -167,6 +188,7 @@ export class Renderer3D {
     this.portraitCache.clear();
     this.overlay.clear();
     this.village.rebuild(w);
+    shareShadowDepth(this.village.group);
     for (const v of w.vs) this.chars.set(v.id, makeChar(v, this.charGroup));
   }
 
@@ -344,8 +366,11 @@ export class Renderer3D {
     // 해는 5:30 에 떠서 20:00 에 진다. 저녁 노을이 19 시 무렵까지 보이게 한다.
     const day = Math.min(1, Math.max(0, Math.sin(((h - 5.5) / 14.5) * Math.PI)));
     const ang = ((h - 5.5) / 14.5) * Math.PI;
-    const cx = w.W / 2;
-    const cz = w.H / 2;
+    // 그림자는 카메라가 보는 곳을 따라간다(큰 지도, SPEC 7). 넓이는 카메라 거리로 정하고, 흔들리지 않게 칸 단위로 끊는다.
+    const t = this.controls.target;
+    const cx = Math.round(t.x / SHADOW.snap) * SHADOW.snap;
+    const cz = Math.round(t.z / SHADOW.snap) * SHADOW.snap;
+    this.fitShadow(this.camera.position.distanceTo(t));
     const sun = this.sun;
     if (day > 0.02) {
       sun.position.set(cx + Math.cos(ang) * 46, 10 + Math.sin(ang) * 50, cz - 26);
@@ -421,6 +446,25 @@ export class Renderer3D {
     o.globalAlpha = 1;
   }
 
+  /** 그림자 카메라 넓이를 카메라 거리에 맞춘다(단계로 끊어 바뀔 때만 다시 계산한다). */
+  private fitShadow(dist: number): void {
+    const half =
+      Math.ceil(Math.min(SHADOW.maxHalf, Math.max(SHADOW.minHalf, dist * SHADOW.perDist)) / 8) * 8;
+    if (half === this.shadowHalf) return;
+    this.shadowHalf = half;
+    const cam = this.sun.shadow.camera;
+    cam.left = -half;
+    cam.right = half;
+    cam.top = half * 0.75;
+    cam.bottom = -half * 0.75;
+    cam.updateProjectionMatrix();
+  }
+
+  /** 지난 프레임 그리기 호출 수(그림자 패스 포함, 계측 표시용). */
+  drawCalls(): number {
+    return this.renderer.info.render.calls;
+  }
+
   /** 새로 생긴 주민의 캐릭터를 만든다(이사). */
   private syncChars(w: World): void {
     for (const v of w.vs)
@@ -430,18 +474,49 @@ export class Renderer3D {
   /** 한 프레임: 정적 장면 확인 → 주민 → 하늘 → 3D → 겹쳐 그리기. alpha 는 틱 사이 보간(0~1). */
   frame(w: World, dt: number, dtA: number, alpha: number, now: number): void {
     this.animT += dtA;
-    if (this.village.version !== w.staticVersion) this.village.rebuild(w);
+    if (this.village.version !== w.staticVersion) {
+      this.village.rebuild(w);
+      shareShadowDepth(this.village.group);
+    }
     this.syncChars(w);
     const h = hourOf(w.t) + alpha / 60;
-    const ctx = { animT: this.animT, dtA, overlay: this.overlay };
+    const ctx = { animT: this.animT, dtA, overlay: this.overlay, lite: false };
+    // 주민 LOD(SPEC 7): 지난 프레임 카메라로 화면 안을 가른다. 화면 밖은 그리지 않고 동작을 멈추며,
+    // 먼 주민은 그림자·입자를 끄고 동작을 띄엄띄엄 갱신한다. 시뮬레이션에는 영향이 없다.
+    const cam = this.camera;
+    this.frustum.setFromProjectionMatrix(
+      this.projView.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse),
+    );
+    const far2 = LOD.far * LOD.far;
+    const st = this.lodStats;
+    st.full = st.lite = st.off = 0;
     for (const c of this.chars.values()) {
       const v = c.v;
-      c.root.visible = v.inside == null;
       if (v.inside != null) {
+        c.root.visible = false;
         c.line.visible = c.bobber.visible = false;
         continue;
       }
-      c.root.position.set(v.px + (v.x - v.px) * alpha, 0, v.py + (v.y - v.py) * alpha);
+      const x = v.px + (v.x - v.px) * alpha;
+      const z = v.py + (v.y - v.py) * alpha;
+      c.root.position.set(x, 0, z);
+      this.sphere.center.set(x, CHAR_H * 0.5, z);
+      const on = !this.lodOn || this.frustum.intersectsSphere(this.sphere);
+      c.root.visible = on;
+      c.root.matrixWorldAutoUpdate = on;
+      if (!on) {
+        c.line.visible = c.bobber.visible = false;
+        hold(c, dtA);
+        st.off++;
+        continue;
+      }
+      const dx = x - cam.position.x;
+      const dz = z - cam.position.z;
+      const dy = cam.position.y;
+      ctx.lite = this.lodOn && dx * dx + dy * dy + dz * dz > far2;
+      setShadow(c, !ctx.lite);
+      if (ctx.lite) st.lite++;
+      else st.full++;
       animate(w, c, ctx);
     }
     this.village.update(w, dtA);
@@ -462,12 +537,15 @@ export class Renderer3D {
     if (this.village.waterMat) this.village.waterMat.opacity = 0.6 + Math.sin(now / 900) * 0.04;
     // 굴뚝 연기와 파티 꽃가루
     if (dtA > 0) {
+      // 깨어 있는 사람이 든 건물(주민 수 × 건물 수로 돌지 않게 한 번만 모은다)
+      const awake = this.awakeIn;
+      awake.clear();
+      for (const v of w.vs)
+        if (v.inside != null && !(v.act && v.act.type === 'sleep' && v.act.phase === 'do'))
+          awake.add(v.inside);
       for (const b of w.buildings) {
         if (b.kind === 'yard' || b.kind === 'mill') continue;
-        const occ = w.vs.some(
-          (v) => v.inside === b.id && !(v.act && v.act.type === 'sleep' && v.act.phase === 'do'),
-        );
-        if (occ && Math.random() < dtA * (b.kind === 'bakery' ? 2.4 : 0.9))
+        if (awake.has(b.id) && Math.random() < dtA * (b.kind === 'bakery' ? 2.4 : 0.9))
           this.overlay.burst(
             'smoke',
             b.x + b.w * 0.68,

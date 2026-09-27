@@ -738,6 +738,9 @@ button:focus-visible {
   padding: 4px 8px;
   border-radius: 8px;
   pointer-events: none;
+  white-space: pre;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
 }
 .feed li.k-work {
   background: color-mix(in srgb, #e2b85a 12%, transparent);

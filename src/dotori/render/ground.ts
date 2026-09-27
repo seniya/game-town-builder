@@ -8,6 +8,8 @@ import { TILE } from '../sim/types';
 import { SEASON_LOOK, type GroundLook } from './seasonLook';
 
 const TS = 32;
+/** 지면 텍스처 한 변의 상한(휴대폰 GPU 에서도 받는 크기). */
+const MAX_TEX = 4096;
 
 /** 지면 텍스처를 칠한다. 지형이나 계절이 바뀌면 다시 부른다(look 은 계절 색, SPEC 12.4). */
 export function paintGround(
@@ -16,14 +18,17 @@ export function paintGround(
   look: GroundLook = SEASON_LOOK.summer.ground,
 ): HTMLCanvasElement {
   const c = canvas ?? document.createElement('canvas');
-  c.width = w.W * TS;
-  c.height = w.H * TS;
+  // 큰 지도(SPEC 2)에서도 텍스처 한 변이 4096 을 넘지 않게 줄여 칠한다. 칠하는 좌표는 타일당 TS 그대로다.
+  const k = Math.min(1, MAX_TEX / (Math.max(w.W, w.H) * TS));
+  c.width = Math.round(w.W * TS * k);
+  c.height = Math.round(w.H * TS * k);
   const g = c.getContext('2d');
   if (!g) return c;
+  g.setTransform(k, 0, 0, k, 0, 0);
   const W = w.W;
   const H = w.H;
   g.fillStyle = look.grass;
-  g.fillRect(0, 0, c.width, c.height);
+  g.fillRect(0, 0, W * TS, H * TS);
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
       const k = hash01(x * 131 + y * 7);

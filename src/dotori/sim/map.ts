@@ -1,14 +1,14 @@
 // 타일 격자: 읽기·쓰기, 통과와 이동 비용, 처음 지도 만들기, 장소 목록 다시 계산 (SPEC 2).
 import {
+  ENTRANCE,
   FARM,
-  FOREST_BLOBS,
   FOREST_JITTER,
   FOUNTAIN,
-  LAKE,
+  LAYOUTS,
   PLAZA,
-  ROADS,
   SCATTER_TREE_CHANCE,
   TERRACE,
+  type MapLayout,
 } from '../data/villageMap';
 import type { Locations, Pt, World } from './types';
 import { TILE } from './types';
@@ -30,12 +30,21 @@ export function getT(w: World, x: number, y: number): number {
   return inb(w, x, y) ? (w.tiles[y * w.W + x] ?? TILE.WATER) : TILE.WATER;
 }
 
-/** 타일을 바꾼다(지도 밖이면 무시). */
+/** 타일을 바꾼다(지도 밖이면 무시). 바뀌면 타일 판 번호를 올린다(경로 캐시). */
 export function setT(w: World, x: number, y: number, v: number): void {
-  if (inb(w, x, y)) w.tiles[y * w.W + x] = v;
+  if (!inb(w, x, y)) return;
+  const i = y * w.W + x;
+  if (w.tiles[i] === v) return;
+  w.tiles[i] = v;
+  w.tileVer++;
 }
 
-/** 이 타일 종류를 걸어서 지나갈 수 있는가. */
+/** 새 주민이 나타나는 칸(동쪽 큰길 끝, SPEC 4.4). */
+export function entranceOf(w: World): Pt {
+  return { x: w.W - ENTRANCE.fromEast, y: ENTRANCE.y };
+}
+
+/** 이 타일 종류를 지나갈 수 있는가. */
 export function passableTile(t: number): boolean {
   return t !== TILE.WATER && t !== TILE.BLD && t !== TILE.FOUNT && t !== TILE.SITE;
 }
@@ -78,20 +87,23 @@ export function fillRect(
 }
 
 /** 처음 지형(숲·호수·길·밭·광장·분수)을 칠한다. 건물은 world.ts 가 놓는다. */
-export function paintTerrain(w: World): void {
+export function paintTerrain(w: World, layout: MapLayout = LAYOUTS.village): void {
   w.tiles.fill(TILE.GRASS);
+  w.tileVer++;
   const R = (): number => w.rng.next();
   for (let y = 0; y < w.H; y++)
     for (let x = 0; x < w.W; x++) {
-      for (const [bx, by, r] of FOREST_BLOBS) {
+      for (const [bx, by, r] of layout.forests) {
         const d = Math.hypot(x - bx, y - by) / r + (R() - 0.5) * FOREST_JITTER;
         if (d < 1) setT(w, x, y, TILE.FOREST);
       }
-      const e = ((x - LAKE.cx) / LAKE.rx) ** 2 + ((y - LAKE.cy) / LAKE.ry) ** 2;
-      if (e < 1) setT(w, x, y, TILE.WATER);
-      else if (e < LAKE.shore) setT(w, x, y, TILE.SAND);
+      for (const L of layout.lakes) {
+        const e = ((x - L.cx) / L.rx) ** 2 + ((y - L.cy) / L.ry) ** 2;
+        if (e < 1) setT(w, x, y, TILE.WATER);
+        else if (e < L.shore && getT(w, x, y) !== TILE.WATER) setT(w, x, y, TILE.SAND);
+      }
     }
-  for (const [x0, y0, x1, y1] of ROADS) {
+  for (const [x0, y0, x1, y1] of layout.roads) {
     for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++)
       for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++)
         if (getT(w, x, y) !== TILE.WATER) setT(w, x, y, TILE.PATH);

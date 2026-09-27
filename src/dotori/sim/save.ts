@@ -124,6 +124,7 @@ export function fromSave(raw: unknown): World | null {
   w.rng.state = d.rng ?? 1;
   w.t = d.t ?? 0;
   w.tiles.set(d.tiles);
+  w.tileVer++;
   w.buildings = d.buildings ?? [];
   w.decor = d.decor ?? [];
   w.blueprints = d.blueprints ?? [];

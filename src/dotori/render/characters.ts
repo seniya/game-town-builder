@@ -4,9 +4,9 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { JOBS } from '../data/people';
 import { convById } from '../sim/social';
 import type { Villager, World } from '../sim/types';
-import { PRODUCE } from '../data/balance';
+import { LOD, PRODUCE } from '../data/balance';
 import { CHAR_NAMES, model, place, sizeOf, type ModelName } from './assets';
-import { matLine } from './materials';
+import { matLine, shareShadowDepth } from './materials';
 import type { Overlay } from './overlay';
 import {
   makeBagPack,
@@ -50,6 +50,12 @@ export interface CharView {
   bubbleRef: Villager['bubble'];
   bubbleT0: number;
   cart: THREE.Object3D | null;
+  /** LOD: 아직 믹서에 넘기지 않은 동작 시간(초). */
+  animHold: number;
+  /** LOD: 먼 주민 갱신 차례를 세는 수. */
+  lodTick: number;
+  /** LOD: 지금 그림자를 드리우는가. */
+  shadow: boolean;
 }
 
 /** 주민 한 명의 3D 캐릭터를 만든다. */
@@ -88,6 +94,7 @@ export function makeChar(v: Villager, parent: THREE.Object3D): CharView {
   const bobber = mesh(new THREE.SphereGeometry(0.05, 10, 8), '#ff5a4f');
   bobber.visible = false;
   parent.add(bobber);
+  shareShadowDepth(root);
   return {
     v,
     root,
@@ -112,6 +119,9 @@ export function makeChar(v: Villager, parent: THREE.Object3D): CharView {
     bubbleRef: null,
     bubbleT0: 0,
     cart: null,
+    animHold: 0,
+    lodTick: v.id,
+    shadow: true,
   };
 }
 
@@ -135,7 +145,10 @@ function setTool(c: CharView, kind: ToolKind | null): void {
   if (c.tool) c.hand.remove(c.tool);
   c.tool = kind ? makeTool(kind) : null;
   c.toolKind = kind;
-  if (c.tool) c.hand.add(c.tool);
+  if (c.tool) {
+    if (!c.shadow) c.tool.traverse((o) => (o.castShadow = false));
+    c.hand.add(c.tool);
+  }
 }
 
 /** 등짐을 바꾼다(목재 개수·보따리). */
@@ -157,7 +170,10 @@ function setPack(c: CharView): void {
           : p.kind === 'fish'
             ? makeFishPack(p.n)
             : makeBagPack(c.v.look.umb);
-  if (c.pack) c.back.add(c.pack);
+  if (c.pack) {
+    if (!c.shadow) c.pack.traverse((o) => (o.castShadow = false));
+    c.back.add(c.pack);
+  }
 }
 
 /** 그림에 쓰는 시간(초)과 연출 층. */
@@ -165,11 +181,13 @@ export interface AnimCtx {
   animT: number;
   dtA: number;
   overlay: Overlay;
+  /** 먼 주민(LOD): 입자를 내지 않고 동작을 띄엄띄엄 갱신한다. */
+  lite: boolean;
 }
 
 /** 시뮬레이션 상태를 동작·도구·방향·연출로 옮긴다. */
 export function animate(w: World, c: CharView, ctx: AnimCtx): void {
-  const { animT, dtA, overlay } = ctx;
+  const { animT, dtA, overlay, lite } = ctx;
   const v = c.v;
   const a = v.act;
   const T = animT + v.id * 0.73;
@@ -334,7 +352,7 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
     c.line.visible = true;
     c.bobber.visible = true;
     c.bobber.position.set(bx, by, bz);
-    if (c.catchT != null && c.lastCatch !== c.catchT) {
+    if (!lite && c.catchT != null && c.lastCatch !== c.catchT) {
       c.lastCatch = c.catchT;
       overlay.burst('splash', bx, 0.1, bz, 10);
     }
@@ -343,7 +361,7 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
     c.bobber.visible = false;
   }
   // 연출 입자
-  if (dtA > 0 && v.inside == null) {
+  if (!lite && dtA > 0 && v.inside == null) {
     const hy = CHAR_H + 0.25;
     const R = Math.random;
     if (conv && conv.argue && R() < dtA * 4) overlay.burst('steam', v.x, hy, v.y, 2);
@@ -402,7 +420,25 @@ export function animate(w: World, c: CharView, ctx: AnimCtx): void {
     if (a && a.phase === 'do' && a.type === 'hunt' && R() < dtA * 1.2)
       overlay.burst('dirt', v.x + Math.sin(c.yaw) * 0.35, 0.1, v.y + Math.cos(c.yaw) * 0.35, 3);
   }
-  c.mixer.update(dtA);
+  c.animHold += dtA;
+  if (!lite || ++c.lodTick % LOD.farEvery === 0) {
+    c.mixer.update(c.animHold);
+    c.animHold = 0;
+  }
+}
+
+/** 화면 밖 주민: 그리지 않고, 동작 시간만 모아 둔다(돌아오면 한 번에 넘긴다). */
+export function hold(c: CharView, dtA: number): void {
+  c.animHold = Math.min(LOD.maxHold, c.animHold + dtA);
+}
+
+/** 그림자를 켜고 끈다(먼 주민은 끈다). 바뀔 때만 모든 메시를 돈다. */
+export function setShadow(c: CharView, on: boolean): void {
+  if (c.shadow === on) return;
+  c.shadow = on;
+  c.root.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) o.castShadow = on;
+  });
 }
 
 /** 캐릭터를 장면에서 뺀다(새 마을·불러오기). */

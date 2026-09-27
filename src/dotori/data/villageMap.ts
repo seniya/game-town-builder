@@ -92,8 +92,78 @@ export const START_LAMPS: readonly (readonly [number, number])[] = [
   [30, 4],
 ];
 
-/** 마을 입구: 새 주민이 나타나는 칸(동쪽 큰길 끝). */
-export const ENTRANCE = { x: 78, y: 20 } as const;
+/** 마을 입구: 새 주민이 나타나는 칸. 동쪽 큰길 끝(지도 동쪽 끝에서 두 칸 안, SPEC 2)이다. */
+export const ENTRANCE = { fromEast: 2, y: 20 } as const;
+
+/** 호수 한 곳(타원). */
+export interface Lake {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  /** 반지름 배율 이 값 안쪽은 모래 물가. */
+  shore: number;
+}
+
+export type MapId = 'village' | 'large';
+
+/** 지도 배치 한 벌(SPEC 2). 마을 가운데(건물·광장·밭)는 같고, 둘레 들판·숲·호수·길이 다르다. */
+export interface MapLayout {
+  id: MapId;
+  W: number;
+  H: number;
+  forests: readonly (readonly [number, number, number])[];
+  lakes: readonly Lake[];
+  roads: readonly (readonly [number, number, number, number])[];
+}
+
+/**
+ * 지도 배치. `village` 가 기본(80 × 52)이다. `large`(160 × 104, V4 후보)는 같은 마을을 북서쪽에 두고
+ * 동쪽·남쪽으로 들판을 넓혀 집·밭을 더 지을 자리를 준다. 손으로 정한 숲·호수·길이며 절차적 지형 생성이 아니다.
+ */
+export const LAYOUTS: Readonly<Record<MapId, MapLayout>> = {
+  village: {
+    id: 'village',
+    W: MAP_W,
+    H: MAP_H,
+    forests: FOREST_BLOBS,
+    lakes: [LAKE],
+    roads: ROADS,
+  },
+  large: {
+    id: 'large',
+    W: 160,
+    H: 104,
+    forests: [
+      ...FOREST_BLOBS,
+      [96, 7, 8],
+      [128, 5, 7],
+      [153, 30, 7],
+      [120, 38, 5],
+      [151, 64, 6],
+      [134, 94, 8],
+      [98, 99, 6],
+      [62, 89, 7],
+      [24, 80, 8],
+      [6, 97, 6],
+      [86, 70, 4],
+    ],
+    lakes: [
+      LAKE,
+      { cx: 112, cy: 78, rx: 12, ry: 7, shore: 1.45 },
+      { cx: 44, cy: 68, rx: 5, ry: 3.5, shore: 1.6 },
+    ],
+    roads: [
+      ...ROADS,
+      [78, 20, 158, 20],
+      [31, 49, 31, 101],
+      [66, 42, 66, 100],
+      [20, 60, 150, 60],
+      [110, 20, 110, 60],
+      [140, 60, 140, 100],
+    ],
+  },
+};
 
 /** 흩어진 나무가 생길 확률(주변이 모두 풀·숲인 풀 칸). */
 export const SCATTER_TREE_CHANCE = 0.035;

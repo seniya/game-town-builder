@@ -177,3 +177,44 @@ uniform float uAmt;`,
   cache.set(src, m);
   return m;
 }
+
+const depth = new Map<string, THREE.MeshDepthMaterial>();
+
+/** 그림자 패스에서 셰이더가 바뀌는 조건(스킨·인스턴스·색·텍스처·알파 자르기·면)을 한 줄로 만든다. */
+function depthKey(o: THREE.Mesh, mat: THREE.Material): string {
+  const inst = o as THREE.InstancedMesh;
+  const map = (mat as THREE.MeshStandardMaterial).map;
+  return [
+    (o as THREE.SkinnedMesh).isSkinnedMesh ? 's' : '',
+    inst.isInstancedMesh ? 'i' : '',
+    inst.isInstancedMesh && inst.instanceColor ? 'c' : '',
+    map ? 'm' : '',
+    mat.alphaTest > 0 ? 'a' : '',
+    mat.shadowSide ?? mat.side,
+  ].join('');
+}
+
+/**
+ * 그림자 패스의 깊이 재질을 메시 종류별로 나눠 준다(SPEC 7, ADR 054).
+ * three 는 따로 정하지 않은 메시 모두에 깊이 재질 하나를 돌려 쓴다. 그래서 스킨 메시·인스턴스·텍스처 모형이
+ * 섞여 그려지면 물체마다 셰이더를 다시 고른다(주민 100 명에서 CPU 의 약 8 %). 종류마다 하나씩 주면 고르지 않는다.
+ * 보통 메시(스킨·인스턴스·텍스처 없음, 앞면)는 기본 재질에 그대로 두고, 자르는 면이 있는 재질(공사 중)은 three 에 맡긴다.
+ */
+export function shareShadowDepth(root: THREE.Object3D): void {
+  root.traverse((obj) => {
+    const o = obj as THREE.Mesh;
+    if (!o.isMesh || !o.castShadow || o.customDepthMaterial) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const first = mats[0];
+    if (!first || mats.some((m) => m.clippingPlanes && m.clippingPlanes.length > 0)) return;
+    const key = depthKey(o, first);
+    if (mats.some((m) => depthKey(o, m) !== key)) return;
+    if (key === String(THREE.FrontSide)) return;
+    let d = depth.get(key);
+    if (!d) {
+      d = new THREE.MeshDepthMaterial();
+      depth.set(key, d);
+    }
+    o.customDepthMaterial = d;
+  });
+}

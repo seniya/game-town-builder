@@ -190,7 +190,10 @@ export interface InstanceItem {
   yaw?: number;
 }
 
-/** 같은 모델을 여러 곳에 놓을 때 InstancedMesh 로 묶는다. */
+/** 인스턴스를 나누는 구역 한 변(타일). 구역마다 따로 묶어 화면 밖 구역은 그리지 않는다(큰 지도, SPEC 7). */
+const INSTANCE_CHUNK = 32;
+
+/** 같은 모델을 여러 곳에 놓을 때 InstancedMesh 로 묶는다. 구역(INSTANCE_CHUNK 칸)마다 하나씩 만든다. */
 export function instance(
   name: ModelName,
   items: readonly InstanceItem[],
@@ -209,6 +212,13 @@ export function instance(
   const sc = new THREE.Vector3();
   const p = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
+  const chunks = new Map<number, InstanceItem[]>();
+  for (const it of items) {
+    const key = Math.floor(it.z / INSTANCE_CHUNK) * 4096 + Math.floor(it.x / INSTANCE_CHUNK);
+    let list = chunks.get(key);
+    if (!list) chunks.set(key, (list = []));
+    list.push(it);
+  }
   src.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -217,17 +227,20 @@ export function instance(
       : mapMat
         ? mapMat(mesh.material)
         : mesh.material;
-    const im = new THREE.InstancedMesh(mesh.geometry, mat, items.length);
-    im.castShadow = true;
-    im.receiveShadow = true;
-    items.forEach((it, i) => {
-      const k = k0 * (it.s ?? 1);
-      q.setFromAxisAngle(up, it.yaw ?? 0);
-      sc.setScalar(k);
-      p.set(it.x, -box.min.y * k, it.z);
-      m.compose(p, q, sc).multiply(mesh.matrixWorld);
-      im.setMatrixAt(i, m);
-    });
-    parent.add(im);
+    for (const list of chunks.values()) {
+      const im = new THREE.InstancedMesh(mesh.geometry, mat, list.length);
+      im.castShadow = true;
+      im.receiveShadow = true;
+      list.forEach((it, i) => {
+        const k = k0 * (it.s ?? 1);
+        q.setFromAxisAngle(up, it.yaw ?? 0);
+        sc.setScalar(k);
+        p.set(it.x, -box.min.y * k, it.z);
+        m.compose(p, q, sc).multiply(mesh.matrixWorld);
+        im.setMatrixAt(i, m);
+      });
+      im.computeBoundingSphere();
+      parent.add(im);
+    }
   });
 }

@@ -1,5 +1,7 @@
 // A* 길찾기(8 방향). 지도 크기 배열을 세대 번호로 다시 쓰고, 틱당 탐색 횟수를 예산으로 묶는다 (SPEC 7).
-import { inb, passable, tileCost } from './map';
+// 같은 시작·도착 칸의 경로는 타일이 바뀔 때까지 캐시에서 꺼낸다(예산을 쓰지 않는다).
+import { PERF } from '../data/balance';
+import { inb, passable, passableTile, tileCost } from './map';
 import type { Pt, World } from './types';
 
 const DIRS: readonly (readonly [number, number, number])[] = [
@@ -44,20 +46,23 @@ class Scratch {
     this.heapI.length = 0;
   }
 
-  /** 최소 힙에 넣는다. */
+  /** 최소 힙에 넣는다(바꿔 끼우기 대신 빈자리를 올린다. 순서는 바꿔 끼우기와 같다). */
   push(f: number, i: number): void {
     const F = this.heapF;
     const I = this.heapI;
+    let k = F.length;
     F.push(f);
     I.push(i);
-    let k = F.length - 1;
     while (k > 0) {
       const p = (k - 1) >> 1;
-      if ((F[p] as number) <= (F[k] as number)) break;
-      [F[p], F[k]] = [F[k] as number, F[p] as number];
-      [I[p], I[k]] = [I[k] as number, I[p] as number];
+      const pf = F[p] as number;
+      if (pf <= f) break;
+      F[k] = pf;
+      I[k] = I[p] as number;
       k = p;
     }
+    F[k] = f;
+    I[k] = i;
   }
 
   /** 가장 작은 것을 꺼낸다. 비었으면 -1. */
@@ -68,73 +73,128 @@ class Scratch {
     const top = I[0] as number;
     const lf = F.pop() as number;
     const li = I.pop() as number;
-    if (F.length) {
-      F[0] = lf;
-      I[0] = li;
+    const n = F.length;
+    if (n) {
       let k = 0;
       for (;;) {
         const l = 2 * k + 1;
         const r = l + 1;
-        let m = k;
-        if (l < F.length && (F[l] as number) < (F[m] as number)) m = l;
-        if (r < F.length && (F[r] as number) < (F[m] as number)) m = r;
-        if (m === k) break;
-        [F[m], F[k]] = [F[k] as number, F[m] as number];
-        [I[m], I[k]] = [I[k] as number, I[m] as number];
+        let m = -1;
+        let mf = lf;
+        if (l < n && (F[l] as number) < mf) {
+          m = l;
+          mf = F[l] as number;
+        }
+        if (r < n && (F[r] as number) < mf) {
+          m = r;
+          mf = F[r] as number;
+        }
+        if (m < 0) break;
+        F[k] = mf;
+        I[k] = I[m] as number;
         k = m;
       }
+      F[k] = lf;
+      I[k] = li;
     }
     return top;
   }
 }
 
 const scratch = new Scratch();
+/** 지금까지 펼친 칸 수(계측, 모든 World 합). */
+let expanded = 0;
+
+/** 타일 판 번호별 통과·비용 격자(탐색마다 타일 종류를 다시 풀지 않는다). 비용 0 은 지나갈 수 없다. */
+interface CostGrid {
+  ver: number;
+  cost: Float64Array;
+}
+
+const grids = new WeakMap<World, CostGrid>();
+
+/** 이 World 의 비용 격자. 타일이 바뀌었으면 다시 만든다. */
+function gridOf(w: World): Float64Array {
+  let g = grids.get(w);
+  if (!g || g.cost.length !== w.W * w.H) {
+    g = { ver: -1, cost: new Float64Array(w.W * w.H) };
+    grids.set(w, g);
+  }
+  if (g.ver !== w.tileVer) {
+    g.ver = w.tileVer;
+    const C = g.cost;
+    for (let i = 0; i < C.length; i++) {
+      const t = w.tiles[i] as number;
+      C[i] = passableTile(t) ? tileCost(t) : 0;
+    }
+  }
+  return g.cost;
+}
+
+const DX = DIRS.map((d) => d[0]);
+const DY = DIRS.map((d) => d[1]);
+const DC = DIRS.map((d) => d[2]);
 
 /** 예산 없이 경로를 구한다(시험·놓기 검사용). 닿지 못하면 null, 같은 칸이면 []. */
 export function findPathRaw(w: World, sx: number, sy: number, tx: number, ty: number): Pt[] | null {
   if (!inb(w, tx, ty) || !passable(w, tx, ty)) return null;
   if (sx === tx && sy === ty) return [];
   const W = w.W;
+  const H = w.H;
+  const C = gridOf(w);
   const S = scratch;
-  S.begin(W * w.H);
+  S.begin(W * H);
   const gen = S.gen;
+  const G = S.g;
+  const seen = S.seen;
+  const closed = S.closed;
+  const came = S.came;
   const s = sy * W + sx;
   const goal = ty * W + tx;
-  const oct = (x: number, y: number): number => {
-    const dx = Math.abs(x - tx);
-    const dy = Math.abs(y - ty);
-    return Math.max(dx, dy) + 0.414 * Math.min(dx, dy);
-  };
-  S.g[s] = 0;
-  S.seen[s] = gen;
-  S.came[s] = -1;
-  S.push(oct(sx, sy), s);
+  G[s] = 0;
+  seen[s] = gen;
+  came[s] = -1;
+  {
+    const dx = Math.abs(sx - tx);
+    const dy = Math.abs(sy - ty);
+    S.push(Math.max(dx, dy) + 0.414 * Math.min(dx, dy), s);
+  }
   let found = false;
   for (;;) {
     const cur = S.pop();
     if (cur < 0) break;
-    if (S.closed[cur] === gen) continue;
+    if (closed[cur] === gen) continue;
     if (cur === goal) {
       found = true;
       break;
     }
-    S.closed[cur] = gen;
+    closed[cur] = gen;
+    expanded++;
     const cx = cur % W;
     const cy = (cur / W) | 0;
-    const gc = S.g[cur] as number;
-    for (const [dx, dy, dc] of DIRS) {
-      const nx = cx + dx;
-      const ny = cy + dy;
-      if (!inb(w, nx, ny) || !passable(w, nx, ny)) continue;
-      if (dx && dy && (!passable(w, cx + dx, cy) || !passable(w, cx, cy + dy))) continue;
+    const gc = G[cur] as number;
+    for (let d = 0; d < 8; d++) {
+      const ddx = DX[d] as number;
+      const ddy = DY[d] as number;
+      const nx = cx + ddx;
+      const ny = cy + ddy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
       const ni = ny * W + nx;
-      if (S.closed[ni] === gen) continue;
-      const ng = gc + dc * tileCost(w.tiles[ni] as number);
-      if (S.seen[ni] !== gen || ng < (S.g[ni] as number)) {
-        S.seen[ni] = gen;
-        S.g[ni] = ng;
-        S.came[ni] = cur;
-        S.push(ng + oct(nx, ny), ni);
+      const c = C[ni] as number;
+      if (c === 0) continue;
+      // 대각선은 양옆이 모두 열려야 한다(양옆은 지금 칸의 이웃이라 지도 안이다)
+      if (ddx && ddy && ((C[cy * W + nx] as number) === 0 || (C[ny * W + cx] as number) === 0))
+        continue;
+      if (closed[ni] === gen) continue;
+      const ng = gc + (DC[d] as number) * c;
+      if (seen[ni] !== gen || ng < (G[ni] as number)) {
+        seen[ni] = gen;
+        G[ni] = ng;
+        came[ni] = cur;
+        const hx = Math.abs(nx - tx);
+        const hy = Math.abs(ny - ty);
+        // 휴리스틱을 먼저 더해 둔다(덧셈 순서가 바뀌면 같은 비용 경로 중 고르는 것이 달라진다)
+        S.push(ng + (Math.max(hx, hy) + 0.414 * Math.min(hx, hy)), ni);
       }
     }
   }
@@ -143,7 +203,7 @@ export function findPathRaw(w: World, sx: number, sy: number, tx: number, ty: nu
   let c = goal;
   while (c !== s) {
     path.push({ x: c % W, y: (c / W) | 0 });
-    c = S.came[c] as number;
+    c = came[c] as number;
     if (c < 0) return null;
   }
   return path.reverse();
@@ -157,7 +217,69 @@ export function findPath(
   tx: number,
   ty: number,
 ): Pt[] | null | 'busy' {
-  if (w.pathBudget <= 0) return 'busy';
+  const c = cacheOf(w);
+  const n = w.W * w.H;
+  const key = inb(w, sx, sy) && inb(w, tx, ty) ? (sy * w.W + sx) * n + ty * w.W + tx : -1;
+  if (key >= 0) {
+    const hit = c.map.get(key);
+    if (hit !== undefined) {
+      // 가장 최근에 쓴 것으로 옮긴다(오래 안 쓴 것부터 버린다)
+      c.map.delete(key);
+      c.map.set(key, hit);
+      c.hits++;
+      return hit;
+    }
+  }
+  if (w.pathBudget <= 0) {
+    c.busy++;
+    return 'busy';
+  }
   w.pathBudget--;
-  return findPathRaw(w, sx, sy, tx, ty);
+  c.searches++;
+  const p = findPathRaw(w, sx, sy, tx, ty);
+  if (key >= 0) {
+    c.map.set(key, p);
+    if (c.map.size > PERF.pathCache) {
+      const old = c.map.keys().next();
+      if (!old.done) c.map.delete(old.value);
+    }
+  }
+  return p;
+}
+
+/** 경로 캐시. 돌려준 경로 배열은 여러 주민이 함께 읽으므로 고치지 않는다(주민은 v.pi 로 따라간다). */
+interface PathCache {
+  ver: number;
+  map: Map<number, Pt[] | null>;
+  hits: number;
+  searches: number;
+  busy: number;
+}
+
+const caches = new WeakMap<World, PathCache>();
+
+/** 이 World 의 경로 캐시. 타일 판 번호가 바뀌었으면 비운다. */
+function cacheOf(w: World): PathCache {
+  let c = caches.get(w);
+  if (!c) {
+    c = { ver: w.tileVer, map: new Map(), hits: 0, searches: 0, busy: 0 };
+    caches.set(w, c);
+  }
+  if (c.ver !== w.tileVer) {
+    c.ver = w.tileVer;
+    c.map.clear();
+  }
+  return c;
+}
+
+/** 계측(`?debug=1`, 시험): 지금까지 캐시 적중·새 탐색·예산 초과 횟수와 캐시 크기. */
+export function pathStats(w: World): {
+  hits: number;
+  searches: number;
+  busy: number;
+  size: number;
+  expanded: number;
+} {
+  const c = cacheOf(w);
+  return { hits: c.hits, searches: c.searches, busy: c.busy, size: c.map.size, expanded };
 }

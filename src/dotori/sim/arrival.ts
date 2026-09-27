@@ -8,7 +8,7 @@ import {
   type JobName,
   type TraitName,
 } from '../data/people';
-import { ENTRANCE } from '../data/villageMap';
+import { entranceOf } from './map';
 import { startAct } from './act';
 import { makeVillager, nextName } from './create';
 import { mk } from './decide';
@@ -102,7 +102,8 @@ export function spawnNewcomer(w: World, home: Building): Villager {
   const name = nextName(w, new Set(w.vs.map((v) => v.name)));
   const trait = rareTrait(w);
   const job = jobForNewcomer(w);
-  const v = makeVillager(w, name, trait, job, home, ENTRANCE.x + 0.5, ENTRANCE.y + 0.5);
+  const e = entranceOf(w);
+  const v = makeVillager(w, name, trait, job, home, e.x + 0.5, e.y + 0.5);
   v.pack = { kind: 'bag', n: 1, site: null };
   v.hunger = w.rng.int(70, 90);
   v.energy = w.rng.int(70, 90);

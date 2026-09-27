@@ -416,4 +416,6 @@ export interface World {
   bmap: Map<number, Building>;
   out: OutEvent[];
   pathBudget: number;
+  /** 타일이 바뀔 때마다 1 씩 는다(경로 캐시를 비우는 기준, SPEC 7). */
+  tileVer: number;
 }

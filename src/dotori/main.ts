@@ -1,15 +1,17 @@
 // 도토리 마을(v2) 시작점: 에셋 불러오기 → 저장 불러오기(없으면 새 마을) → 입력·패널 연결 → 메인 루프.
 // 1× 에서 실제 1 초에 게임 6 분(SPEC 1). 주소 ?fresh=1 새 마을, ?seed=N 시드, ?ff=분 미리 진행, ?scene=grown 가꾼 마을,
-// ?residents=N 처음 주민 수(큰 마을 시험), ?debug=1 계측 표시.
+// ?residents=N 처음 주민 수(큰 마을 시험), ?map=large 큰 지도(160 × 104), ?debug=1 계측 표시, ?lod=0 주민 LOD 끄기(비교 측정).
 import './ui/style.css';
 import { SoundSystem } from './audio/Sound';
 import { atten } from './audio/mix';
 import { TIME } from './data/balance';
 import { BUILDABLES, type BuildKind } from './data/buildables';
+import { LAYOUTS, type MapId } from './data/villageMap';
 import { Renderer3D, type ViewState } from './render/Renderer3D';
 import { checkPlace } from './sim/build';
 import { place, plantGhost, plantLove, plantParty, remove } from './sim/commands';
 import { newWorld } from './sim/create';
+import { pathStats } from './sim/path';
 import { deserialize, serialize } from './sim/save';
 import { computeStats } from './sim/stats';
 import { run, step } from './sim/step';
@@ -95,9 +97,16 @@ function grownScene(w: World): void {
 }
 
 /** 새 마을을 만든다. */
-function freshWorld(seed: number): World {
+function freshWorld(seed: number, pick?: MapId): World {
   const n = Number(params.get('residents')) || undefined;
-  const w = newWorld(seed, n ? { residents: n } : {});
+  // 지도(SPEC 2): 고른 것, 아니면 `?map=large` 이거나 지금 큰 지도에서 "새 마을" 을 누르면 큰 지도로 다시 시작한다.
+  const cur = world as World | undefined;
+  const map: MapId =
+    pick ??
+    (params.get('map') === 'large' || (cur && cur.W === LAYOUTS.large.W && cur.H === LAYOUTS.large.H)
+      ? 'large'
+      : 'village');
+  const w = newWorld(seed, n ? { residents: n, map } : { map });
   if (params.get('scene') === 'grown') grownScene(w);
   return w;
 }
@@ -327,25 +336,31 @@ function bindControls(): void {
   $('sp3').addEventListener('click', () => setSpeed(3));
   $('sp8').addEventListener('click', () => setSpeed(8));
   // 확인 창(confirm)은 아티팩트 보기 화면에서 막혀 있어, 한 번 더 누르면 새로 시작하는 방식으로 묻는다.
+  // 한 번 누르면 "큰 들판으로"(160 × 104, SPEC 2)도 함께 보인다. 둘 중 하나를 누르면 그 지도로 새로 시작한다.
   let resetArmed: ReturnType<typeof setTimeout> | null = null;
+  const disarm = (): void => {
+    if (resetArmed) clearTimeout(resetArmed);
+    resetArmed = null;
+    $('reset').textContent = '새 마을';
+    $('resetLarge').hidden = true;
+  };
+  const restart = (map: MapId): void => {
+    disarm();
+    clearSave();
+    attach(freshWorld((Math.random() * 1e9) | 0, map));
+    writeSave();
+    say(map === 'large' ? '🌱 넓은 들판에서 새 마을을 시작했어요' : '🌱 새 마을을 시작했어요');
+  };
   $('reset').addEventListener('click', () => {
-    const btn = $('reset');
     if (!resetArmed) {
-      btn.textContent = '정말 새로? 한 번 더';
-      resetArmed = setTimeout(() => {
-        resetArmed = null;
-        btn.textContent = '새 마을';
-      }, 3000);
+      $('reset').textContent = '정말 새로? 한 번 더';
+      $('resetLarge').hidden = false;
+      resetArmed = setTimeout(disarm, 4000);
       return;
     }
-    clearTimeout(resetArmed);
-    resetArmed = null;
-    btn.textContent = '새 마을';
-    clearSave();
-    attach(freshWorld((Math.random() * 1e9) | 0));
-    writeSave();
-    say('🌱 새 마을을 시작했어요');
+    restart(world.W === LAYOUTS.large.W ? 'large' : 'village');
   });
+  $('resetLarge').addEventListener('click', () => restart('large'));
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && !(e.target instanceof HTMLButtonElement)) {
       e.preventDefault();
@@ -413,8 +428,12 @@ function loop(): void {
     $('stage').append(dbg);
   }
   let simMs = 0;
+  let drawMs = 0;
+  let tickMax = 0;
+  let ticks = 0;
   let frames = 0;
   let fpsT = performance.now();
+  let path0 = pathStats(world);
   const frame = (now: number): void => {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
@@ -423,7 +442,12 @@ function loop(): void {
       acc += dt * speed * TIME.minPerSec;
       let n = 0;
       while (acc >= 1 && n < TIME.maxTicksPerFrame) {
+        const t0 = dbg ? performance.now() : 0;
         step(world);
+        if (dbg) {
+          tickMax = Math.max(tickMax, performance.now() - t0);
+          ticks++;
+        }
         acc -= 1;
         n++;
         if (world.t % 60 === 0) writeSave();
@@ -433,9 +457,21 @@ function loop(): void {
     simMs += performance.now() - s0;
     frames++;
     if (dbg && now - fpsT > 1000) {
-      dbg.textContent = `${Math.round((frames * 1000) / (now - fpsT))} fps · 시뮬 ${(simMs / frames).toFixed(2)} ms/프레임 · 주민 ${world.vs.length}`;
+      // 계측(SPEC 7): fps, 프레임당 시뮬·그리기 CPU 시간, 가장 긴 틱, 그리기 호출, 주민 LOD 갈래, 경로(초당 탐색·캐시 적중)
+      const ps = pathStats(world);
+      const L = r3.lodStats;
+      const sec = (now - fpsT) / 1000;
+      dbg.textContent =
+        `${Math.round(frames / sec)} fps · 시뮬 ${(simMs / frames).toFixed(2)} ms/프레임(틱 ${ticks}, 최대 ${tickMax.toFixed(2)} ms)` +
+        ` · 그리기 ${(drawMs / frames).toFixed(2)} ms · 호출 ${r3.drawCalls()}\n` +
+        `주민 ${world.vs.length}(가까이 ${L.full} · 멀리 ${L.lite} · 화면 밖 ${L.off}) · 지도 ${world.W}×${world.H}` +
+        ` · 경로 ${Math.round((ps.searches - path0.searches) / sec)}/초 적중 ${Math.round((ps.hits - path0.hits) / sec)}/초 미룸 ${Math.round((ps.busy - path0.busy) / sec)}/초`;
+      path0 = ps;
       frames = 0;
       simMs = 0;
+      drawMs = 0;
+      tickMax = 0;
+      ticks = 0;
       fpsT = now;
     }
     for (const ev of world.out) {
@@ -453,7 +489,9 @@ function loop(): void {
     }
     world.out.length = 0;
     const dtA = speed > 0 ? dt * (speed >= 8 ? 1.6 : speed >= 3 ? 1.25 : 1) : 0;
+    const d0 = performance.now();
     r3.frame(world, dt, dtA, Math.min(1, acc), now);
+    drawMs += performance.now() - d0;
     sound.update(world, r3.listener(), speed);
     if (now - lastUI > 250) {
       lastUI = now;
@@ -485,6 +523,7 @@ async function main(): Promise<void> {
   }
   $('loading').hidden = true;
   r3.init($('world') as HTMLCanvasElement, $('stage'), view);
+  r3.lodOn = params.get('lod') !== '0';
   bindInput($('world') as HTMLCanvasElement);
   bindControls();
   const saved = params.get('fresh') || params.get('scene') ? null : readSave();

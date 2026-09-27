@@ -14,7 +14,15 @@ import {
   type JobName,
   type TraitName,
 } from '../data/people';
-import { START_BENCHES, START_BUILDINGS, START_LAMPS, MAP_H, MAP_W } from '../data/villageMap';
+import {
+  LAYOUTS,
+  MAP_H,
+  MAP_W,
+  START_BENCHES,
+  START_BUILDINGS,
+  START_LAMPS,
+  type MapId,
+} from '../data/villageMap';
 import { Affinity } from './affinity';
 import { schedParty } from './events';
 import { getT, paintTerrain, recomputeLocations, scatterTrees, setT } from './map';
@@ -89,6 +97,7 @@ export function emptyWorld(seed: number, W = MAP_W, H = MAP_H): World {
     bmap: new Map(),
     out: [],
     pathBudget: 0,
+    tileVer: 0,
   };
 }
 
@@ -309,12 +318,15 @@ export function makeVillager(
 export interface NewWorldOptions {
   /** 처음 주민 수(기본 SPEC 3.1 의 20 명). 집이 모자라면 한 집에 여럿이 산다. */
   residents?: number;
+  /** 지도 배치(기본 village 80 × 52, SPEC 2). */
+  map?: MapId;
 }
 
 /** 시드로 새 마을을 만든다. */
 export function newWorld(seed: number, opts: NewWorldOptions = {}): World {
-  const w = emptyWorld(seed);
-  paintTerrain(w);
+  const layout = LAYOUTS[opts.map ?? 'village'];
+  const w = emptyWorld(seed, layout.W, layout.H);
+  paintTerrain(w, layout);
   placeStartBuildings(w);
   scatterTrees(w);
   placeStartDecor(w);
