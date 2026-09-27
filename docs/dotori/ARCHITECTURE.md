@@ -51,7 +51,11 @@ sim/events.ts     아침·날씨·파티
 sim/build.ts      가꾸기: 놓기 검사, 청사진, 목재 나르기, 짓기, 완성, 치우기
 sim/arrival.ts    새 주민 이사, 인사하기
 sim/stats.ts      인구·빈 자리·행복·매력
-sim/save.ts       World ↔ JSON (version 1)
+sim/produce.ts    생산 사슬: 작물·농부·방앗간·굽기·생선·등짐, 먹거리 여유 (SPEC 9·10)
+sim/story.ts      기억·기념일·생일·주간 신문 (SPEC 11)
+sim/family.ts     청혼·결혼식·신혼집 이사 (SPEC 11.2)
+sim/lines.ts      문장 묶음에서 일기 문장 고르기 (data/lines.ts, SPEC 11.5)
+sim/save.ts       World ↔ JSON (version 2)
 sim/step.ts       한 틱의 순서
 sim/commands.ts   UI 가 부르는 명령(생각 심기, 놓기, 치우기, 새 마을)
 ```
@@ -59,7 +63,8 @@ sim/commands.ts   UI 가 부르는 명령(생각 심기, 놓기, 치우기, 새 
 한 틱의 순서(`step`):
 
 ```text
-t += 1 → (06:00) 아침 → 날씨 → 파티 → 이사 확인(09:00·15:00)
+t += 1 → (06:00) 아침(기억·생일·청혼·신혼집) → 날씨 → 파티·결혼식 → 이사 확인(09:00·15:00, 넉넉하면 12:00)
+→ 생일 요약(20:00) → 신문(7 일째 20:00) → 작물·방앗간
 → 주민마다: 직전 위치 저장, 욕구
 → 경로 예산 초기화 → 주민마다: 행동 진행(대화 중이면 건너뜀)
 → 공간 격자 갱신 → 대화 시작 → 대화 진행
