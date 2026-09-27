@@ -1,6 +1,7 @@
 // 마을 통계: 인구·빈 자리·행복·매력·목재·공사 수 (SPEC 4.1·4.4, HUD).
 import { ARRIVAL } from '../data/balance';
 import { charmOf } from './build';
+import { foodOf } from './produce';
 import type { Villager, World } from './types';
 
 /** 한 사람의 행복 = 네 욕구의 평균. */
@@ -12,6 +13,7 @@ export function happinessOf(v: Villager): number {
 export function computeStats(w: World): void {
   const houses = w.buildings.filter((b) => b.kind === 'house');
   const pop = w.vs.length;
+  const food = foodOf(w);
   const happy = pop ? w.vs.reduce((s, v) => s + happinessOf(v), 0) / pop : 0;
   w.stats = {
     pop,
@@ -23,5 +25,7 @@ export function computeStats(w: World): void {
     wheat: Math.floor(w.buildings.find((b) => b.kind === 'mill')?.wheat ?? 0),
     bread: Math.floor(w.buildings.find((b) => b.kind === 'bakery')?.bread ?? 0),
     fish: Math.floor(w.buildings.find((b) => b.kind === 'tavern')?.fish ?? 0),
+    food: food.food,
+    foodLevel: food.level,
   };
 }

@@ -6,7 +6,7 @@ import { FARM } from '../data/villageMap';
 import { loveTarget } from '../sim/commands';
 import { convById, knows } from '../sim/social';
 import { J, NJ, NV, dayOf, fmtClock, fmtT, hourOf, phaseName } from '../sim/text';
-import type { FeedEntry, Villager, World } from '../sim/types';
+import type { FeedEntry, FoodLevel, Villager, World } from '../sim/types';
 import { aff, vil } from '../sim/world';
 
 const $ = (id: string): HTMLElement => {
@@ -260,6 +260,9 @@ export function updateClock(w: World): void {
     `${dayOf(w.t)}일째 ${fmtClock(w.t)} <small>${phaseName(h)} ${w.weather.rain ? '🌧️' : h >= 6 && h < 19 ? '☀️' : '🌙'}</small>`;
 }
 
+/** 먹거리 여유 단계 이름 (SPEC 10.2). */
+const FOOD_LABEL: Record<FoodLevel, string> = { tight: '빠듯', ok: '알맞음', plenty: '넉넉' };
+
 /** 목표 판정에 쓰는 값. */
 function goalValue(w: World, stat: GoalDef['stat']): number {
   switch (stat) {
@@ -304,6 +307,7 @@ export function updateStats(w: World): void {
       `<span class="stat" title="방앗간에 쌓인 밀">🌾<b>${s.wheat}</b></span>`,
       `<span class="stat${s.bread < 3 ? ' warn' : ''}" title="빵집의 빵">🥖<b>${s.bread}</b></span>`,
       `<span class="stat" title="주점의 생선">🐟<b>${s.fish}</b></span>`,
+      `<span class="stat${s.foodLevel === 'tight' ? ' warn' : ''}" title="먹거리 여유(빵 + 생선 ÷ 주민). 빠듯하면 새 주민이 망설이고, 넉넉하면 더 자주 온다">🍽️<b>${FOOD_LABEL[s.foodLevel]}</b></span>`,
       s.sites ? `<span class="stat" title="공사 중">🔨<b>${s.sites}</b></span>` : '',
     ].join(''),
   );
@@ -316,7 +320,11 @@ export function updateStats(w: World): void {
         ? '빈 집이 있지만 매력이 모자라요. 꽃밭·벤치를 놓아 보세요.'
         : happyLow
           ? '빈 집이 있지만 주민들이 지쳐 있어요.'
-          : '빈 집이 있어요. 아침 9시나 오후 3시에 누군가 이사 올지도 몰라요.'
+          : s.foodLevel === 'tight'
+            ? '빈 집이 있지만 빵과 생선이 빠듯해요. 밭을 일구거나 기다려 보세요.'
+            : s.foodLevel === 'plenty'
+              ? '빈 집이 있고 먹거리가 넉넉해요. 9시·12시·3시에 누군가 이사 올지도 몰라요.'
+              : '빈 집이 있어요. 아침 9시나 오후 3시에 누군가 이사 올지도 몰라요.'
       : '빈 집이 없어요. 집을 지으면 새 주민이 이사 와요.';
   setHTML(
     $('goals'),

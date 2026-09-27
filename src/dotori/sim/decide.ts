@@ -1,5 +1,5 @@
 // 행동 고르기: 욕구·성격·시간으로 점수를 매겨(options) 가장 높은 행동을 만든다(buildAct) (SPEC 3.3, 시험판 규칙).
-import { DESTINATION, LUMBER, PRODUCE } from '../data/balance';
+import { DESTINATION, LUMBER, MEALS, PRODUCE } from '../data/balance';
 import { JOBS } from '../data/people';
 import { startAct } from './act';
 import { carpenterAct, hasCarpentryWork } from './build';
@@ -188,7 +188,7 @@ function buildAct(w: World, v: Villager, type: Choice, h: number): Act | null {
     case 'eat': {
       const bakery = bldKind(w, 'bakery');
       const near = dist(v, bakery.door) <= DESTINATION.bakeryMaxDist || v.trait === '먹보';
-      if (near && bakeryOpen(h) && bakery.bread > 0 && (v.trait === '먹보' || R.next() < 0.6))
+      if (near && bakeryOpen(h) && bakery.bread > 0 && (v.trait === '먹보' || R.next() < MEALS.bakeryChance))
         return mk(w, 'eat', { bld: bakery.id, dur: 25, where: 'bakery' });
       return mk(w, 'eat', { bld: v.home, dur: 30, where: 'home' });
     }

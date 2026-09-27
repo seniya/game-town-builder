@@ -69,7 +69,11 @@ describe('밀 → 방앗간 → 밀가루 → 빵 (SPEC 9.2~9.4)', () => {
     const baker = w.vs.find((v) => v.job === '제빵사');
     if (!baker) throw new Error('제빵사가 없다');
     w.t = PRODUCE.bakeEvery * 100;
-    bakeTick(w, baker);
+    // 방앗간에 밀가루가 있으면 굽기를 멈추고 가지러 간다(true).
+    mill(w).flour = 4;
+    expect(bakeTick(w, baker)).toBe(true);
+    mill(w).flour = 0;
+    expect(bakeTick(w, baker)).toBe(false);
     expect(b.bread).toBe(5);
     expect(w.feed.some((e) => e.html.includes('밀가루가 떨어졌다'))).toBe(true);
   });

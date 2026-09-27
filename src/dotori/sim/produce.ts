@@ -1,9 +1,9 @@
 // 생산 사슬 (SPEC 9, ADR 050): 작물 자람, 농부의 거두기·심기·가꾸기, 방앗간, 제빵사의 밀가루 나르기와 굽기,
 // 어부의 생선, 등짐 내려놓기. 재고는 건물에 있고, 사람이 등짐으로 나른다.
-import { PRODUCE } from '../data/balance';
+import { FOOD, PRODUCE } from '../data/balance';
 import { mk } from './decide';
 import { getT } from './map';
-import type { Act, Building, PackKind, Pt, Villager, World } from './types';
+import type { Act, Building, FoodLevel, PackKind, Pt, Villager, World } from './types';
 import { TILE } from './types';
 import { bldKind, diary, dist, emote, frontOf, log } from './world';
 import { NJ } from './text';
@@ -131,17 +131,21 @@ export function bakerAct(w: World, v: Villager, dur: number): Act {
   return mk(w, 'work', { bld: b.id, dur });
 }
 
-/** 제빵사가 빵집에서 일하는 한 틱: 밀가루로 빵을 굽는다. */
-export function bakeTick(w: World, v: Villager): void {
-  if (w.t % PRODUCE.bakeEvery !== 0) return;
+/**
+ * 제빵사가 빵집에서 일하는 한 틱: 밀가루로 빵을 굽는다.
+ * 밀가루가 모자라고 방앗간에 밀가루가 있으면 true(일을 끝내고 가지러 간다, SPEC 9.4).
+ */
+export function bakeTick(w: World, v: Villager): boolean {
+  if (w.t % PRODUCE.bakeEvery !== 0) return false;
   const b = bakery(w);
-  if (b.bread >= PRODUCE.breadCap) return;
+  if (b.bread >= PRODUCE.breadCap) return false;
   if (b.flour >= PRODUCE.flourPerBread) {
     b.flour -= PRODUCE.flourPerBread;
     b.bread += 1;
     w.tally.bread += 1;
-    return;
+    return false;
   }
+  if (mill(w).flour >= 1) return true;
   if (!w.daily.flourOut) {
     w.daily.flourOut = true;
     log(
@@ -152,6 +156,15 @@ export function bakeTick(w: World, v: Villager): void {
     );
     diary(w, v, '밀가루가 없어서 빵을 못 구웠다… 😣');
   }
+  return false;
+}
+
+/** 먹거리(빵집 빵 + 주점 생선)와 여유 단계 (SPEC 10.2). */
+export function foodOf(w: World): { food: number; level: FoodLevel } {
+  const food = Math.floor(bakery(w).bread) + Math.floor(tavern(w).fish);
+  const per = food / Math.max(1, w.vs.length);
+  const level: FoodLevel = per < FOOD.tightBelow ? 'tight' : per >= FOOD.plentyFrom ? 'plenty' : 'ok';
+  return { food, level };
 }
 
 /** 어부가 일하는 한 틱: 가끔 생선을 잡아 등짐에 넣는다. 등짐이 차면 true(일을 끝낸다). */

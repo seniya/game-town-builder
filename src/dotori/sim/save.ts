@@ -12,6 +12,7 @@ import type {
   FeedEntry,
   Party,
   Rumor,
+  Tally,
   Villager,
   World,
 } from './types';
@@ -53,7 +54,7 @@ export interface SaveData {
   /** 판 2: 작물 단계·자람, 기록 누계. */
   crop?: number[];
   growth?: number[];
-  tally?: { bread: number; wheat: number; fish: number };
+  tally?: Partial<Tally>;
 }
 
 /** World 를 JSON 으로 옮길 수 있는 객체로 만든다. */
@@ -133,7 +134,7 @@ export function fromSave(raw: unknown): World | null {
   w.namesUsed = d.namesUsed ?? 0;
   w.arrivalsToday = d.arrivalsToday ?? 0;
   w.treesPlanted = d.treesPlanted ?? 0;
-  w.tally = d.tally ?? { bread: 0, wheat: 0, fish: 0 };
+  w.tally = { bread: 0, wheat: 0, fish: 0, breadEaten: 0, suppers: 0, ...d.tally };
   for (const b of w.buildings) {
     b.flour ??= 0;
     b.wheat ??= 0;

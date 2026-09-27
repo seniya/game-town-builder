@@ -1,5 +1,5 @@
 // 새 주민의 이사와 이웃의 인사 (SPEC 4.4·4.5).
-import { ARRIVAL, TIME } from '../data/balance';
+import { ARRIVAL, FOOD, TIME } from '../data/balance';
 import {
   JOB_NAMES,
   JOB_TARGET_SHARE,
@@ -38,6 +38,13 @@ function jobForNewcomer(w: World): JobName {
   const pop = w.vs.length + 1;
   const carp = w.vs.filter((v) => v.job === '목수').length;
   if (w.blueprints.length > 0 && carp < pop / 6) return '목수';
+  // 먹거리가 넉넉하지 않으면 생산 사슬에서 막힌 곳의 일손이 온다(SPEC 10.2).
+  if (w.stats.foodLevel !== 'plenty') {
+    const count = (j: JobName): number => w.vs.filter((v) => v.job === j).length;
+    const piled = (w.buildings.find((b) => b.kind === 'mill')?.flour ?? 0) >= FOOD.flourPiled;
+    if (piled && count('제빵사') < pop / FOOD.bakerPer) return '제빵사';
+    if (!piled && count('농부') < pop / FOOD.farmerPer) return '농부';
+  }
   let best: JobName = '한량';
   let gap = -Infinity;
   for (const j of JOB_NAMES) {
@@ -68,18 +75,24 @@ function pickWelcomers(w: World, nv: Villager): void {
   for (const o of pool.slice(0, want + mates.length)) o.welcome = nv.id;
 }
 
-/** 이사 조건 (SPEC 4.4). 들어올 수 있으면 빈 집, 아니면 모자란 이유. */
+/** 오늘 이사 올 수 있는 최대 수. 먹거리가 넉넉하면 는다(SPEC 10.2). */
+export function arrivalLimit(w: World): number {
+  return w.stats.foodLevel === 'plenty' ? FOOD.plentyMaxPerDay : ARRIVAL.maxPerDay;
+}
+
+/** 이사 조건 (SPEC 4.4·10.2). 들어올 수 있으면 빈 집, 아니면 모자란 이유. */
 export function arrivalCheck(w: World): {
   home: Building | null;
-  reason: 'ok' | 'noHouse' | 'unhappy' | 'charm' | 'limit';
+  reason: 'ok' | 'noHouse' | 'unhappy' | 'charm' | 'food' | 'limit';
 } {
   computeStats(w);
-  if (w.arrivalsToday >= ARRIVAL.maxPerDay) return { home: null, reason: 'limit' };
+  if (w.arrivalsToday >= arrivalLimit(w)) return { home: null, reason: 'limit' };
   const home = vacantHouse(w);
   if (!home) return { home: null, reason: 'noHouse' };
   if (w.stats.happy < ARRIVAL.minHappiness) return { home: null, reason: 'unhappy' };
   if (w.stats.charm < w.vs.length * ARRIVAL.charmPerResident)
     return { home: null, reason: 'charm' };
+  if (w.stats.foodLevel === 'tight') return { home: null, reason: 'food' };
   return { home, reason: 'ok' };
 }
 
@@ -109,10 +122,18 @@ export function spawnNewcomer(w: World, home: Building): Villager {
   return v;
 }
 
-/** 이사 확인 시각이면 조건을 보고 새 주민을 들인다. 매력만 모자라면 하루 한 번 알린다. */
+/** 이사 확인 시각인가. 먹거리가 넉넉하면 한낮에 한 번 더 확인한다(SPEC 10.2). */
+function isArrivalMinute(w: World, m: number): boolean {
+  if (TIME.arrivalMinutes.includes(m)) return true;
+  if (m !== FOOD.plentyMinute) return false;
+  computeStats(w);
+  return w.stats.foodLevel === 'plenty';
+}
+
+/** 이사 확인 시각이면 조건을 보고 새 주민을 들인다. 매력이나 먹거리만 모자라면 하루 한 번씩 알린다. */
 export function arrivalTick(w: World): void {
   const m = w.t % 1440;
-  if (!TIME.arrivalMinutes.includes(m)) return;
+  if (!isArrivalMinute(w, m)) return;
   const chk = arrivalCheck(w);
   if (chk.home) {
     spawnNewcomer(w, chk.home);
@@ -121,5 +142,9 @@ export function arrivalTick(w: World): void {
   if (chk.reason === 'charm' && !w.daily.charmHint) {
     w.daily.charmHint = true;
     log(w, '🌷 "꽃과 벤치가 더 있으면 이사 오고 싶다" 는 사람이 있다는 소문이다.', [], 'arrive');
+  }
+  if (chk.reason === 'food' && !w.daily.foodHint) {
+    w.daily.foodHint = true;
+    log(w, '🍞 "빵집 빵이 넉넉하면 이사 오고 싶다" 며 망설이는 사람이 있다는 소문이다.', [], 'arrive');
   }
 }

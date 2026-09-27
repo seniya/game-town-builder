@@ -1,5 +1,5 @@
 // 행동의 시작·이동·도착·진행·끝 (시험판 규칙 + 가꾸기·이사 행동, SPEC 3.3·4.3·4.4).
-import { LUMBER, NEEDS, PRODUCE, WALK } from '../data/balance';
+import { LUMBER, MEALS, NEEDS, PRODUCE, WALK } from '../data/balance';
 import { FINDS } from '../data/people';
 import { arriveSite, buildTick, useDecor } from './build';
 import { decide, mk } from './decide';
@@ -12,6 +12,13 @@ import type { Act, Villager, World } from './types';
 import { TILE } from './types';
 import { addAff, bld, bldKind, diary, dist, emote, inSleep, log, vil, workHours } from './world';
 
+
+/** 빵집·주점에서 먹으면 식사를 시작할 때 즐거움·어울림을 한 번 더한다(SPEC 10.1). 100 을 넘지 않는다. */
+function mealBonus(v: Villager, where: 'bakery' | 'tavern'): void {
+  const m = MEALS[where];
+  v.fun = Math.min(100, v.fun + m.fun);
+  v.social = Math.min(100, v.social + m.social);
+}
 /** 행동을 시작한다. 건물 안에 있으면 먼저 문으로 나온다. 경로 예산이 없으면 다음 틱에 경로를 구한다. */
 export function startAct(w: World, v: Villager, act: Act): void {
   if (act.bld != null && act.bld === v.inside) {
@@ -97,14 +104,17 @@ function arrive(w: World, v: Villager): void {
         const t = bldKind(w, 'tavern');
         if (t.fish >= 1) {
           t.fish -= 1;
-          v.social += PRODUCE.supperSocial;
+          w.tally.suppers += 1;
+          mealBonus(v, 'tavern');
           v.carry = { item: 'mug', until: w.t + a.dur };
           diary(w, v, '주점에서 생선구이를 먹었다. 다들 모여 왁자지껄 🐟🍺');
         } else diary(w, v, '주점에 갔는데 생선이 다 떨어졌다 😅');
       } else if (a.where === 'bakery') {
         const bakery = bldKind(w, 'bakery');
-        const take = v.trait === '먹보' ? 3 : 1;
-        bakery.bread = Math.max(0, bakery.bread - take);
+        const take = Math.min(bakery.bread, v.trait === '먹보' ? 3 : 1);
+        bakery.bread -= take;
+        w.tally.breadEaten += take;
+        if (take > 0) mealBonus(v, 'bakery');
         diary(
           w,
           v,
@@ -256,7 +266,7 @@ function doTick(w: World, v: Villager, a: Act, h: number): boolean {
       if (v.trait === '일벌레') v.fun += 0.06;
       else v.fun -= 0.02;
       v.energy -= 0.03;
-      if (v.job === '제빵사' && a.bld != null) bakeTick(w, v);
+      if (v.job === '제빵사' && a.bld != null && bakeTick(w, v)) return true;
       if (v.job === '어부' && fishTick(w, v)) return true;
       if (v.job === '농부' && a.where != null && w.t >= a.until) {
         finishFarmWork(w, v, a);

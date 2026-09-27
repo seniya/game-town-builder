@@ -278,7 +278,22 @@ export interface Locations {
   water: Pt[];
 }
 
+/** 마을 기록 누계 (SPEC 9.7·10.3). */
+export interface Tally {
+  bread: number;
+  wheat: number;
+  fish: number;
+  breadEaten: number;
+  suppers: number;
+}
+
+/** 먹거리 여유 단계 (SPEC 10.2). */
+export type FoodLevel = 'tight' | 'ok' | 'plenty';
+
 export interface Stats {
+  /** 먹거리(빵집 빵 + 주점 생선)와 여유 단계. */
+  food: number;
+  foodLevel: FoodLevel;
   wheat: number;
   bread: number;
   fish: number;
@@ -326,8 +341,8 @@ export interface World {
   growth: Uint16Array;
   /** 작물 단계가 바뀔 때마다 1 씩 는다(render 가 작물만 다시 그린다). */
   cropVersion: number;
-  /** 누계: 구운 빵·거둔 밀·잡은 생선. */
-  tally: { bread: number; wheat: number; fish: number };
+  /** 누계: 구운 빵·거둔 밀·잡은 생선·먹은 빵·주점 저녁상. */
+  tally: Tally;
   /** 건물·장식·청사진·지형이 바뀔 때마다 1 씩 는다(render 가 다시 짓는다). */
   staticVersion: number;
   stats: Stats;

@@ -91,11 +91,14 @@ export const PRODUCE = {
   millWheatCap: 60,
   /** 방앗간 밀가루 창고 용량. 가득 차면 빻지 않는다. */
   millFlourCap: 60,
-  /** 빵집 밀가루가 이보다 적으면 가지러 간다. */
-  flourLow: 3,
-  flourCarry: 8,
-  bakeEvery: 10,
-  flourPerBread: 0.5,
+  /** 빵집 밀가루가 이보다 적으면 가지러 간다(V2.5: 3 → 8). */
+  flourLow: 8,
+  /** 한 번에 가져오는 밀가루(V2.5: 8 → 30, 제빵사 일 시간의 절반 넘게 방앗간 오가기였다). 손수레로 민다. */
+  flourCarry: 30,
+  /** 제빵사 한 명이 빵 1 을 굽는 틱(V2.5: 10 → 6, 제빵사가 하루 약 10 개만 구워 밀가루가 방앗간에 쌓였다). */
+  bakeEvery: 6,
+  /** 빵 1 에 드는 밀가루(V2.5: 0.5 → 1, 밀이 남아돌아 밭과 빵이 이어지지 않았다). */
+  flourPerBread: 1,
   breadCap: 40,
   fishEvery: 15,
   fishChance: 0.2,
@@ -105,9 +108,35 @@ export const PRODUCE = {
   supperTo: 23,
   supperMaxHunger: 70,
   supperDur: 40,
-  supperSocial: 10,
   tavernMaxDist: 30,
   start: { bread: 24, bakeryFlour: 6, millFlour: 4, millWheat: 0 },
+} as const;
+
+/** 먹는 곳에 따라 식사를 시작할 때 한 번 더하는 즐거움·어울림 (SPEC 10.1, V2.5). 집밥은 배만 채운다. */
+export const MEALS = {
+  home: { fun: 0, social: 0 },
+  /** 갓 구운 빵. */
+  bakery: { fun: 8, social: 4 },
+  /** 주점 생선구이 저녁상(여럿이 모여 먹는다). */
+  tavern: { fun: 12, social: 10 },
+  /** 빵이 있고 가까울 때 빵집에서 먹을 확률(먹보는 늘). 시험판 0.6. */
+  bakeryChance: 0.7,
+} as const;
+
+/** 먹거리 여유 (SPEC 10.2, V2.5). 여유 = (빵집 빵 + 주점 생선) ÷ 인구. */
+export const FOOD = {
+  /** 이보다 적으면 "빠듯": 새 주민이 이사를 망설인다. */
+  tightBelow: 0.25,
+  /** 이 이상이면 "넉넉": 이사 확인을 한 번 더 하고 하루 최대 이사 수가 는다. */
+  plentyFrom: 0.8,
+  /** 넉넉할 때 더하는 이사 확인 시각(하루 안의 분). */
+  plentyMinute: 12 * 60,
+  plentyMaxPerDay: 3,
+  /** 넉넉하지 않을 때 새 주민 직업: 방앗간 밀가루가 이 이상이면 제빵사(굽는 손이 모자람), 아니면 농부. */
+  flourPiled: 30,
+  /** 그 직업이 인구 ÷ 이 값보다 적을 때만 (제빵사 5, 농부 4). */
+  bakerPer: 5,
+  farmerPer: 4,
 } as const;
 
 /** 처음 마을 (SPEC 3.1·4.3). */
